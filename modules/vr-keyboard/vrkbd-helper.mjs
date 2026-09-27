@@ -1,11 +1,15 @@
 // vrkbd-helper: injects vrkbd-patch.js into Steam's UI via CEF DevTools and
 // performs the key requests of the patched VR keyboard with xdotool on :0.
-// usage: node vrkbd-helper.mjs <patch.js> [xdotool]
+// On SIGTERM/SIGINT it reverts the patch (unpatch.js), so stopping the service
+// restores Steam's stock keyboard without restarting Steam.
+// usage: node vrkbd-helper.mjs <patch.js> <unpatch.js> [xdotool]
 import { readFileSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 
-const [, , patchPath, xdotool = 'xdotool'] = process.argv;
+const [, , patchPath, unpatchPath, xdotool = 'xdotool'] = process.argv;
 const PATCH = readFileSync(patchPath, 'utf8');
+const UNPATCH = readFileSync(unpatchPath, 'utf8');
+let current = null;                               // CDP `call` of the live session, if any
 const CDP = 'http://127.0.0.1:8080/json/list';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ENV = { ...process.env, DISPLAY: process.env.VRKBD_DISPLAY || ':0', LC_ALL: 'C.UTF-8' };
@@ -78,7 +82,8 @@ async function session() {
     else if (m.method === 'Runtime.bindingCalled' && m.params.name === '__vrkbdKey') handle(m.params.payload);
     else if (m.method === 'Runtime.executionContextCreated') setTimeout(inject, 3000);
   };
-  const closed = new Promise((res) => { ws.onclose = res; });
+  const closed = new Promise((res) => { ws.onclose = () => { current = null; res(); }; });
+  current = call;
   await call('Runtime.enable');
   await call('Runtime.addBinding', { name: '__vrkbdKey' });
   // Nothing is held by this helper instance; make the page re-send holds.
@@ -92,7 +97,14 @@ async function session() {
   releaseAll();
 }
 
-for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { releaseAll(); setTimeout(() => process.exit(0), 200); });
+for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, async () => {
+  releaseAll();
+  if (current) {
+    const r = await Promise.race([current('Runtime.evaluate', { expression: UNPATCH, returnByValue: true }), sleep(2000)]);
+    console.log('unpatch:', r?.result?.result?.value ?? 'timeout');
+  }
+  setTimeout(() => process.exit(0), 200);
+});
 
 for (;;) {
   try { await session(); console.log('disconnected'); }

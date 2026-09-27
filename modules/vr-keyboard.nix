@@ -24,7 +24,8 @@
     Steam's UI through its CEF DevTools port, plus an xdotool helper service)
   '';
 
-  config = lib.mkIf config.steamFrame.vrKeyboard.enable {
+  config = lib.mkMerge [
+  (lib.mkIf config.steamFrame.vrKeyboard.enable {
     systemd.user.services.vr-keyboard = {
       Unit.Description = "Modifier keys for Steam's VR keyboard (CEF patch + xdotool)";
       Service = {
@@ -32,11 +33,13 @@
           "${pkgs.nodejs}/bin/node"
           "${./vr-keyboard/vrkbd-helper.mjs}"
           "${./vr-keyboard/vrkbd-patch.js}"
+          "${./vr-keyboard/vrkbd-unpatch.js}"
           "${pkgs.xdotool}/bin/xdotool"
         ];
         Environment = "VRKBD_DISPLAY=:0";
         Restart = "always";
         RestartSec = 5;
+        TimeoutStopSec = 5;   # the helper unpatches Steam's UI on SIGTERM
       };
       Install.WantedBy = [ "default.target" ];
     };
@@ -44,5 +47,11 @@
     # Restart on every switch so a changed patch is re-injected (it replaces
     # the older version).
     steamFrame.userServices.restart = [ "vr-keyboard.service" ];
-  };
+  })
+  # Disabled: stop a still-running helper, which reverts the patch, so the
+  # stock keyboard is back right away (no Steam restart or reboot).
+  (lib.mkIf (!config.steamFrame.vrKeyboard.enable) {
+    steamFrame.userServices.stop = [ "vr-keyboard.service" ];
+  })
+  ];
 }

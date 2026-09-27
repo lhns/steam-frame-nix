@@ -12,8 +12,8 @@
 # running"). The `steamFrameUserServices` activation entry does it instead,
 # pointed at the outer session: it always runs `systemctl --user
 # daemon-reload` (so changed unit files are picked up even when both lists are
-# empty), then starts the units in `userServices.start` and restarts those in
-# `userServices.restart`.
+# empty), then starts the units in `userServices.start`, stops those in
+# `userServices.stop` and restarts those in `userServices.restart`.
 { config, lib, ... }:
 let
   cfg = config.steamFrame;
@@ -58,6 +58,14 @@ in {
         example = [ "vr-keyboard.service" ];
         description = "User units restarted on every switch (outer user manager).";
       };
+      stop = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+        description = ''
+          User units stopped on switch if still running, e.g. the service of a
+          feature that was just disabled (its unit file is already gone).
+        '';
+      };
     };
   };
 
@@ -66,6 +74,8 @@ in {
     run /usr/bin/systemctl --user daemon-reload
   '' + lib.optionalString (cfg.userServices.start != [ ]) ''
     run /usr/bin/systemctl --user start ${units cfg.userServices.start}
+  '' + lib.optionalString (cfg.userServices.stop != [ ]) ''
+    run /usr/bin/systemctl --user stop ${units cfg.userServices.stop} || true
   '' + lib.optionalString (cfg.userServices.restart != [ ]) ''
     run /usr/bin/systemctl --user restart ${units cfg.userServices.restart}
   '');

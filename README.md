@@ -115,6 +115,7 @@ menu list every desktop entry, including terminals such as Konsole.
 | `steamFrame.outerBusEnv` | str, read-only | `"env DBUS_SESSION_BUS_ADDRESS=${userBus}"` | Prefix for launchers that must use the outer bus. |
 | `steamFrame.userServices.start` | list of str | `[ ]` | User units started on switch if not running (outer user manager). |
 | `steamFrame.userServices.restart` | list of str | `[ ]` | User units restarted on every switch (outer user manager). |
+| `steamFrame.userServices.stop` | list of str | `[ ]` | User units stopped on switch if still running, e.g. of a feature just disabled. |
 | `steamFrame.portalFix.enable` | bool | `true` | Working portal config for the Steam session (OpenURI). |
 | `steamFrame.keyboardLayout` | null or str | `null` | XKB layout for the Steam session, e.g. `"de"`. `null` = no drop-in (US). |
 | `steamFrame.keyboardVariant` | null or str | `null` | XKB variant for the Steam session. |
@@ -138,7 +139,8 @@ running"): new or changed user units are neither reloaded nor started.
 **Fix:** the activation entry `steamFrameUserServices` exports the outer
 session's `XDG_RUNTIME_DIR`/`DBUS_SESSION_BUS_ADDRESS` and runs
 `/usr/bin/systemctl --user daemon-reload`, then `start` for
-`userServices.start` and `restart` for `userServices.restart`. The entry
+`userServices.start`, `stop` for `userServices.stop` and `restart` for
+`userServices.restart`. The entry
 always runs (also with both lists empty), so unit files you define yourself
 are at least reloaded.
 
@@ -185,8 +187,11 @@ keymap (`| @ { [ ] } \ ~ ^`, backtick, `ä ö ü €`) come out as `1`.
 `vrkbd-patch.js` into Steam's UI at runtime through Steam's CEF DevTools port
 (`127.0.0.1:8080`; SteamOS starts Steam with `-cef-enable-debugging`) and
 re-injects it after Steam restarts or the keyboard popup is recreated.
-Steam's files are never modified; without the service, a restart of Steam
-gives the stock keyboard. The service is restarted on every switch (via
+Steam's files are never modified. Enabling and disabling take effect on
+`home-manager switch`, no reboot or Steam restart needed: when the helper
+stops (service stopped, or the option disabled, which stops it via
+`userServices.stop`) it reverts the patch in Steam's running UI
+(`vrkbd-unpatch.js`). The service is restarted on every switch (via
 `userServices.restart`) so a changed patch is re-injected.
 
 - Bottom row becomes `Esc Ctrl Alt [Space] AltGr ← ↑ ↓ → Close`.
