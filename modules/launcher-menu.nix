@@ -1,37 +1,19 @@
-# The VR dashboard's "+" menu (non-Steam programs, #VRDashboard_LaunchNonSteamApp)
-# lists programs in the order SteamClient.Apps.ScanForInstalledNonSteamApps()
-# returns them: GLib hash-table order, effectively random, with "Desktop" (the
-# nested Plasma session) somewhere in a scrolling list. Runtime patches of
-# Steam's UI (steam-ui-patches.nix, evaluated in SharedJSContext), each
-# registered only when its option is set:
-# - order/: wraps ScanForInstalledNonSteamApps to sort the list by name;
-# - pinned-desktop/: hides Desktop in the scrolling list and pins a copy above
-#   or below it, with a separator; clicking the copy clicks the hidden
-#   original;
-# - launch/: wraps SteamClient.Apps.LaunchNonSteamApp (only called by this
-#   menu) to close the menu right after a program is started, and/or to
-#   ignore repeated launches of the same program within a few seconds (stock,
-#   the menu stays open until the program's window appears, inviting double
-#   launches);
-# - grid/: restyles the programs section as a grid of tiles (icon, name
-#   below), optionally limited to maxRows visible rows;
-# - show-all/: empties the list of programs Steam hides without Developer
-#   Mode (the webpack module holding it is found by signature).
-# Options reach the patches through mkPatch's `opts`. All are reverted when
-# turned off (next switch). Besides that one module, they depend on Steam UI
-# internals such as React props, popup names and the scroll fade's classes
-# and CSS; scripts/check-signatures.mjs checks all of them after a Steam
-# update (lib/signatures.json). Tested with Steam client 1790377368.
+# The VR dashboard's "+" menu (non-Steam programs). Steam lists them in GLib
+# hash-table order (random-looking). Runtime patches in SharedJSContext, each
+# registered only when its option is set, reverted when unset (next switch):
+# - order/: sorts ScanForInstalledNonSteamApps() by name;
+# - pinned-desktop/: hides Desktop in the list, pins a proxy above/below it;
+# - launch/: wraps LaunchNonSteamApp (menu-only) to close the menu and/or
+#   debounce repeated launches;
+# - grid/: programs as a grid of tiles, optionally maxRows visible;
+# - show-all/: empties the list Steam hides without Developer Mode.
+# Tested with Steam client 1790377368.
 #
-# iconFallbacks is not a patch: Steam's scan of host programs resolves a
-# desktop entry's Icon= name only in the hicolor icon theme (and pixmaps),
-# so programs whose icon exists only in the desktop's Breeze theme (SteamOS'
-# Konsole and KDE System Settings) have no icon in the menu. On every switch,
-# launcher-menu/icon-fallbacks.sh looks through the desktop entries Steam
-# sees and links the missing icons that nixpkgs' Breeze has into
-# ~/.local/share/icons/hicolor (see the script). Until 2026-09 iconFallbacks
-# was a list of names; setting a list now fails with a message pointing to
-# enable/extra.
+# iconFallbacks (not a patch): Steam resolves Icon= names only in hicolor (and
+# pixmaps), so Breeze-only icons (Konsole, KDE System Settings) are missing;
+# icon-fallbacks.sh links them from nixpkgs' Breeze into
+# ~/.local/share/icons/hicolor on switch. It was a list of names until 2026-09;
+# a list now fails with a pointer to enable/extra.
 { config, lib, pkgs, ... }:
 let
   cfg = config.steamFrame.launcherMenu;
@@ -51,9 +33,7 @@ in {
       type = lib.types.bool;
       default = false;
       description = ''
-        Sort the VR dashboard's "+" menu (non-Steam programs) alphabetically
-        instead of Steam's random-looking order. Runtime patch of Steam's UI
-        (steamFrame.uiPatches).
+        Sort the "+" menu (non-Steam programs) by name. Runtime patch.
       '';
     };
     pinDesktop = lib.mkOption {
@@ -61,23 +41,17 @@ in {
       default = null;
       example = "bottom";
       description = ''
-        Pin "Desktop" (the nested Plasma session) above ("top", below the
-        menu heading) or below ("bottom") the scrolling program list of the
-        "+" menu, separated by a thin line, so it is always visible; it is
-        hidden in the list itself. null leaves it a normal list entry. Runtime
-        patch of Steam's UI (steamFrame.uiPatches).
+        Pin "Desktop" (the nested Plasma session) above ("top") or below
+        ("bottom") the "+" menu's scrolling list, so it is always visible;
+        null = normal list entry. Runtime patch.
       '';
     };
     closeOnLaunch = lib.mkOption {
       type = lib.types.bool;
       default = false;
       description = ''
-        Close the "+" menu as soon as a program in it is activated (pointer,
-        controller or the pinned Desktop entry). Stock, it stays open until the
-        program's window appears, so it looks as if the click did nothing and
-        programs get launched twice. Runtime patch of Steam's UI
-        (steamFrame.uiPatches); off by default like the other launcherMenu
-        options, so nothing is injected unless asked for.
+        Close the "+" menu as soon as a program is launched (stock: it stays
+        open until the window appears, inviting double launches). Runtime patch.
       '';
     };
     launchDebounce = lib.mkOption {
@@ -85,22 +59,21 @@ in {
       default = 0;
       example = 10;
       description = ''
-        Seconds during which another launch of the same program (same command
-        line) from the "+" menu is ignored, counted from the last launch that
-        went through; ignored launches are logged (steam-ui-patches journal).
-        0 disables it. Runtime patch of Steam's UI (steamFrame.uiPatches).
+        Ignore another "+" menu launch of the same command line within this
+        many seconds of the last one that went through (logged); 0 = off.
+        Runtime patch.
       '';
     };
     grid = {
       enable = lib.mkEnableOption ''
-        the "+" menu's programs as a grid of tiles (large icon, name below)
-        instead of a list. Runtime patch of Steam's UI (steamFrame.uiPatches)'';
+        the "+" menu's programs as a grid of tiles (icon, name below) instead
+        of a list. Runtime patch'';
       columns = lib.mkOption {
         type = lib.types.ints.between 1 8;
         default = 4;
         description = ''
-          Tiles per row. The menu popup is a fixed 300 px wide: 3 columns give
-          tiles of about 92 px, 4 about 68 px, 5 about 53 px.
+          Tiles per row (the menu is 300 px wide: 3 → ~92 px tiles, 4 → ~68,
+          5 → ~53).
         '';
       };
       maxRows = lib.mkOption {
@@ -108,9 +81,8 @@ in {
         default = null;
         example = 4;
         description = ''
-          Rows of tiles visible at once: the menu shrinks to that many rows and
-          the rest scrolls. null: the grid fills up to the menu's stock maximum
-          height (600 px).
+          Rows visible at once (the rest scrolls); null = up to the menu's
+          stock max height (600 px).
         '';
       };
     };
@@ -118,24 +90,20 @@ in {
       type = lib.types.bool;
       default = false;
       description = ''
-        List all programs in the "+" menu without Steam's Developer Mode.
-        Without it, Steam hides a fixed list (konsole, systemsettings,
-        dolphin, plasma-discover, vlc, firewall-config, cmake-gui, qrenderdoc,
-        lxterminal, sh). Only that list is emptied; the Developer Mode setting
-        itself (used by other settings pages) is untouched. Hide individual
-        programs with steamFrame.hiddenApps. Runtime patch of Steam's UI
-        (steamFrame.uiPatches).
+        List all programs in the "+" menu without Developer Mode (Steam
+        otherwise hides konsole, systemsettings, dolphin, plasma-discover, vlc,
+        firewall-config, cmake-gui, qrenderdoc, lxterminal, sh). Developer Mode
+        itself is untouched; hide single programs with steamFrame.hiddenApps.
+        Runtime patch.
       '';
     };
     iconFallbacks = lib.mkOption {
       default = { };
       description = ''
-        Hicolor fallbacks for program icons only the desktop's Breeze theme
-        has, so the "+" menu shows them: Steam resolves program icons only in
-        the hicolor theme.
+        Hicolor links for program icons only Breeze has, so the "+" menu shows
+        them (Steam looks only in hicolor).
       '';
-      # The option used to be a list of icon names: keep a list from being
-      # silently misread and fail with a message instead (see the assertion).
+      # Formerly a list of names: fail with a message instead (see assertion).
       type = lib.types.coercedTo (lib.types.listOf lib.types.str)
         (names: { legacyList = names; })
         (lib.types.submodule {
@@ -144,16 +112,12 @@ in {
               type = lib.types.bool;
               default = true;
               description = ''
-                On every switch, look through the desktop entries Steam sees
-                (XDG data dirs, shadowed and Hidden/NoDisplay entries skipped)
-                and, for each Icon= name no hicolor theme dir (or pixmaps)
-                has but nixpkgs' Breeze app icons do (SteamOS: Konsole's
-                utilities-terminal, KDE System Settings' preferences-system),
-                link the Breeze SVG as
-                ~/.local/share/icons/hicolor/scalable/apps/<name>.svg. Links
-                no longer needed are removed; only links made by this option
-                (listed in ~/.local/state/steam-frame-nix/icon-fallbacks) are
-                ever touched. false removes them all.
+                On switch, for each Icon= of the desktop entries Steam sees
+                that hicolor lacks but nixpkgs' Breeze has (SteamOS:
+                utilities-terminal, preferences-system), link the Breeze SVG
+                into ~/.local/share/icons/hicolor/scalable/apps. Only its own
+                links (listed in ~/.local/state/steam-frame-nix/icon-fallbacks)
+                are touched; stale ones are removed; false removes all.
               '';
             };
             extra = lib.mkOption {
@@ -161,9 +125,8 @@ in {
               default = [ ];
               example = [ "system-file-manager" ];
               description = ''
-                Icon names to provide even if no desktop entry the scan sees
-                uses them (still only if hicolor lacks them). A name Breeze
-                has no app icon for is reported on switch and skipped.
+                Extra icon names to provide (if hicolor lacks them); names
+                Breeze doesn't have are reported and skipped.
               '';
             };
             legacyList = lib.mkOption {
@@ -188,8 +151,8 @@ in {
     '';
   } ];
 
-  # After installPackages, so the new profile's desktop entries and icons count.
-  # Disabled, the script removes its links (no BREEZE_APPS).
+  # After installPackages so the new profile counts; without BREEZE_APPS the
+  # script removes its links.
   config.home.activation.steamFrameIconFallbacks =
     lib.hm.dag.entryAfter [ "writeBoundary" "installPackages" ] (
       if cfg.iconFallbacks.enable then ''

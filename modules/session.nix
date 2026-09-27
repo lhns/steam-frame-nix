@@ -1,19 +1,11 @@
-# Shared settings for the two sessions on the Steam Frame, and the
-# user-services mechanism.
+# Settings shared by both sessions, and user-service handling on switch.
 #
-# The Frame runs the Steam/VR session (gamescope, systemd user manager, outer
-# D-Bus at <runtimeDir>/bus) and a nested Plasma desktop with its own
-# XDG_RUNTIME_DIR and private D-Bus. Modules that talk to the outer session use
-# `runtimeDir` / `userBus` explicitly.
-#
-# User services: `home-manager switch` usually runs from the nested desktop,
-# whose XDG_RUNTIME_DIR and D-Bus can't reach the user manager, so
-# home-manager's own reloadSystemd step is skipped ("User systemd daemon not
-# running"). The `steamFrameUserServices` activation entry does it instead,
-# pointed at the outer session: it always runs `systemctl --user
-# daemon-reload` (so changed unit files are picked up even when both lists are
-# empty), then starts the units in `userServices.start`, stops those in
-# `userServices.stop` and restarts those in `userServices.restart`.
+# The Steam/VR session owns the systemd user manager and the outer D-Bus
+# (<runtimeDir>/bus); the nested Plasma desktop has its own XDG_RUNTIME_DIR
+# and private bus. `switch` usually runs from the nested desktop, where
+# home-manager's reloadSystemd is skipped ("User systemd daemon not running"),
+# so `steamFrameUserServices` does it against the outer session: always
+# daemon-reload, then start/stop/restart the units in `userServices`.
 { config, lib, ... }:
 let
   cfg = config.steamFrame;
@@ -30,8 +22,8 @@ in {
       default = "unix:path=${cfg.runtimeDir}/bus";
       defaultText = lib.literalExpression ''"unix:path=''${config.steamFrame.runtimeDir}/bus"'';
       description = ''
-        Address of the outer session D-Bus. The user systemd manager and the
-        single running kwalletd6 are only reachable over this bus.
+        Outer session D-Bus address; the only bus that reaches the user
+        systemd manager and the running kwalletd6.
       '';
     };
     outerBusEnv = lib.mkOption {
@@ -40,9 +32,8 @@ in {
       default = "env DBUS_SESSION_BUS_ADDRESS=${cfg.userBus}";
       defaultText = lib.literalExpression ''"env DBUS_SESSION_BUS_ADDRESS=''${config.steamFrame.userBus}"'';
       description = ''
-        Command prefix for launchers (desktop entry Exec= lines) that must use
-        the outer bus, e.g. so apps started from the nested desktop use the
-        one kwalletd6 instead of starting a second wallet on the private bus.
+        Exec= prefix for launchers that must use the outer bus, e.g. so apps
+        in the nested desktop use the running kwalletd6 instead of a second one.
       '';
     };
     userServices = {
@@ -61,10 +52,7 @@ in {
       stop = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         default = [ ];
-        description = ''
-          User units stopped on switch if still running, e.g. the service of a
-          feature that was just disabled (its unit file is already gone).
-        '';
+        description = "User units stopped on switch if running (e.g. of a just-disabled feature).";
       };
     };
   };

@@ -1,10 +1,7 @@
-# clipboard-sync: bridges the clipboards of the Steam session's X displays and
-# the nested Plasma desktop (own Wayland + Xwayland :2).
-# Started via KDE autostart, not systemd: the nested desktop has no access to
-# the user systemd instance, and clipboard-sync must start after :2 exists.
-#
-# Built from source with the consumer's pkgs (the upstream flake outputs are
-# x86-only); flake.nix passes the source in through this closure.
+# clipboard-sync between the Steam session's X displays and the nested desktop
+# (Xwayland :2). KDE autostart, not systemd: the nested desktop can't reach the
+# user manager, and :2 must exist first. Built from source (upstream flake is
+# x86-only); flake.nix passes the source in.
 { clipboard-sync-src }:
 { config, pkgs, lib, ... }:
 let
@@ -15,8 +12,8 @@ in {
       type = lib.types.bool;
       default = true;   # without it the nested desktop's clipboard is isolated
       description = ''
-        Whether to run clipboard-sync between the Steam session and the nested
-        desktop (KDE autostart; on switch, stale builds and duplicates are stopped).
+        Run clipboard-sync between the Steam session and the nested desktop
+        (KDE autostart; switch stops stale builds and duplicates).
       '';
     };
     package = lib.mkOption {
@@ -46,13 +43,10 @@ in {
       NoDisplay=true
     '';
 
-    # Keep exactly one instance of the current build, preferably one started in
-    # the nested desktop (XDG_CURRENT_DESKTOP=KDE): it inherits the process
-    # environment, so a copy started from a Steam-session terminal runs with
-    # the wrong session's env. Stale builds and duplicate instances are
-    # stopped (workers of an instance are left alone). A new
-    # instance is only started when switching from the nested desktop;
-    # otherwise the autostart entry starts it with the desktop.
+    # Keep one instance of the current build, preferably one started in the
+    # nested desktop (it inherits the environment; one from a Steam-session
+    # terminal has the wrong one). Kill stale builds and duplicates; start a new
+    # one only when switching from the nested desktop (else autostart does).
     home.activation.startClipboardSync = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       want="${cfg.package}/bin/clipboard-sync"
       desktop=() other=()

@@ -1,22 +1,13 @@
-# Firefox (Flathub Flatpak org.mozilla.firefox) on the Frame.
-#
-# vrFullscreenFix: real fullscreen is broken in the Steam session: gamescope
-# gives the fullscreen X11 window input focus but never shows it, so Firefox
-# looks frozen. With ignore-widgets, fullscreen (e.g. YouTube) only fills the
-# Firefox window itself, which in VR can be made as large as you like.
-# Profile names are random, and flakes can't read $HOME at eval time, so the
-# user.js is linked into every existing profile on each switch.
-#
-# desktopProfile: the Steam session and the nested desktop have separate D-Bus
-# buses and displays, so a second Firefox can't find the running one and
-# stops at the locked profile. In the nested desktop (XDG_CURRENT_DESKTOP=KDE)
-# the launcher uses its own profile instead (the launcher creates the dir,
-# Firefox fills it). It gets no user.js: real fullscreen works there.
-#
-# The launcher's desktop entry shadows the Flatpak's own entry (same ID), so
-# MIME/default-browser associations for org.mozilla.firefox.desktop still
-# apply, and the Steam "+" menu (which only reads ~/.local/share/applications)
-# sees it.
+# Firefox Flatpak (org.mozilla.firefox) launcher.
+# - vrFullscreenFix: in the Steam session gamescope focuses a fullscreen X11
+#   window but never shows it (Firefox looks frozen). ignore-widgets keeps
+#   fullscreen inside the window. Profile names are random and $HOME isn't
+#   readable at eval time, so user.js is linked into each profile on switch.
+# - desktopProfile: the sessions have separate buses/displays, so a second
+#   Firefox can't reach the running one and hits the profile lock; the nested
+#   desktop gets its own profile (no user.js: fullscreen works there).
+# The entry shadows the Flatpak's (same ID), keeping MIME associations, and is
+# seen by the "+" menu (which reads only ~/.local/share/applications).
 { config, pkgs, lib, ... }:
 let
   cfg = config.steamFrame.firefox;
@@ -48,18 +39,17 @@ in {
       type = lib.types.bool;
       default = true;
       description = ''
-        Link a user.js setting full-screen-api.ignore-widgets into every
-        existing Firefox profile (except the desktop profile), so fullscreen
-        fills only the Firefox window instead of freezing in the Steam session.
+        Link a user.js (full-screen-api.ignore-widgets) into every existing
+        profile except the desktop one, so fullscreen fills the window instead
+        of freezing in the Steam session.
       '';
     };
     desktopProfile = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = "desktop";
       description = ''
-        Name of the separate profile the launcher uses in the nested desktop
-        (XDG_CURRENT_DESKTOP=KDE), so both sessions can run Firefox at once.
-        null uses the default profile in both sessions.
+        Profile used in the nested desktop, so both sessions can run Firefox at
+        once; null = default profile in both.
       '';
     };
   };

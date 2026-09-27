@@ -1,20 +1,12 @@
-# Runtime patch of Steam's on-screen (VR) keyboard. Steam's layouts are
-# hardcoded in its UI, and in VR it can only send text (no Ctrl/Alt/Esc;
-# SteamClient.Input.ControllerKeyboardSetKeyState throws "Unknown method").
-# - patch.js is injected into Steam's running UI through its CEF DevTools port
-#   (127.0.0.1:8080; SteamOS starts Steam with -cef-enable-debugging); Steam's
-#   files are untouched. Bottom row: Esc Ctrl Alt [space] AltGr ← ↑ ↓ →, with
-#   AltGr + arrows = Pos1/PgUp/PgDn/End. Chords, Shift+arrows and characters
-#   Steam's key emulation turns into "1" (non-ASCII, AltGr/dead keys on the
-#   de keymap) are handed to the helper; Ctrl/Alt are held while toggled.
-# - helper.mjs keeps the injection alive (Steam restarts, popup recreated),
-#   performs those requests with xdotool on :0 (X focus follows the window
-#   selected in VR) and reverts the patch when stopped (unpatch.js). Its
-#   allowlist can't type ASCII text or press Enter.
-# Depends on Steam UI internals, found by signature (lib/finders.js, entry
-# "steam-keyboard-patch" in lib/signatures.json) rather than webpack module
-# ids; after a Steam update, scripts/check-signatures.mjs tells whether they
-# still match. Tested with Steam client 1790377368 (UI build 11041156).
+# Steam's VR keyboard can only send text (ControllerKeyboardSetKeyState throws
+# "Unknown method" in VR), and its layouts are hardcoded.
+# - patch.js (injected over CEF DevTools, 127.0.0.1:8080) adds a bottom row
+#   Esc Ctrl Alt [space] AltGr ← ↑ ↓ → (AltGr+arrows = Pos1/PgUp/PgDn/End) and
+#   hands chords, Shift+arrows and characters Steam would turn into "1"
+#   (non-ASCII, AltGr/dead keys) to the helper.
+# - helper.mjs keeps it injected, sends those keys with xdotool on :0 (an
+#   allowlist: no ASCII text, no Enter) and unpatches on stop.
+# Tested with Steam client 1790377368 (UI build 11041156).
 { config, pkgs, lib, ... }:
 let
   patch = (import ./lib { inherit pkgs; }).mkPatch {
@@ -25,11 +17,9 @@ in {
   imports = [ ./session.nix ];
 
   options.steamFrame.steamKeyboardPatch.enable = lib.mkEnableOption ''
-    the runtime patch of Steam's on-screen (VR) keyboard: Esc/Ctrl/Alt and four
-    separate arrow keys, real Ctrl/Alt chords (held while toggled, e.g. for
-    Ctrl+scroll), and working AltGr/non-ASCII characters. Injected into Steam's
-    UI through its CEF DevTools port by an xdotool helper service; disabling
-    it reverts the patch on the next switch'';
+    Esc/Ctrl/Alt, arrow keys, Ctrl/Alt chords (held while toggled) and
+    AltGr/non-ASCII characters on Steam's VR keyboard (runtime patch plus an
+    xdotool helper service); off reverts it on the next switch'';
 
   config = lib.mkMerge [
   (lib.mkIf config.steamFrame.steamKeyboardPatch.enable {
@@ -50,12 +40,10 @@ in {
       Install.WantedBy = [ "default.target" ];
     };
 
-    # Restart on every switch so a changed patch is re-injected (it replaces
-    # the older version).
+    # Restart on switch to re-inject a changed patch.
     steamFrame.userServices.restart = [ "steam-keyboard-patch.service" ];
   })
-  # Disabled: stop a still-running helper, which reverts the patch, so the
-  # stock keyboard is back right away (no Steam restart or reboot).
+  # Disabled: stopping the helper reverts the patch right away.
   (lib.mkIf (!config.steamFrame.steamKeyboardPatch.enable) {
     steamFrame.userServices.stop = [ "steam-keyboard-patch.service" ];
   })

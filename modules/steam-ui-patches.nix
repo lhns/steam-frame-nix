@@ -1,24 +1,11 @@
-# Runtime patches of Steam's (and SteamVR's) web UIs through their local CEF
-# DevTools ports: Steam's client UI on 127.0.0.1:8080 (SteamOS starts Steam
-# with -cef-enable-debugging), SteamVR's vrwebhelper on 127.0.0.1:8087 when
-# its debugger is enabled. Steam's files are untouched: the
-# `steam-ui-patches` service (injector.mjs, Node) evaluates each registered
-# patch in its target pages, re-injects it when a page is reloaded or
-# recreated (and every 15 s), and evaluates its unpatch expression when the
-# service stops, so the UI is back to stock without a Steam restart.
-#
-# Other modules (and your own config) register patches in
-# `steamFrame.uiPatches.patches`; the service exists only while that list is
-# non-empty. It is restarted on every switch (changed patches are re-injected,
-# removed ones reverted by the old instance) and stopped once the list is
-# empty. The keyboard patch (steam-keyboard-patch.nix) has its own helper.
-#
-# Patches that need Steam's webpack modules should find them by signature
-# rather than by module id or minified export name, which change with Steam
-# updates: `steamFrame.uiPatches.lib.mkPatch` wraps a patch written as
-# `(find, sigs, opts, hooks) => …` with the finder library (lib/finders.js),
-# its signatures and the shared method hooks (lib/hooks.js);
-# scripts/check-signatures.mjs checks signatures offline.
+# Runtime patches of Steam's and SteamVR's web UIs over local CEF DevTools
+# (Steam 127.0.0.1:8080; SteamVR's vrwebhelper 127.0.0.1:8087, see
+# steamvr-debugger.nix). The steam-ui-patches service (injector.mjs) injects
+# each registered patch into its target pages, re-injects on reload and every
+# 15 s, and runs the unpatches on stop; Steam's files are untouched.
+# It exists while `patches` is non-empty, restarts on every switch (the old
+# instance reverts removed patches) and is stopped once the list is empty.
+# Patch calling convention (mkPatch): lib/default.nix.
 { config, pkgs, lib, ... }:
 let
   cfg = config.steamFrame.uiPatches;
@@ -36,8 +23,7 @@ let
         default = "http://127.0.0.1:8080";
         example = "http://127.0.0.1:8087";
         description = ''
-          DevTools base URL of the CEF instance (its /json/list is polled).
-          Steam's client UI is on port 8080, SteamVR's vrwebhelper on 8087.
+          DevTools base URL (its /json/list is polled): Steam 8080, SteamVR 8087.
         '';
       };
       target = {
@@ -61,21 +47,18 @@ let
       patch = mkOption {
         type = types.path;
         description = ''
-          JavaScript file evaluated in every matching page (DevTools
-          Runtime.evaluate, awaited). Must be idempotent: it is re-evaluated
-          after page reloads and every 15 s. Its result value is logged when it
-          changes; return e.g. "patched", and "unchanged" (never logged) when
-          already applied. To use the finder library, build it with
-          `config.steamFrame.uiPatches.lib.mkPatch`.
+          JavaScript evaluated (awaited) in every matching page after reloads
+          and every 15 s, so it must be idempotent. Its result is logged when
+          it changes ("unchanged" never is). Build with `lib.mkPatch` to get
+          the finder library.
         '';
       };
       unpatch = mkOption {
         type = types.nullOr types.path;
         default = null;
         description = ''
-          JavaScript file evaluated in every patched page when the service
-          stops (switch, list emptied, logout), reverting the patch. Must be
-          safe when the page isn't patched.
+          JavaScript that reverts the patch when the service stops; must be
+          safe on an unpatched page.
         '';
       };
     };
@@ -102,16 +85,10 @@ in {
     default = import ./lib { inherit pkgs; };
     defaultText = lib.literalMD "the helpers of `modules/lib`";
     description = ''
-      Helpers for writing patches (see modules/lib/default.nix):
-      `mkPatch { name, src, signatures ? …, opts ? { } }` returns a patch
-      file that calls `src`, a JavaScript function expression
-      `(find, sigs, opts, hooks) => …`, with the finder library `find`
-      (modules/lib/finders.js: getWebpackRequire, resolveAll, findModule,
-      findExport, findFiberUp, findInReactTree, …), the module signatures
-      `sigs` (format: modules/lib/signatures.json; default: its entry
-      `name`, if any), `opts` and the shared method hooks `hooks`
-      (modules/lib/hooks.js: before, remove, has). `finders` and `hooks`
-      are the libraries' paths, `signatures` the parsed signatures.json.
+      Patch helpers from modules/lib/default.nix: `mkPatch { name, src,
+      signatures ? …, opts ? { } }` (calls `src` as
+      `(find, sigs, opts, hooks) => …`; see there), plus `finders`, `hooks`
+      (paths) and `signatures` (parsed signatures.json).
     '';
   };
 
@@ -128,9 +105,8 @@ in {
     '';
     description = ''
       Runtime patches of Steam's web UIs, kept injected by the
-      `steam-ui-patches` user service over the local CEF DevTools ports and
-      reverted when it stops. Every target (page) of the endpoint matching all
-      given target criteria is patched.
+      steam-ui-patches service and reverted when it stops. Every page
+      matching all given target criteria is patched.
     '';
   };
 
@@ -156,13 +132,11 @@ in {
       Install.WantedBy = [ "default.target" ];
     };
 
-    # Restart on every switch so changed patches are re-injected (each
-    # replaces its older version) and removed ones are reverted by the old
-    # instance.
+    # Restart on switch: re-inject changed patches; the old instance reverts
+    # removed ones.
     steamFrame.userServices.restart = [ "steam-ui-patches.service" ];
   })
-  # No patches: stop a still-running injector, which reverts its patches, so
-  # Steam's UI is stock right away.
+  # No patches: stopping the injector reverts them right away.
   (lib.mkIf (cfg.patches == [ ]) {
     steamFrame.userServices.stop = [ "steam-ui-patches.service" ];
   })

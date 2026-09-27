@@ -1,13 +1,7 @@
-# Resize and grab-distance limits of SteamVR dashboard windows (Steam, app
-# windows, overlays, the theater screen, the dashboard itself), through a
-# runtime patch of SteamVR's dashboard page (vrwebhelper "systemui", DevTools
-# 127.0.0.1:8087; see dashboard-windows/patch.js for how it works). It is
-# registered with steam-ui-patches.nix only when an option is set, and turns
-# on the SteamVR web helper debugger (steamvr-debugger.nix), which needs one
-# SteamVR restart the first time. Changes apply immediately (the dashboard
-# resends its scene graph); unsetting all options reverts to stock.
-# Depends on SteamVR UI internals, found by signature (lib/signatures.json,
-# "dashboard-windows"; scripts/check-signatures.mjs checks them offline).
+# Resize and grab-distance limits of SteamVR dashboard windows. Dashboard patch
+# (dashboard-windows/patch.js; "systemui" on 127.0.0.1:8087), registered only
+# when an option is set; enables steamvr-debugger.nix (one SteamVR restart the
+# first time). Unsetting all options reverts to stock.
 { config, lib, pkgs, ... }:
 let
   cfg = config.steamFrame.dashboard;
@@ -26,8 +20,8 @@ let
       type = types.nullOr types.number;
       default = null;
       description = ''
-        Closest distance in meters ${what} can be pulled in to while grabbed.
-        null = stock (${toString stockDistance.${kind}.min} m).
+        Closest distance (m) ${what} can be pulled in to while grabbed; null =
+        stock (${toString stockDistance.${kind}.min} m).
       '';
     };
     max = mkOption {
@@ -35,8 +29,8 @@ let
       default = null;
       example = stockDistance.${kind}.max * 2;
       description = ''
-        Farthest distance in meters ${what} can be pushed back to while
-        grabbed. null = stock (${toString stockDistance.${kind}.max} m).
+        Farthest distance (m) ${what} can be pushed back to while grabbed;
+        null = stock (${toString stockDistance.${kind}.max} m).
       '';
     };
   };
@@ -57,12 +51,9 @@ in {
       default = null;
       example = 4.0;
       description = ''
-        Largest size, relative to their default size, that SteamVR dashboard
-        windows (Steam, app windows, overlays, the theater screen) can be
-        enlarged to with the resize handle. null = stock (2; the smallest is
-        0.25). The theater screen's default size is 2.8x that of a normal
-        window, so its limit is 2.8x this value. Runtime patch of the SteamVR
-        dashboard (steamFrame.uiPatches), applied immediately.
+        Largest resize factor of SteamVR dashboard windows, relative to their
+        default size; null = stock (2). The theater screen starts 2.8x larger,
+        so its limit is 2.8x this. Dashboard patch, applied immediately.
       '';
     };
     windowDistance = {

@@ -24,9 +24,7 @@
       steam-close-button = ./modules/steam-close-button.nix;
       window-curvature = ./modules/window-curvature.nix;
       frame-controls = ./modules/frame-controls.nix;
-      # Built with the consumer's pkgs; only the source comes from our input.
-      # The key lets the module system deduplicate it when it is imported both
-      # directly and through `default`.
+      # Built with the consumer's pkgs; `key` dedups direct + `default` imports.
       clipboard-sync = {
         key = "steam-frame-nix/clipboard-sync";
         _file = ./modules/clipboard-sync.nix;

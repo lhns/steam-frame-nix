@@ -1,29 +1,16 @@
-# Enables the SteamVR web helper debugger: Chromium DevTools of vrwebhelper,
-# which renders the SteamVR dashboard, on 127.0.0.1:8087, so steam-ui-patches
-# can patch the dashboard the way it patches Steam's UI on 127.0.0.1:8080.
-# Turned on automatically (mkDefault) when a UI patch targets port 8087.
+# SteamVR web helper debugger: DevTools of the dashboard (vrwebhelper) on
+# 127.0.0.1:8087, for dashboard patches. On automatically (mkDefault) when a
+# patch targets port 8087.
 #
-# SteamVR only opens the port when /settings/VRWebHelper/DebuggerEnabled is
-# true (settingsschema.vrsettings: requires_restart; port from
-# VRWebHelper/DebuggerPort, default 8087). User settings live in
-# ~/.config/openvr/config/steamvr.vrsettings, which SteamVR rewrites at
-# runtime and on exit (from memory), so it can't be a read-only store link,
-# and editing it while SteamVR runs would be overwritten.
-# steamvr-webhelper-debugger.service merges just that key with jq (atomic
-# write, other keys untouched, file created if missing), before every start
-# of steamvr.service (SteamVR's systemd user unit): a drop-in makes it
-# Want + start After the oneshot. (Its own ExecStartPre= chain already starts
-# vrserver, so an added ExecStartPre= would run too late.) Hence the setting
-# takes effect with the next SteamVR start, once.
-#
-# The service is installed even when disabled: if this module set the key
-# before (marker in $XDG_STATE_HOME/steam-frame-nix), it sets it back to
-# false at the next SteamVR start and removes the marker; otherwise it
-# leaves the file alone (a setting made by hand is kept).
-#
-# Security: the port listens on 127.0.0.1 only; Steam's Developer Mode makes
-# SteamOS forward it to 0.0.0.0:8088 (README, "DevTools on the LAN"), so keep
-# Developer Mode off. Our patches only use 127.0.0.1.
+# The port opens only with VRWebHelper/DebuggerEnabled (requires a SteamVR
+# restart). steamvr.vrsettings is rewritten by SteamVR from memory, so it
+# can't be a store link or be edited while SteamVR runs: a oneshot merges just
+# that key with jq before each steamvr.service start (drop-in Wants/After;
+# ExecStartPre= would be too late, vrserver starts in the unit's own chain).
+# Disabled, it resets the key only if it set it (marker in
+# $XDG_STATE_HOME/steam-frame-nix); a manual setting is kept.
+# Developer Mode forwards the port to 0.0.0.0:8088 (README, "DevTools on the
+# LAN"); our patches use 127.0.0.1 only.
 { config, lib, pkgs, ... }:
 let
   cfg = config.steamFrame.steamvrDebugger;
@@ -73,15 +60,11 @@ in {
     default = false;
     defaultText = lib.literalMD "on automatically when a dashboard patch (a `steamFrame.uiPatches.patches` entry on port 8087) is enabled";
     description = ''
-      Enable SteamVR's web helper debugger (DevTools of the SteamVR dashboard
-      on 127.0.0.1:8087, setting VRWebHelper/DebuggerEnabled in
-      ~/.config/openvr/config/steamvr.vrsettings), needed by patches of the
-      SteamVR dashboard. Set before each SteamVR start, so it takes effect
-      after SteamVR is restarted once. Turning it off sets the key back to
-      false at the next SteamVR start. Normally there is no need to set it:
-      it is turned on automatically when a dashboard patch is enabled. The
-      port listens on 127.0.0.1; keep Steam's Developer Mode off, which would
-      also forward it to the LAN (0.0.0.0:8088).
+      SteamVR's web helper debugger (dashboard DevTools on 127.0.0.1:8087,
+      VRWebHelper/DebuggerEnabled in steamvr.vrsettings), needed by dashboard
+      patches, which turn it on automatically. Takes effect after one SteamVR
+      restart; off resets the key at the next start. Developer Mode also
+      forwards the port to the LAN (0.0.0.0:8088).
     '';
   };
 
@@ -100,8 +83,7 @@ in {
       };
     };
 
-    # Wants= (not Requires=): if the merge fails (e.g. broken JSON), SteamVR
-    # still starts, just without the debugger.
+    # Wants=, not Requires=: SteamVR still starts if the merge fails.
     xdg.configFile."systemd/user/steamvr.service.d/webhelper-debugger.conf".text = ''
       [Unit]
       Wants=steamvr-webhelper-debugger.service

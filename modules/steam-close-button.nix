@@ -1,14 +1,6 @@
-# Close (X) button on the SteamVR dashboard's main Steam window
-# (steamFrame.dashboard.steamCloseButton.enable): it switches to the
-# previously active dashboard window, or leaves just the dashboard bar when
-# Steam was the last one. Runtime patch of SteamVR's dashboard page
-# (vrwebhelper "systemui", DevTools 127.0.0.1:8087; see
-# steam-close-button/patch.js for how it works), registered with
-# steam-ui-patches.nix only when enabled; it turns on the SteamVR web helper
-# debugger (steamvr-debugger.nix), which needs one SteamVR restart the first
-# time. Depends on SteamVR UI internals, found by signature
-# (lib/signatures.json, "steam-close-button"; scripts/check-signatures.mjs
-# checks them offline).
+# Close (X) button on the dashboard's Steam window. Dashboard patch
+# (steam-close-button/patch.js; "systemui" on 127.0.0.1:8087), registered only
+# when enabled; enables steamvr-debugger.nix (one SteamVR restart the first time).
 { config, lib, pkgs, ... }:
 let
   cfg = config.steamFrame.dashboard.steamCloseButton;
@@ -17,14 +9,10 @@ in {
   imports = [ ./steam-ui-patches.nix ./steamvr-debugger.nix ];
 
   options.steamFrame.dashboard.steamCloseButton.enable = lib.mkEnableOption ''
-    a Close (X) button on the SteamVR dashboard's main Steam window. It
-    docks the window back into the dashboard if it was placed in the world,
-    then switches to the most recently active other dashboard window, or,
-    with none, leaves the dashboard open with just its bar ("bar only";
-    kept when the dashboard is closed and reopened, until a window is
-    activated, e.g. with the Steam tab). Runtime patch of the SteamVR
-    dashboard (steamFrame.uiPatches), applied immediately; turning it off
-    removes the button (next switch)'';
+    a Close (X) button on the dashboard's Steam window: docks it back if it
+    was in the world, then switches to the last active other window, or
+    leaves only the dashboard bar (until a window is activated, e.g. via the
+    Steam tab). Dashboard patch; off removes it (next switch)'';
 
   config = lib.mkIf cfg.enable {
     steamFrame.uiPatches.patches = [ {

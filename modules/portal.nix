@@ -1,11 +1,8 @@
-# Workaround for the Steam Frame image (SteamOS 0.3.0, build 20260922):
-# the Steam session's xdg-desktop-portal gets XDG_DESKTOP_PORTAL_DIR pointing at
-# /usr/share/xdg-desktop-portal/gamescope-portals, which contains the holo and
-# gamescope backends but no gamescope-portals.conf (and no UseIn=). With that
-# variable set, the portal only reads config from that dir, so it selects no
-# backend and offers no OpenURI: no app in the Steam session can open links.
-# Fix: our own portal dir = links to Valve's .portal files + a config.
-# Remove once SteamOS ships a gamescope-portals.conf.
+# Workaround (SteamOS 0.3.0, build 20260922): the Steam session's portal dir
+# /usr/share/xdg-desktop-portal/gamescope-portals has backends but no
+# gamescope-portals.conf, so no backend is selected and there is no OpenURI
+# (links don't open). We point it at our own dir: Valve's .portal files + a
+# config. Remove once SteamOS ships the .conf.
 { config, lib, ... }:
 let
   sys = "/usr/share/xdg-desktop-portal/gamescope-portals";
@@ -15,8 +12,8 @@ in {
     type = lib.types.bool;
     default = true;
     description = ''
-      Give the Steam session's xdg-desktop-portal a working config
-      (gamescope-portals.conf) so apps there can open links (OpenURI).
+      Give the Steam session's xdg-desktop-portal a config so apps there can
+      open links (OpenURI).
     '';
   };
 
@@ -30,8 +27,7 @@ in {
       default=holo;gamescope
     '';
 
-    # Only affects the systemd-managed (outer) portal; the nested desktop's
-    # portal is D-Bus-activated on its own bus and keeps using kde-portals.conf.
+    # Outer (systemd) portal only; the nested desktop's keeps kde-portals.conf.
     xdg.configFile."systemd/user/xdg-desktop-portal.service.d/gamescope-portals.conf".text = ''
       [Service]
       Environment=XDG_DESKTOP_PORTAL_DIR=%h/.local/share/${dir}
