@@ -16,12 +16,13 @@ const ENV = { ...process.env, DISPLAY: process.env.VRKBD_DISPLAY || ':0', LC_ALL
 
 // Allowlist: requests come from Steam's UI JS, so the helper must not be able
 // to type ASCII text or press Enter on its behalf. Accepted:
-//  key:<combo>  the extra keys (Esc, Del, Home, End, arrows), optionally with
-//               modifiers; or ctrl and/or alt (+ optional shift) with one key
+//  key:<combo>  the extra keys (Esc, Del, Home, End, PgUp/PgDn, arrows),
+//               optionally with modifiers; or ctrl and/or alt (+ optional
+//               shift) with one key
 //  type:<char>  one character Steam's key emulation can't produce: non-ASCII
 //               (äöüß€§°´…) or | @ { [ ] } \ ~ ^ `
 //  down:<mod> / up:<mod>   hold/release ctrl or alt
-const SPECIAL = new Set(['Escape', 'Delete', 'Home', 'End', 'Left', 'Right', 'Up', 'Down']);
+const SPECIAL = new Set(['Escape', 'Delete', 'Home', 'End', 'Prior', 'Next', 'Left', 'Right', 'Up', 'Down']);
 const KEY = /^([a-z0-9]|space|BackSpace|Tab|period|comma|minus|plus|numbersign|less|slash|ssharp|udiaeresis|odiaeresis|adiaeresis)$/;
 const MODKEY = { ctrl: 'Control_L', alt: 'Alt_L' };
 function allowedCombo(combo) {

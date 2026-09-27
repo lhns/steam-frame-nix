@@ -12,7 +12,7 @@
 // executed by helper.mjs with xdotool on :0.
 // Idempotent: safe to evaluate repeatedly.
 (() => {
-  const VERSION = 5;
+  const VERSION = 7;
   const send = (msg) => window.__vrkbdKey && window.__vrkbdKey(msg);
   const wr = window.__vrkbdWr ||
     (webpackChunksteamui.push([[Symbol('vrkbd')], {}, (r) => { window.__vrkbdWr = r; }]), window.__vrkbdWr);
@@ -25,18 +25,33 @@
   // left of the space bar, and Steam's arrow keys become four separate keys
   // (stock layouts pair them as [Left, Up-when-shifted], [Right, Down-when-shifted]).
   // Key type "Half" for all added keys; the stylesheet below sets their width.
+  // Every entry is a [normal, shifted, altgr] triple: Steam's stock bottom row
+  // lacks explicit variants, so with Shift the close icon jumps and with AltGr
+  // keys turn into empty full-width panels. With AltGr the arrows become
+  // Pos1/Ende/PgUp/PgDn (Shift+arrows stay arrows, for selecting).
   const HALF = 2;
   const k = (key, label) => ({ key, label, type: HALF });
-  const MODS = [k('VKX_Escape', 'Esc'), k('Control', 'Ctrl'), k('Alt', 'Alt')];
-  const ARROWS = [Layouts.Md, Layouts.GO, Layouts.xl, Layouts.B6]   // Steam's ArrowLeft/Up/Down/Right
-    .map((a) => ({ ...a, type: HALF }));
+  // null as the shifted variant = "same key, no shift label". Steam still draws
+  // the AltGr variant as a small secondary label; the stylesheet hides that in
+  // the bottom row (the arrows keep theirs as a Pos1/Ende/Bild hint).
+  const same = (x) => [x, null, x];
+  const MODS = [k('VKX_Escape', 'Esc'), k('Control', 'Ctrl'), k('Alt', 'Alt')].map(same);
+  const half = (a) => ({ ...a, type: HALF });
+  const ARROWS = [                                 // Steam's ArrowLeft/Up/Down/Right keys
+    [Layouts.Md, k('VKX_Home', 'Pos1')],
+    [Layouts.GO, k('VKX_Prior', 'Bild↑')],
+    [Layouts.xl, k('VKX_Next', 'Bild↓')],
+    [Layouts.B6, k('VKX_End', 'Ende')],
+  ].map(([a, alt]) => [half(a), null, alt]);
+  const first = (x) => (Array.isArray(x) ? x.find((y) => y) : x);
   const isArrow = (x) => (Array.isArray(x) ? x : [x]).some((y) => y && typeof y.key === 'string' && y.key.startsWith('Arrow'));
   const bottomRow = (row) => {
     const out = [];
     for (const x of row) {
-      if (x === undefined || isArrow(x)) continue;
-      if (x && x.key === ' ') out.push(...MODS);
-      out.push(x);
+      const key = first(x);
+      if (!key || isArrow(x)) continue;
+      if (key.key === ' ') out.push(...MODS);
+      out.push(same(key));
     }
     out.splice(out.length - 1, 0, ...ARROWS);      // before Close/Done (last entry)
     return out;
@@ -90,9 +105,13 @@
   const doc = kbPopup.window.document;
   let style = doc.getElementById('vrkbd-style');
   if (!style) { style = doc.createElement('style'); style.id = 'vrkbd-style'; doc.head.appendChild(style); }
-  style.textContent = ['VKX_Escape', 'Control', 'Alt', 'ArrowLeft', 'ArrowUp', 'ArrowDown', 'ArrowRight']
+  style.textContent = ['VKX_Escape', 'Control', 'Alt', 'ArrowLeft', 'ArrowUp', 'ArrowDown', 'ArrowRight',
+    'VKX_Home', 'VKX_Prior', 'VKX_Next', 'VKX_End']
     .map((key) => `[data-key="${key}"]`).join(',') + '{ width: 43px !important; }'
-    + '[data-key="AltGr"]{ width: 52px !important; }';
+    + '[data-key="AltGr"]{ width: 52px !important; }'
+    // Secondary (AltGr) labels in the bottom row, except the arrows' hints.
+    + `[data-key-row="${Math.max(...[...doc.querySelectorAll('[data-key-row]')].map((e) => +e.getAttribute('data-key-row')))}"]`
+    + ':not([data-key^="Arrow"]) span ~ span { display: none !important; }';
   const el = doc.querySelector('[data-key]');
   let f = el[Object.keys(el).find((x) => x.startsWith('__reactFiber'))];
   while (f && !(f.stateNode && f.stateNode.TypeKeyInternal)) f = f.return;
@@ -123,7 +142,8 @@
       const key = st?.strKey;
       const ts = this.state?.toggleStates || {};
       const ctrl = active(ts.Control), alt = active(ts.Alt), shift = active(ts.Shift);
-      const special = key?.startsWith('VKX_');
+      // Extra keys always; Shift+arrow too (Steam's own arrow path drops Shift).
+      const special = key?.startsWith('VKX_') || (shift && key?.startsWith('Arrow'));
       const isToggle = key && ['Shift', 'CapsLock', 'Control', 'Alt', 'AltGr'].includes(key);
       if (key && !isToggle && (special || ctrl || alt)) {
         const sym = keysym(key);
