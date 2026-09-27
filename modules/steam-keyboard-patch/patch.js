@@ -115,7 +115,10 @@
     // Arrow keys: smaller icon, raised, and a smaller Pos1/Ende/Bild hint at
     // the bottom edge, so the two don't overlap on the half-width keys.
     + '[data-key^="Arrow"] span ~ span { font-size: 7px !important; top: auto !important; bottom: 3px !important; line-height: 1 !important; }'
-    + '[data-key^="Arrow"] span:first-child svg { height: 18px !important; transform: translateY(-4px); }';
+    + '[data-key^="Arrow"] span:first-child svg { height: 18px !important; transform: translateY(-4px); }'
+    // AltGr variants of the arrows: labels slightly smaller than the 16px default.
+    + ['VKX_Home', 'VKX_Prior', 'VKX_Next', 'VKX_End'].map((key) => `[data-key="${key}"] span`).join(',')
+    + ' { font-size: 13px !important; }';
   const el = doc.querySelector('[data-key]');
   let f = el[Object.keys(el).find((x) => x.startsWith('__reactFiber'))];
   while (f && !(f.stateNode && f.stateNode.TypeKeyInternal)) f = f.return;
