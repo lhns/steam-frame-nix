@@ -111,7 +111,11 @@
     + '[data-key="AltGr"]{ width: 52px !important; }'
     // Secondary (AltGr) labels in the bottom row, except the arrows' hints.
     + `[data-key-row="${Math.max(...[...doc.querySelectorAll('[data-key-row]')].map((e) => +e.getAttribute('data-key-row')))}"]`
-    + ':not([data-key^="Arrow"]) span ~ span { display: none !important; }';
+    + ':not([data-key^="Arrow"]) span ~ span { display: none !important; }'
+    // Arrow keys: smaller icon, raised, and a smaller Pos1/Ende/Bild hint at
+    // the bottom edge, so the two don't overlap on the half-width keys.
+    + '[data-key^="Arrow"] span ~ span { font-size: 7px !important; top: auto !important; bottom: 3px !important; line-height: 1 !important; }'
+    + '[data-key^="Arrow"] span:first-child svg { height: 18px !important; transform: translateY(-4px); }';
   const el = doc.querySelector('[data-key]');
   let f = el[Object.keys(el).find((x) => x.startsWith('__reactFiber'))];
   while (f && !(f.stateNode && f.stateNode.TypeKeyInternal)) f = f.return;
