@@ -7,7 +7,12 @@
 # - pinned-desktop/: hides Desktop in the scrolling list and pins a copy above
 #   or below it, with a separator; clicking the copy clicks the hidden
 #   original. The position is passed by calling the patch's function.
-# Both are reverted when turned off (next switch).
+# - launch/: wraps SteamClient.Apps.LaunchNonSteamApp (only called by this
+#   menu) to close the menu right after a program is started, and/or to
+#   ignore repeated launches of the same program within a few seconds (stock,
+#   the menu stays open until the program's window appears, inviting double
+#   launches). Options are passed by calling the patch's function.
+# All are reverted when turned off (next switch).
 # Depends on Steam UI internals; tested with Steam client 1790377368.
 { config, lib, pkgs, ... }:
 let
@@ -38,6 +43,29 @@ in {
         patch of Steam's UI (steamFrame.uiPatches).
       '';
     };
+    closeOnLaunch = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Close the "+" menu as soon as a program in it is activated (pointer,
+        controller or the pinned Desktop entry). Stock, it stays open until the
+        program's window appears, so it looks as if the click did nothing and
+        programs get launched twice. Runtime patch of Steam's UI
+        (steamFrame.uiPatches); off by default like the other launcherMenu
+        options, so nothing is injected unless asked for.
+      '';
+    };
+    launchDebounce = lib.mkOption {
+      type = lib.types.ints.unsigned;
+      default = 0;
+      example = 10;
+      description = ''
+        Seconds during which another launch of the same program (same command
+        line) from the "+" menu is ignored, counted from the last launch that
+        went through; ignored launches are logged (steam-ui-patches journal).
+        0 disables it. Runtime patch of Steam's UI (steamFrame.uiPatches).
+      '';
+    };
   };
 
   config.steamFrame.uiPatches.patches =
@@ -54,5 +82,16 @@ in {
         (${builtins.readFile ./launcher-menu/pinned-desktop/patch.js})(${builtins.toJSON { position = cfg.pinDesktop; }})
       '';
       unpatch = ./launcher-menu/pinned-desktop/unpatch.js;
+    }
+    ++ lib.optional (cfg.closeOnLaunch || cfg.launchDebounce > 0) {
+      name = "launcher-menu-launch";
+      target = sharedJSContext;
+      patch = pkgs.writeText "launcher-menu-launch.js" ''
+        (${builtins.readFile ./launcher-menu/launch/patch.js})(${builtins.toJSON {
+          inherit (cfg) closeOnLaunch;
+          debounceSeconds = cfg.launchDebounce;
+        }})
+      '';
+      unpatch = ./launcher-menu/launch/unpatch.js;
     };
 }

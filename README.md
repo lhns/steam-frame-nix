@@ -127,7 +127,12 @@ the two files below).
   steamFrame = {
     keyboardLayout = "de";
     steamKeyboardPatch.enable = true;
-    launcherMenu = { sort = true; pinDesktop = "bottom"; };
+    launcherMenu = {
+      sort = true;
+      pinDesktop = "bottom";
+      closeOnLaunch = true;
+      launchDebounce = 10;
+    };
     firefox.enable = true;
     # Only relevant with Steam Developer Mode on (see hidden-apps below).
     hiddenApps = [ "lxterminal" "cmake-gui" "firewall-config" "renderdoc" ];
@@ -174,6 +179,8 @@ menu list every desktop entry, including terminals such as Konsole.
 | `steamFrame.uiPatches.patches` | list of submodules | `[ ]` | Runtime patches of Steam's web UIs over their local DevTools ports, see [UI patches](#ui-patches-uipatchespatches). |
 | `steamFrame.launcherMenu.sort` | bool | `false` | Sort the VR "+" menu alphabetically. |
 | `steamFrame.launcherMenu.pinDesktop` | null or `"top"` / `"bottom"` | `null` | Pin "Desktop" above or below the "+" menu's scrolling list (always visible). `null`: a normal list entry. |
+| `steamFrame.launcherMenu.closeOnLaunch` | bool | `false` | Close the "+" menu as soon as a program in it is clicked. |
+| `steamFrame.launcherMenu.launchDebounce` | unsigned int (seconds) | `0` | Ignore repeated launches of the same program from the "+" menu within this time. `0`: off. |
 | `steamFrame.hiddenApps` | list of str | `[ ]` | Desktop entry ids (without `.desktop`) to hide from the "+" and KDE menus. |
 | `steamFrame.clipboardSync.enable` | bool | `true` | Clipboard bridge between the Steam session and the nested desktop. |
 | `steamFrame.clipboardSync.package` | package | built from `dnut/clipboard-sync` | The clipboard-sync package. |
@@ -346,6 +353,11 @@ GLib hash-table order, effectively random and changing with installed apps,
 with "Desktop" (the nested Plasma session) somewhere in the middle of a
 scrolling list.
 
+Also, clicking a program only calls `SteamClient.Apps.LaunchNonSteamApp()`:
+the menu stays open until the program's window appears, which can take a
+while, so it looks as if the click did nothing, and a second click starts
+the program twice.
+
 **Fix:** UI patches (see above) in Steam's `SharedJSContext`:
 
 - `sort = true`: a wrapper around `ScanForInstalledNonSteamApps` sorts the
@@ -360,8 +372,17 @@ scrolling list.
   **Limitation:** the pinned copy is a plain DOM element, not part of Steam's
   controller navigation: it works with the laser pointer, but thumbstick /
   D-pad focus can't reach it.
+- `closeOnLaunch = true` / `launchDebounce = <seconds>`: a wrapper around
+  `LaunchNonSteamApp` (called only by this menu, for list entries and the
+  pinned Desktop alike). With `closeOnLaunch`, it closes the menu right after
+  the launch through the "+" button's own popup handle (as Steam does after
+  adding a desktop window). With `launchDebounce`, another launch of the same
+  command line within that many seconds of the last one that went through is
+  ignored and logged (`journalctl --user -u steam-ui-patches`, on the next
+  re-injection, i.e. within 15 s). Consequence: a program that exits right
+  away can only be started again once the time is up.
 
-Both are reverted when the options are turned off (next switch).
+All are reverted when the options are turned off (next switch).
 Tested with Steam client 1790377368.
 
 ### Hidden apps (`hiddenApps`)
