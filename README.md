@@ -1028,3 +1028,7 @@ default-browser associations for `org.mozilla.firefox.desktop` keep working.
 
 `home-manager generations` lists previous generations; run the `activate`
 script of the one you want (`<store path>/activate`).
+
+## License
+
+[Apache License 2.0](LICENSE).
