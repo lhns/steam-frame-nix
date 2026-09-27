@@ -137,6 +137,7 @@ the two files below).
       closeOnLaunch = true;
       launchDebounce = 10;
       grid = { enable = true; columns = 4; maxRows = 4; };
+      showAllApps = true;
     };
     dashboard = {
       windowMaxScale = 4.0;
@@ -196,6 +197,7 @@ menu list every desktop entry, including terminals such as Konsole.
 | `steamFrame.launcherMenu.grid.enable` | bool | `false` | Show the "+" menu's programs as a grid of tiles (large icon, name below) instead of a list. |
 | `steamFrame.launcherMenu.grid.columns` | int, 1-8 | `4` | Tiles per row (popup is 300 px wide: 3 ≈ 92 px, 4 ≈ 68 px, 5 ≈ 53 px tiles). |
 | `steamFrame.launcherMenu.grid.maxRows` | null or positive int | `null` | Rows visible at once, the rest scrolls. `null`: fill up to the menu's max height (600 px). |
+| `steamFrame.launcherMenu.showAllApps` | bool | `false` | List all programs in the "+" menu without Steam's Developer Mode (Konsole, KDE System Settings, Dolphin, Discover, VLC, ... are hidden otherwise). See [Launcher menu](#launcher-menu-launchermenu). |
 | `steamFrame.launcherMenu.iconFallbacks.enable` | bool | `true` | On every switch, link hicolor fallbacks (Breeze app icons) for desktop entries whose icon Steam can't find, so the "+" menu shows them (SteamOS: Konsole, KDE System Settings). `false` removes the links. See [Icon fallbacks](#icon-fallbacks-launchermenuiconfallbacks). |
 | `steamFrame.launcherMenu.iconFallbacks.extra` | list of str | `[ ]` | Further icon names to provide even if no desktop entry the scan sees uses them. |
 | `steamFrame.dashboard.windowMaxScale` | null or number | `null` | Largest resize-handle scale of SteamVR dashboard windows, relative to their default size. `null`: stock (2). See [Dashboard windows](#dashboard-windows-dashboard). |
@@ -563,6 +565,21 @@ the program twice.
   Controller navigation keeps working: Steam derives thumbstick / D-pad
   directions from the panel's CSS grid, so up/down/left/right move between
   tiles.
+
+- `showAllApps = true`: without Steam's Developer Mode, the menu hides a
+  fixed list of programs by executable name (`konsole`, `systemsettings`,
+  `dolphin`, `plasma-discover`, `vlc`, `firewall-config`, `cmake-gui`,
+  `qrenderdoc`, `lxterminal`, `sh`); Steam's scan still finds them. The
+  menu's filter adds that list to its block list only when Developer Mode
+  is off (`bDevMode || block.push(...list)`), and nothing else uses the list,
+  so the patch gives that one array an empty iterator: nothing is added,
+  the setting itself (used by other settings pages) is untouched. So
+  Developer Mode can stay off: it also turns on sshd, xrdp, the devkit
+  service and SteamOS's LAN forwards of the DevTools ports (0.0.0.0:8081 and
+  8088), none of which the patches need. Hide single programs with
+  `steamFrame.hiddenApps`. Found by signature (webpack module with the
+  `developer_mode_enabled` accessor and the list); the offline checker also
+  verifies the filter still spreads the list.
 
 All are reverted when the options are turned off (next switch). These
 patches use Steam APIs (`SteamClient.Apps`), React props and CSS rather

@@ -137,6 +137,26 @@
         }
       }
     },
+    "launcher-menu-show-all": {
+      "bundle": "steamui",
+      "modules": {
+        "devModeApps": {
+          "module": { "includes": ["\"developer_mode_enabled\"", "\"firewall-config\"", "\"vrurlhandler\"", "\"Install Chromium\""] },
+          "exports": {
+            "devModeOnly": { "type": "object", "has": ["push"], "props": { "0": "firewall-config" } }
+          },
+          "expects": ["\"konsole\"", "\"systemsettings\"", "\"dolphin\"", "\"plasma-discover\""]
+        },
+        "launcherFilter": {
+          "checkOnly": true,
+          "module": {
+            "includes": ["allowLaunchProgram", "#VRDashboard_LaunchNonSteamApp", "strExePath.endsWith(\"/\"+"],
+            "regex": ["/\\|\\|[\\w$]+\\.push\\(\\.\\.\\.[\\w$]+\\.[\\w$]+\\),[\\w$]+\\.filter\\(/"]
+          },
+          "expects": ["strAppName==", "strExePath=="]
+        }
+      }
+    },
     "dashboard-windows": {
       "bundle": "vrwebui-systemui",
       "modules": {

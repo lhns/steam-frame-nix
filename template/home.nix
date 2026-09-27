@@ -26,6 +26,9 @@
   #     closeOnLaunch = true;
   #     launchDebounce = 10;
   #     grid = { enable = true; columns = 4; maxRows = 4; };
+  #     # All programs without Steam's Developer Mode (Konsole, KDE System
+  #     # Settings, Dolphin, ... are hidden otherwise):
+  #     showAllApps = true;
   #     # Icon fallbacks for programs without an icon in the menu are on by
   #     # default; names to provide in addition to what the scan finds:
   #     # iconFallbacks.extra = [ "system-file-manager" ];

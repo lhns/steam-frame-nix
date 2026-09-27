@@ -112,6 +112,19 @@ in {
         '';
       };
     };
+    showAllApps = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        List all programs in the "+" menu without Steam's Developer Mode.
+        Without it, Steam hides a fixed list (konsole, systemsettings,
+        dolphin, plasma-discover, vlc, firewall-config, cmake-gui, qrenderdoc,
+        lxterminal, sh). Only that list is emptied; the Developer Mode setting
+        itself (used by other settings pages) is untouched. Hide individual
+        programs with steamFrame.hiddenApps. Runtime patch of Steam's UI
+        (steamFrame.uiPatches).
+      '';
+    };
     iconFallbacks = lib.mkOption {
       default = { };
       description = ''
@@ -223,5 +236,14 @@ in {
         opts = { inherit (cfg.grid) columns maxRows; };
       };
       unpatch = ./launcher-menu/grid/unpatch.js;
+    }
+    ++ lib.optional cfg.showAllApps {
+      name = "launcher-menu-show-all";
+      target = sharedJSContext;
+      patch = mkPatch {
+        name = "launcher-menu-show-all";
+        src = ./launcher-menu/show-all/patch.js;
+      };
+      unpatch = ./launcher-menu/show-all/unpatch.js;
     };
 }
