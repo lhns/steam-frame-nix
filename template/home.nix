@@ -43,7 +43,8 @@
   #     # just the dashboard bar:
   #     steamCloseButton.enable = true;
   #     # Curvature per window: click the "Toggle Curvature" row of a
-  #     # window's More Options menu to toggle, drag up/down to adjust:
+  #     # window's More Options menu (or its bar button) to toggle, drag
+  #     # up/down to adjust (with controller haptics):
   #     windowCurvature.enable = true;
   #   };
   #   firefox.enable = true;             # launcher for the Firefox Flatpak

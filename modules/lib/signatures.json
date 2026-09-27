@@ -295,7 +295,8 @@
           "checkOnly": true,
           "module": { "includes": ["legacy-frame-controls-additional-options-", "controlAdditionalOptionsItems.filter("] },
           "expects": ["id:`legacy-frame-controls-additional-options-${", "isControlAdditionalOptionsOpen",
-            ".AdditionalOptionsRow,", ".AdditionalOptionsLabel},", "display_name", "invocation", "onClick:()=>{", "onMouseDown:"]
+            ".AdditionalOptionsRow,", ".AdditionalOptionsLabel},", "display_name", "invocation", "onClick:()=>{", "onMouseDown:",
+            "id:`legacy-frame-controls-${", "items_for_bottom_frame_controls", "control:e,", ".TopCenter,meters_per_pixel:"]
         },
         "curvatureAction": {
           "checkOnly": true,
@@ -306,7 +307,8 @@
           "checkOnly": true,
           "module": { "includes": ["e[e.Alive=2]=\"Alive\""] },
           "expects": ["this.curvature=", "this.docking=", "get isControlAdditionalOptionsOpen()",
-            "get controlAdditionalOptionsItems()", "get associatedSummonOverlayKeys()"]
+            "get controlAdditionalOptionsItems()", "get associatedSummonOverlayKeys()",
+            "get protoForSteam()", "isCurrentlyVisible"]
         },
         "docking": {
           "checkOnly": true,
@@ -325,7 +327,22 @@
         },
         "panel": {
           "checkOnly": true,
-          "module": { "includes": ["properties[\"curvature-origin-id\"]"] }
+          "module": { "includes": ["properties[\"curvature-origin-id\"]"] },
+          "expects": ["properties.origin=", "properties.debug_name=this.props.debug_name", ".TopCenter:return{x:0,y:1}",
+            "this.m_Rect=this.getCurrentRootElement().getBoundingClientRect()", "new ResizeObserver("]
+        },
+        "sgApp": {
+          "checkOnly": true,
+          "module": { "includes": ["forceLayoutUpdate(){", "s_bPanelsAreDirty"] },
+          "expects": ["forceLayoutUpdate=this.forceLayoutUpdate", "updateLayoutValues()"]
+        },
+        "hapticEffects": {
+          "checkOnly": true,
+          "module": { "includes": ["e[e.Snap=3]=\"Snap\",e[e.Sliding=4]=\"Sliding\",e[e.SlidingEdge=5]=\"SlidingEdge\""] }
+        },
+        "hapticCall": {
+          "checkOnly": true,
+          "module": { "includes": ["TriggerOverlayHapticEffect(VRHTML.VROverlay.ThisOverlayHandle(),"] }
         },
         "sceneGraphNodes": {
           "checkOnly": true,

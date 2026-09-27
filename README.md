@@ -203,7 +203,7 @@ menu list every desktop entry, including terminals such as Konsole.
 | `steamFrame.dashboard.windowMaxScale` | null or number | `null` | Largest resize-handle scale of SteamVR dashboard windows, relative to their default size. `null`: stock (2). See [Dashboard windows](#dashboard-windows-dashboard). |
 | `steamFrame.dashboard.windowDistance.{world,theater,dashboard}.{min,max}` | null or number (m) | `null` | How close / far grabbed windows can be pulled in / pushed back. `null`: stock (world 0.25-5, theater 1-6, dashboard 0.3-4 m). |
 | `steamFrame.dashboard.steamCloseButton.enable` | bool | `false` | Close (X) button on the dashboard's Steam window: switches to the previous window, or leaves just the dashboard bar. See [Steam close button](#steam-close-button-dashboardsteamclosebuttonenable). |
-| `steamFrame.dashboard.windowCurvature.enable` | bool | `false` | Adjustable curvature per dashboard window: the "Toggle Curvature" row of a window's More Options menu becomes a control (click: toggle, drag up/down: curvature). See [Window curvature](#window-curvature-dashboardwindowcurvature). |
+| `steamFrame.dashboard.windowCurvature.enable` | bool | `false` | Adjustable curvature per dashboard window: the "Toggle Curvature" row of a window's More Options menu (and its bottom-bar button, when it sits there) becomes a control (click: toggle, drag up/down: curvature). See [Window curvature](#window-curvature-dashboardwindowcurvature). |
 | `steamFrame.dashboard.windowCurvature.default` | number | `1.0` | Curvature of world/hand windows without a value of their own, once curved (relative to SteamVR's stock curve: 1 = stock, 2 = twice as curved, 0 = flat). Dashboard/theater windows start at 1. |
 | `steamFrame.dashboard.windowCurvature.max` | number | `3.0` | Largest curvature the control goes to. |
 | `steamFrame.dashboard.windowCurvature.step` | number | `0.05` | Step the value is rounded to while dragging. |
@@ -211,6 +211,9 @@ menu list every desktop entry, including terminals such as Konsole.
 | `steamFrame.dashboard.windowCurvature.snapPoints` | list of numbers | `[ 0 1.0 ]` | Snap points (flat, stock). |
 | `steamFrame.dashboard.windowCurvature.dragThreshold` | unsigned int (px) | `8` | Vertical laser travel before a press becomes a drag instead of a click. |
 | `steamFrame.dashboard.windowCurvature.dragPixelsPerUnit` | number (px) | `60` | Drag distance per 1.0 of curvature (the laser stops at the menu's edge, ~190 px above the row). |
+| `steamFrame.dashboard.windowCurvature.barDragPixelsPerUnit` | number (px) | `30` | Drag distance per 1.0 of curvature on the bottom-bar button. |
+| `steamFrame.dashboard.windowCurvature.barDragRoom` | unsigned int (px) | `160` | Transparent room added above and below a window's bottom bar while its curvature button is dragged, so the laser stays on the bar. `0`: none. |
+| `steamFrame.dashboard.windowCurvature.haptics` | bool | `true` | Controller haptics while dragging: snap at snap points, edge at 0 and `max`, a tick per other step. |
 | `steamFrame.steamvrDebugger.enable` | bool | `true` if a UI patch uses port 8087, else `false` | SteamVR dashboard DevTools on `127.0.0.1:8087` (`VRWebHelper/DebuggerEnabled`), needed by dashboard patches. See [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable). |
 | `steamFrame.hiddenApps` | list of str | `[ ]` | Desktop entry ids (without `.desktop`) to hide from the "+" and KDE menus. |
 | `steamFrame.clipboardSync.enable` | bool | `true` | Clipboard bridge between the Steam session and the nested desktop. |
@@ -748,13 +751,23 @@ flat.
 `127.0.0.1:8087`, title `systemui`; it turns on the
 [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable)) makes the whole
 "Toggle Curvature" row a control, with the window's value on its right and
-small arrows above/below it:
+small arrows above/below it. When the control sits in the window's bottom
+bar instead (e.g. moved there by a patch of your own), that button works
+the same way, without the value: the steps are felt as haptics.
 
 - **click**: curved → flat, flat → stock curve (1);
 - **press and drag up/down** with the laser (after `dragThreshold` px): the
   curvature follows live, `dragPixelsPerUnit` px per 1.0, rounded to `step`,
   from 0 (flat) to `max`. Near a snap point (`snapPoints`, by default 0 and
   1, within ± `snap`) it snaps to it exactly; dragging on moves past.
+  With `haptics`, the controller gives a snap at a snap point, an edge
+  bump at 0 and `max` and a light tick for other steps (SteamVR's own
+  overlay haptic effects).
+- on the **bar button**, `barDragPixelsPerUnit` px per 1.0; the bar panel is
+  only one button high and the laser's position stops at the edge of the
+  pressed panel, so while dragging the panel gets `barDragRoom` px of
+  transparent room above and below (its origin is shifted in the scene
+  graph by the same amount, so the bar stays in place).
 
 ```nix
 steamFrame.dashboard.windowCurvature = {
@@ -762,6 +775,7 @@ steamFrame.dashboard.windowCurvature = {
   # default = 1.0;  max = 3.0;  step = 0.05;
   # snap = 0.15;  snapPoints = [ 0 1.0 ];
   # dragThreshold = 8;  dragPixelsPerUnit = 60;
+  # barDragPixelsPerUnit = 30;  barDragRoom = 160;  haptics = true;
 };
 ```
 
@@ -789,6 +803,17 @@ kept per window (its overlay key) in the `systemui` page
 (`home-manager switch`), but not across a SteamVR restart (or a reload of the
 dashboard page). `window.__sfuiWindowCurvature.dump()` lists every window's
 state, `.log` recent events.
+
+**Other patches** that handle presses on the same controls (e.g. a long
+press on frame controls) coordinate through a small contract instead of
+guessing each other's timing: every element the patch drives has the class
+`sfui-curv-ctl`; when a press on one becomes a drag, a bubbling
+`CustomEvent` `sfui-curv-dragstart` (detail `{ frameID, where: 'menu' | 'bar' }`)
+is dispatched on it, and `sfui-curv-dragend` when the drag ends;
+`window.__sfuiWindowCurvature.cancelPress()` ends a press without its
+click. A patch with its own gesture there lets `mousemove` through while
+that gesture is undecided, drops it on `sfui-curv-dragstart`, and calls
+`cancelPress()` when it takes the press over.
 
 **Limitations:**
 

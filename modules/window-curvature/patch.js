@@ -1,8 +1,11 @@
 // window-curvature: adjustable curvature per SteamVR dashboard window. The
-// "Toggle Curvature" row of a window's More Options (three-dot) menu becomes
-// the control: click toggles (curved -> flat, flat -> stock curve), dragging
-// up/down with the laser sets the curvature live; the value is shown on the
-// right of the row.
+// stock "Toggle Curvature" control becomes a wheel wherever it is shown: the
+// row of a window's More Options (three-dot) menu (with the value on the
+// right of the row) and, when the control sits in the window's bottom bar
+// (e.g. moved there by another patch), that bar button (no value shown:
+// the steps and snap points are felt as controller haptics). Click toggles
+// (curved -> flat, flat -> stock curve), dragging up/down with the laser sets
+// the curvature live.
 //
 // Target: SteamVR's dashboard page (vrwebhelper, DevTools 127.0.0.1:8087,
 // title "systemui"). This file is a function expression, called by the file
@@ -40,19 +43,57 @@
 // docked in the dashboard or the theater, so the docked Steam window stays
 // concentric with the dashboard bar.
 //
+// Bar button: the bar panel (vsg-node#legacy-frame-controls-<frameID>,
+// origin TopCenter) is one button high, and the laser's position stops at
+// the edge of the pressed panel. While a drag on the bar button runs, the
+// panel gets opts.barDragRoom px of transparent padding above and below
+// (stock window.forceLayoutUpdate() re-measures it), and the panel's origin
+// is moved by the same amount in outgoing scene graphs, so the bar stays
+// where it is in VR. The padding moves the bar down in page coordinates;
+// laser events the compositor still maps with the old layout are recognised
+// (the laser moves continuously) and shifted. opts.barDragPixelsPerUnit
+// sets the drag speed there.
+//
+// Haptics (opts.haptics): VRHTML.VROverlay.TriggerOverlayHapticEffect with
+// the stock EOverlayHapticEffect values (sigs.hapticEffects): SlidingEdge at
+// 0 and max, Snap at a snap point, Sliding for other steps (at most every
+// 30 ms).
+//
+// Contract with other patches (e.g. a long press on frame controls): this
+// patch owns press-and-drag on its controls.
+//   - Every element it drives has the class `sfui-curv-ctl`.
+//   - When a press on one becomes a drag (opts.dragThreshold px vertical),
+//     it dispatches a bubbling CustomEvent `sfui-curv-dragstart` on the
+//     element (detail { frameID, where: 'menu' | 'bar' }); when that drag
+//     ends (release or cancelPress), `sfui-curv-dragend`.
+//   - window.__sfuiWindowCurvature.cancelPress() ends the current press on
+//     any of its controls without its click (a drag stays at its value);
+//     returns whether a press was active.
+// A patch with its own gesture on these elements lets mousemove through
+// while that gesture is undecided, drops it on `sfui-curv-dragstart`, and
+// calls cancelPress() when it takes the press over. Neither side reads the
+// other's thresholds or restores the other's state afterwards.
+//
 // Debugging: window.__sfuiWindowCurvature: dump() (per frame: dock, on/off,
-// stored/applied value, distances), hits (scene-graph rewrite counters),
-// log (last events, also in the state), setValue(frameID, v).
+// stored/applied value, distances, controls), hits (scene-graph rewrite and
+// haptic counters), log (last events, also in the state), setValue(frameID,
+// v), controls(), cancelPress().
 ((find, sigs, opts, hooks) => {
   const NAME = 'window-curvature';
-  const VERSION = 10;
+  const VERSION = 11;
   const FLAT = 999;                               // origin distances >= this are "flat"
   const ICON_OFF = 40, ICON_ON = 39;              // Toggle Curvature action icons (sigs.curvatureAction)
+  const HAPTIC = { Snap: 3, Sliding: 4, SlidingEdge: 5 };   // EOverlayHapticEffect (sigs.hapticEffects)
 
-  const o = { default: 1, max: 3, step: 0.05, snap: 0.15, snapPoints: [0, 1], dragThreshold: 8, dragPixelsPerUnit: 60, ...opts };
+  const o = {
+    default: 1, max: 3, step: 0.05, snap: 0.15, snapPoints: [0, 1], dragThreshold: 8, dragPixelsPerUnit: 60,
+    barDragPixelsPerUnit: 30, barDragRoom: 160, haptics: true, ...opts,
+  };
   if (!(o.max > 0 && o.step > 0 && o.step <= o.max && o.default >= 0 && o.default <= o.max && o.snap >= 0 &&
       Array.isArray(o.snapPoints) && o.snapPoints.every((p) => p >= 0 && p <= o.max) &&
-      o.dragThreshold >= 0 && o.dragPixelsPerUnit > 0)) return `invalid options ${JSON.stringify(opts)}`;
+      o.dragThreshold >= 0 && o.dragPixelsPerUnit > 0 && o.barDragPixelsPerUnit > 0 &&
+      Number.isInteger(o.barDragRoom) && o.barDragRoom >= 0 && typeof o.haptics === 'boolean'))
+    return `invalid options ${JSON.stringify(opts)}`;
   const id = JSON.stringify([VERSION, o]);
 
   const prev = window.__sfuiWindowCurvature;
@@ -85,7 +126,7 @@
     logBuf.push({ t: new Date().toISOString().slice(11, 23), msg, ...(data ? { data } : {}) });
     if (logBuf.length > 200) logBuf.splice(0, logBuf.length - 200);
   };
-  const hits = { sends: 0, origins: 0, scaled: 0 };
+  const hits = { sends: 0, origins: 0, scaled: 0, roomOrigins: 0, haptics: 0 };
 
   // ---- values ------------------------------------------------------------------------
   const round = (v) => +(Math.round(v / o.step) * o.step).toFixed(6);
@@ -110,7 +151,35 @@
     return v;
   };
 
+  // ---- haptics -------------------------------------------------------------------------
+  let lastHaptic = -Infinity;
+  const haptic = (effect) => {
+    if (!o.haptics) return;
+    const ov = window.VRHTML?.VROverlay;
+    if (typeof ov?.TriggerOverlayHapticEffect !== 'function' || typeof ov.ThisOverlayHandle !== 'function') return;
+    const now = performance.now();
+    if (effect === HAPTIC.Sliding && now - lastHaptic < 30) return;
+    lastHaptic = now;
+    try { ov.TriggerOverlayHapticEffect(ov.ThisOverlayHandle(), effect); hits.haptics++; } catch (e) { log('haptic failed', String(e)); }
+  };
+  const hapticFor = (v) => haptic(v <= 0 || v >= o.max ? HAPTIC.SlidingEdge
+    : o.snapPoints.includes(v) ? HAPTIC.Snap : HAPTIC.Sliding);
+
   // ---- scene graph ---------------------------------------------------------------------
+  // Bar panels with drag room: frameID -> { node, pad, saved }.
+  const rooms = new Map();
+  // Keeps a padded bar panel's content where it was: the stock origin (x, y
+  // in -1..1 of the panel, y = 1 top) is re-expressed for the taller panel.
+  const fixOrigin = (p) => {
+    const m = /^legacy-frame-controls-(\d+)$/.exec(p.debug_name ?? '');
+    const r = m && rooms.get(Number(m[1]));
+    if (!r || !Array.isArray(p.origin) || p.origin.length < 2) return;
+    const h = r.node.getBoundingClientRect().height, inner = h - 2 * r.pad;
+    if (!(inner > 0)) return;
+    const fromTop = r.pad + ((1 - p.origin[1]) / 2) * inner;
+    p.origin = [p.origin[0], 1 - (2 * fromTop) / h, ...p.origin.slice(2)];
+    hits.roomOrigins++;
+  };
   // Origin node ids may carry a "<prefix>::" (sub-scene); match the suffix.
   const rewrite = (sg) => {
     const byOrigin = new Map();
@@ -118,7 +187,7 @@
       const c = curvatureOf(f);
       if (c?.shouldCurve) byOrigin.set(c.curvatureTransformOriginID, f);
     }
-    if (!byOrigin.size) return;
+    if (!byOrigin.size && !rooms.size) return;
     const walk = (n) => {
       if (!n || typeof n !== 'object') return;
       if (Array.isArray(n)) { n.forEach(walk); return; }
@@ -133,6 +202,7 @@
           hits.scaled++;
         }
       }
+      if (rooms.size && n.type === 'panel' && p) fixOrigin(p);
       if (n.children) walk(n.children);
     };
     walk(sg);
@@ -153,12 +223,18 @@
       try { resendStock(); } catch (e) { log('resend failed', String(e)); }
     }, Math.max(0, lastResend + 40 - performance.now()));
   };
+  // Panel bounds are re-measured on the stock forced layout update (a
+  // padding change doesn't trigger the panels' ResizeObserver).
+  const relayout = () => {
+    try { window.forceLayoutUpdate?.(); } catch (e) { log('forceLayoutUpdate failed', String(e)); }
+    resend();
+  };
 
   // Sets the shown value of a frame: 0 = curvature off, > 0 = on with that
-  // strength. On/off goes through the stock ToggleCurvature (what the row's
-  // stock click invokes), so Steam's state and the row icon match. Going to
-  // 0 forgets the window's value (turning it on again, e.g. by docking it in
-  // the dashboard, uses the default).
+  // strength. On/off goes through the stock ToggleCurvature (what the
+  // control's stock click invokes), so Steam's state and the icon match.
+  // Going to 0 forgets the window's value (turning it on again, e.g. by
+  // docking it in the dashboard, uses the default).
   const setValue = (f, v, why) => {
     const c = curvatureOf(f);
     if (!c) return;
@@ -177,13 +253,13 @@
   };
 
   // ---- UI ------------------------------------------------------------------------------
-  // The whole Toggle Curvature row is the control; the value is shown on its
-  // right with small arrows above/below (only where the value can go).
+  // Menu row: the value is shown on its right with small arrows above/below
+  // (only where the value can go). Bar button: no indicator.
   const STYLE_ID = 'sfui-window-curvature-style';
   const ROW = `.${CLS.row}`;
   const CSS = `
-${ROW}:has(> .sfui-curv-ind) { cursor: ns-resize; }
-${ROW}:has(> .sfui-curv-ind.sfui-dragging) { background: var(--gamepadui-grey) !important; }
+.sfui-curv-ctl { cursor: ns-resize; }
+.sfui-curv-ctl.sfui-dragging { background: var(--gamepadui-grey, #67707b) !important; }
 .sfui-curv-ind { flex: none; align-self: stretch; position: relative; width: 3em; min-height: 0; font-size: 0.72em;
   margin: -8px 0 -8px auto; font-variant-numeric: tabular-nums; line-height: 1; pointer-events: none;
   user-select: none; }
@@ -208,23 +284,35 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
   };
 
   // The frame's Toggle Curvature action: a toggle (invocation 2) with the
-  // curvature icons. Its row is found by position among the menu's rows,
-  // checked against (else looked up by) the action's label.
+  // curvature icons. Its menu row is found by position among the menu's
+  // rows, checked against (else looked up by) the action's label; its bar
+  // button by the React `control` prop of the bar's buttons.
   const isCurvatureAction = (a) => {
     const p = a?.partialParams;
     return p?.invocation === 2 && p?.icon?.enum === ICON_OFF && p?.icon_active?.enum === ICON_ON;
   };
+  const isCurvatureItem = (i) => i?.type === 2 && isCurvatureAction(actions.GetAction(i.action_id));
+  const inBar = (f) => (f.protoForSteam?.controls?.items_for_bottom_frame_controls ?? []).some(isCurvatureItem);
   const panelOf = (fid) => document.getElementById(`legacy-frame-controls-additional-options-${fid}`);
+  const barOf = (fid) => document.getElementById(`legacy-frame-controls-${fid}`);
   const curvatureRow = (f, panel) => {
     const rows = [...panel.querySelectorAll(ROW)];
     const items = (f.controlAdditionalOptionsItems ?? []).filter((i) => i.type === 2);
-    const idx = items.findIndex((i) => isCurvatureAction(actions.GetAction(i.action_id)));
+    const idx = items.findIndex(isCurvatureItem);
     if (idx < 0) return { why: 'no curvature action' };
     const label = actions.GetAction(items[idx].action_id).protoForSteam?.display_name;
     const text = (r) => r.querySelector(`.${CLS.label}`)?.textContent;
     let row = rows.length === items.length ? rows[idx] : null;
     if (!row || (label && text(row) !== label)) row = rows.find((r) => label && text(r) === label) ?? null;
     return row ? { row } : { why: `row not found (${rows.length} rows, ${items.length} items)` };
+  };
+  const barButton = (node) => {
+    for (const b of node.querySelectorAll('.ButtonControl')) {
+      if (b.closest('[id^="legacy-frame-controls-additional-options-"]')) continue;
+      const fiber = find.findFiberUp(b, (x) => x.memoizedProps?.control != null, 12);
+      if (isCurvatureItem(fiber?.memoizedProps.control)) return b;
+    }
+    return null;
   };
 
   // Digits have no descenders, so their ink sits above the centre of the line
@@ -243,6 +331,14 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
     const inkCentre = baseline - (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2;
     return lh / 2 - inkCentre;                    // > 0: move down
   };
+  const buildInd = () => {
+    const ind = document.createElement('div');
+    ind.className = 'sfui-curv-ind';
+    for (const c of ['sfui-curv-up', 'sfui-curv-v', 'sfui-curv-dn']) {
+      const d = document.createElement('div'); d.className = c; ind.appendChild(d);
+    }
+    return ind;
+  };
   const renderInd = (ind, v) => {
     const [up, num, dn] = ind.children;
     up.textContent = v < o.max ? '▲' : '';
@@ -252,118 +348,199 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
       num.style.setProperty('--sfui-curv-dy', `${inkShift(num).toFixed(2)}px`);
   };
 
-  const controls = new Map();                     // frameID -> { ind, row, panel, mo, attach, detach, endDrag }
+  // `${frameID}:menu` / `${frameID}:bar` -> { key, fid, where, panel, el, ind, mo, down }
+  const controls = new Map();
   function updateUI(f) {
-    const c = controls.get(f.frameID);
-    if (c?.ind.isConnected) renderInd(c.ind, shown(f));
+    const c = controls.get(`${f.frameID}:menu`);
+    if (c?.ind?.isConnected) renderInd(c.ind, shown(f));
   }
 
-  // Row control of one frame. Every press/click on the row is stopped at the
-  // row, so React (listening at the root) never runs the stock onClick; the
-  // click is re-implemented on mouseup when the press never became a drag.
-  // Drag: vertical and relative (the cylinder bends horizontally, so the
-  // pointer's y on the panel barely moves while the curvature changes). A
-  // press becomes a drag after dragThreshold px (then re-based, so there is no
-  // jump); the value follows at dragPixelsPerUnit px per 1.0 (the laser's
-  // position stops at the menu panel's edge, so the whole range has to fit
-  // into the room above/below the row), see dragValue.
+  // ---- input -----------------------------------------------------------------------------
+  // Every press/click on a control is stopped at the element, so React
+  // (listening at the root) never runs the stock onClick; the click is
+  // re-implemented on mouseup when the press never became a drag. Drag:
+  // vertical and relative (the cylinder bends horizontally, so the pointer's
+  // y on the panel barely moves while the curvature changes). A press
+  // becomes a drag after dragThreshold px (then re-based, so there is no
+  // jump); the value follows at dragPixelsPerUnit (bar: barDragPixelsPerUnit)
+  // px per 1.0, see dragValue. One press at a time, window capture listeners
+  // while it lasts.
   const stop = (e) => e.stopPropagation();
   const STOPPED = ['click', 'dblclick', 'mouseup', 'pointerdown', 'pointerup', 'contextmenu'];
-  const buildControl = (fid) => {
-    const frame = () => FS.GetFrame(fid);
-    const ind = document.createElement('div');
-    ind.className = 'sfui-curv-ind';
-    for (const c of ['sfui-curv-up', 'sfui-curv-v', 'sfui-curv-dn']) {
-      const d = document.createElement('div'); d.className = c; ind.appendChild(d);
-    }
+  let press = null;                               // { c, y0, v0, last, moved, shift, stale }
 
-    let drag = null;                              // { y0, v0, moved }
-    const onMove = (e) => {
-      const d = drag, f = frame();
-      if (!d || !f) return;
-      if (!d.moved) {
-        if (Math.abs(e.clientY - d.y0) < o.dragThreshold) return;
-        d.moved = true; d.y0 = e.clientY;
-        ind.classList.add('sfui-dragging');
-        return;
-      }
-      const v = dragValue(d.v0 + (d.y0 - e.clientY) / o.dragPixelsPerUnit, shown(f));
-      if (v !== null) setValue(f, v, 'drag');
-    };
-    const onUp = (e) => {
-      const d = drag;
-      if (!d) return;
-      drag = null;
-      window.removeEventListener('mousemove', onMove, true);
-      window.removeEventListener('mouseup', onUp, true);
-      ind.classList.remove('sfui-dragging');
-      const f = frame();
-      if (!d.moved && f && e) setValue(f, curved(f) ? 0 : 1, 'click');   // curved -> flat, flat -> stock
-    };
-    const onDown = (e) => {
-      e.stopPropagation(); e.preventDefault();
-      const f = frame();
-      if (e.button !== 0 || drag || !f) return;
-      drag = { y0: e.clientY, v0: shown(f), moved: false };
-      window.addEventListener('mousemove', onMove, true);
-      window.addEventListener('mouseup', onUp, true);
-    };
-    const attach = (row) => {
-      row.addEventListener('mousedown', onDown);
-      for (const t of STOPPED) row.addEventListener(t, stop);
-    };
-    const detach = (row) => {
-      row.removeEventListener('mousedown', onDown);
-      for (const t of STOPPED) row.removeEventListener(t, stop);
-    };
-    return { ind, attach, detach, endDrag: () => onUp(null) };
+  const emit = (c, type) => {
+    try {
+      c.el?.dispatchEvent(new CustomEvent(type, { bubbles: true, detail: { frameID: c.fid, where: c.where } }));
+    } catch (e) { log(`${type} listener failed`, String(e)); }
   };
 
-  const inject = (f) => {
-    const fid = f.frameID;
-    const panel = panelOf(fid);
+  const addRoom = (p) => {
+    const node = p.c.panel;
+    if (!o.barDragRoom || !node?.isConnected || rooms.has(p.c.fid)) return;
+    const before = p.c.el.getBoundingClientRect().top;
+    rooms.set(p.c.fid, { node, pad: o.barDragRoom, saved: [node.style.paddingTop, node.style.paddingBottom] });
+    node.style.paddingTop = node.style.paddingBottom = `${o.barDragRoom}px`;
+    const shift = p.c.el.getBoundingClientRect().top - before;
+    p.shift = shift; p.stale = shift !== 0; p.last += shift; p.y0 += shift;
+    relayout();
+  };
+  const removeRoom = (fid) => {
+    const r = rooms.get(fid);
+    if (!r) return;
+    rooms.delete(fid);
+    [r.node.style.paddingTop, r.node.style.paddingBottom] = r.saved;
+    relayout();
+  };
+
+  const onMove = (e) => {
+    const p = press;
+    if (!p) return;
+    const f = FS.GetFrame(p.c.fid);
+    if (!f) { endPress('frame gone'); return; }
+    let y = e.clientY;
+    // After the bar got its room, events the compositor still maps with the
+    // old layout are off by `shift`: take the reading closer to the last one.
+    if (p.stale) {
+      if (Math.abs(y + p.shift - p.last) < Math.abs(y - p.last)) y += p.shift;
+      else p.stale = false;
+    }
+    p.last = y;
+    if (!p.moved) {
+      if (Math.abs(y - p.y0) < o.dragThreshold) return;
+      p.moved = true;
+      p.c.el?.classList.add('sfui-dragging');
+      log('drag', { frame: p.c.fid, where: p.c.where });
+      emit(p.c, 'sfui-curv-dragstart');
+      if (press !== p) return;                    // a listener cancelled the press
+      if (p.c.where === 'bar') addRoom(p);
+      p.y0 = p.last;
+      return;
+    }
+    const ppu = p.c.where === 'bar' ? o.barDragPixelsPerUnit : o.dragPixelsPerUnit;
+    const v = dragValue(p.v0 + (p.y0 - y) / ppu, shown(f));
+    if (v === null) return;
+    setValue(f, v, 'drag');
+    hapticFor(v);
+  };
+  const onUp = (e) => {
+    if (e.button === 0) endPress('release');
+  };
+  // Ends the press; `release` of a press that never moved is a click.
+  function endPress(why) {
+    const p = press;
+    if (!p) return false;
+    press = null;
+    window.removeEventListener('mousemove', onMove, true);
+    window.removeEventListener('mouseup', onUp, true);
+    p.c.el?.classList.remove('sfui-dragging');
+    removeRoom(p.c.fid);
+    if (p.moved) emit(p.c, 'sfui-curv-dragend');
+    const f = FS.GetFrame(p.c.fid);
+    if (why === 'release') {
+      if (!p.moved && f) setValue(f, curved(f) ? 0 : 1, `click (${p.c.where})`);   // curved -> flat, flat -> stock
+    } else {
+      log('press ended', { frame: p.c.fid, where: p.c.where, why, dragged: p.moved });
+    }
+    return true;
+  }
+  const onDown = (c) => (e) => {
+    e.stopPropagation(); e.preventDefault();
+    const f = FS.GetFrame(c.fid);
+    if (e.button !== 0 || !f) return;
+    endPress('new press');
+    press = { c, y0: e.clientY, last: e.clientY, v0: shown(f), moved: false, shift: 0, stale: false };
+    window.addEventListener('mousemove', onMove, true);
+    window.addEventListener('mouseup', onUp, true);
+  };
+
+  // ---- controls --------------------------------------------------------------------------
+  const setEl = (c, el) => {
+    if (c.el === el) return;
+    if (c.el) detach(c);
+    c.el = el;
+    el.classList.add('sfui-curv-ctl');
+    if (press?.c === c && press.moved) el.classList.add('sfui-dragging');   // re-rendered mid-drag
+    el.addEventListener('mousedown', c.down);
+    for (const t of STOPPED) el.addEventListener(t, stop);
+  };
+  function detach(c) {
+    c.el.classList.remove('sfui-curv-ctl', 'sfui-dragging');
+    c.el.removeEventListener('mousedown', c.down);
+    for (const t of STOPPED) c.el.removeEventListener(t, stop);
+  }
+  const newControl = (key, fid, where, panel) => {
+    const c = { key, fid, where, panel, el: null, ind: where === 'menu' ? buildInd() : null };
+    c.down = onDown(c);
+    c.mo = new MutationObserver(() => {
+      if (!c.el?.isConnected || (c.ind && c.ind.parentElement !== c.el)) queueSync();
+    });
+    c.mo.observe(panel, { childList: true, subtree: true });
+    controls.set(key, c);
+    return c;
+  };
+  function removeControl(key) {
+    const c = controls.get(key);
+    if (!c) return;
+    if (press?.c === c) endPress('control removed');
+    c.mo.disconnect();
+    if (c.el) detach(c);
+    c.ind?.remove();
+    controls.delete(key);
+  }
+
+  const injectMenu = (f) => {
+    const key = `${f.frameID}:menu`, panel = panelOf(f.frameID);
     if (!panel) return 'no panel';
-    let c = controls.get(fid);
-    if (c && c.panel !== panel) { removeControl(fid); c = null; }
-    if (c?.ind.isConnected && c.row?.contains(c.ind)) { renderInd(c.ind, shown(f)); return 'ok'; }
+    let c = controls.get(key);
+    if (c && c.panel !== panel) { removeControl(key); c = null; }
+    if (c?.el?.isConnected && c.ind.parentElement === c.el) { renderInd(c.ind, shown(f)); return 'ok'; }
     const r = curvatureRow(f, panel);
-    if (!r.row) { log('inject failed', { frame: fid, why: r.why }); return r.why; }
+    if (!r.row) return r.why;
     ensureStyle();
-    if (!c) {
-      const b = buildControl(fid);
-      const mo = new MutationObserver(() => { if (!b.ind.isConnected || !b.ind.parentElement?.matches(ROW)) queueSync(); });
-      mo.observe(panel, { childList: true, subtree: true });
-      c = { ...b, panel, mo, row: null };
-      controls.set(fid, c);
-    }
-    if (c.row !== r.row) {
-      if (c.row) c.detach(c.row);
-      c.row = r.row;
-      c.attach(r.row);
-    }
+    c ??= newControl(key, f.frameID, 'menu', panel);
+    setEl(c, r.row);
     r.row.append(c.ind);
     renderInd(c.ind, shown(f));
     return 'ok';
   };
+  const injectBar = (f) => {
+    const key = `${f.frameID}:bar`, node = barOf(f.frameID);
+    if (!node) return 'no bar panel';
+    let c = controls.get(key);
+    if (c && c.panel !== node) { removeControl(key); c = null; }
+    if (c?.el?.isConnected && node.contains(c.el)) return 'ok';
+    const btn = barButton(node);
+    if (!btn) return 'bar button not found';
+    ensureStyle();
+    c ??= newControl(key, f.frameID, 'bar', node);
+    setEl(c, btn);
+    return 'ok';
+  };
 
-  function removeControl(fid) {
-    const c = controls.get(fid);
-    if (!c) return;
-    c.mo.disconnect(); c.endDrag();
-    if (c.row) c.detach(c.row);
-    c.ind.remove();
-    controls.delete(fid);
-  }
-
-  // Open menus: inject (retrying until React has rendered the panel).
-  const openFrames = () => FS.frames.filter((f) => f.isControlAdditionalOptionsOpen);
+  // Wanted controls: open menus, and bars that hold the curvature action;
+  // injected with retries until React has rendered them (bars only while
+  // the frame is visible: a hidden frame has no bar panel).
   let syncTimer = null, retries = 0;
+  const failed = new Map();                       // key -> last reason logged
   const sync = () => {
     syncTimer = null;
-    const open = openFrames();
-    for (const fid of [...controls.keys()]) if (!open.some((f) => f.frameID === fid)) removeControl(fid);
+    const want = new Map();
+    for (const f of FS.frames) {
+      if (f.isControlAdditionalOptionsOpen) want.set(`${f.frameID}:menu`, f);
+      if (inBar(f)) want.set(`${f.frameID}:bar`, f);
+    }
+    for (const key of [...controls.keys()]) if (!want.has(key)) removeControl(key);
+    for (const key of [...failed.keys()]) if (!want.has(key)) failed.delete(key);
     let pending = false;
-    for (const f of open) if (inject(f) !== 'ok') pending = true;
+    for (const [key, f] of want) {
+      const bar = key.endsWith(':bar');
+      const r = bar ? injectBar(f) : injectMenu(f);
+      if (r === 'ok') { failed.delete(key); continue; }
+      if (bar ? !f.isCurrentlyVisible : r === 'no curvature action') continue;   // hidden frame / not in this menu
+      pending = true;
+      if (failed.get(key) !== r) { failed.set(key, r); log('inject failed', { frame: f.frameID, where: bar ? 'bar' : 'menu', why: r }); }
+    }
     if (pending && retries < 12) { retries++; syncTimer = setTimeout(sync, 60 * retries); } else retries = 0;
   };
   function queueSync() { if (!syncTimer) syncTimer = setTimeout(sync, 0); }
@@ -371,16 +548,19 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
   hooks.before(proto, 'SendMessage', NAME, hook);
   const disposers = [
     mx.reaction(
-      () => FS.frames.map((f) => `${f.frameID}:${f.isControlAdditionalOptionsOpen ? 1 : 0}:${curved(f) ? 1 : 0}:${dockOf(f)}`).join(','),
+      () => FS.frames.map((f) => [f.frameID, f.isControlAdditionalOptionsOpen ? 1 : 0, curved(f) ? 1 : 0, dockOf(f),
+        inBar(f) ? 1 : 0, f.isCurrentlyVisible ? 1 : 0].join(':')).join(','),
       () => { retries = 0; queueSync(); for (const f of FS.frames) updateUI(f); },
     ),
     mx.reaction(() => DS.curvatureDistance, () => resend()),
   ];
 
   const teardown = () => {
+    endPress('teardown');
     for (const d of disposers.splice(0)) d();
     clearTimeout(syncTimer); clearTimeout(resendTimer);
-    for (const fid of [...controls.keys()]) removeControl(fid);
+    for (const key of [...controls.keys()]) removeControl(key);
+    for (const fid of [...rooms.keys()]) removeRoom(fid);
     document.getElementById(STYLE_ID)?.remove();
     hooks.remove(proto, 'SendMessage', NAME);
     if (window.__sfuiWindowCurvature === state) delete window.__sfuiWindowCurvature;
@@ -388,7 +568,7 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
   };
   const check = () => {
     if (!hooks.has(proto, 'SendMessage', NAME)) hooks.before(proto, 'SendMessage', NAME, hook);
-    if (openFrames().length) queueSync();
+    queueSync();
     return 'unchanged';
   };
   const dump = () => FS.frames.map((f) => ({
@@ -396,15 +576,21 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
     override: curvatureOf(f)?.m_bCurveOverride, stored: S.values[keyOf(f)], shown: shown(f),
     stockDistance: curvatureOf(f)?.curvatureOriginDistance,
     appliedDistance: curved(f) ? DS.curvatureDistance / strength(f) : null,
-    menuOpen: f.isControlAdditionalOptionsOpen, control: !!controls.get(f.frameID)?.ind.isConnected,
+    menuOpen: f.isControlAdditionalOptionsOpen, inBar: inBar(f), visible: f.isCurrentlyVisible,
+    control: !!controls.get(`${f.frameID}:menu`)?.el?.isConnected,
+    barControl: !!controls.get(`${f.frameID}:bar`)?.el?.isConnected,
   }));
   const state = {
     version: VERSION, id, opts: o, hits, log: logBuf, state: S, teardown, check, dump, dragValue,
     setValue: (fid, v) => { const f = FS.GetFrame(fid); if (f) setValue(f, v, 'api'); return f ? shown(f) : 'no frame'; },
+    cancelPress: () => endPress('cancelled'),
+    controls: () => [...controls.values()].map((c) => ({ frame: c.fid, where: c.where, connected: !!c.el?.isConnected })),
+    get pressing() { return press && { frame: press.c.fid, where: press.c.where, dragging: press.moved }; },
   };
   window.__sfuiWindowCurvature = state;
   log('patched', { version: VERSION, opts: o });
   resend();
   queueSync();
-  return `patched (default ${o.default}, max ${o.max}, step ${o.step}, snap ±${o.snap} at ${o.snapPoints.join('/')})`;
+  return `patched (default ${o.default}, max ${o.max}, step ${o.step}, snap ±${o.snap} at ${o.snapPoints.join('/')}, ` +
+    `haptics ${o.haptics ? 'on' : 'off'})`;
 })
