@@ -349,6 +349,96 @@
           "module": { "includes": ["case\"VSG-TRANSFORM\":", ".properties.translation="] }
         }
       }
+    },
+    "frame-controls": {
+      "bundle": "vrwebui-systemui",
+      "modules": {
+        "mobx": {
+          "module": { "includes": ["runInAction:()=>", "makeObservable:()=>", "reaction:()=>"] }
+        },
+        "frame": {
+          "module": { "includes": ["m_rgControlsItems_BottomFrameControls", "get protoForSteam()", "SetControlsItems("] },
+          "exports": {
+            "Frame": { "type": "class", "protoMethods": ["SetControlsItems", "SetControlAdditionalOptionsOpen", "CreateAction"] }
+          },
+          "expects": ["SetControlsItems(e,t,o){this.m_rgControlsItems_BottomFrameControls=e,this.m_rgControlsItems_TabHoverControls=t,this.m_rgControlsItems_AdditionalOptions=o}",
+            "get isControlAdditionalOptionsOpen(){return this.m_bControlAdditionalOptionsOpen&&this.m_rgControlsItems_AdditionalOptions.length>0}",
+            "BPanelHasFocus(this.panels.additionalOptionsPanelSGID)", "this.SetControlAdditionalOptionsOpen(!1)", "m_unControlAdditionalOptionsActionID"]
+        },
+        "actions": {
+          "module": { "includes": ["window.dashboardActionStore="] },
+          "exports": {
+            "store": { "type": "object", "methods": ["GetAction", "BIsVRLinkRemoteAction"] }
+          },
+          "expects": ["get protoForSteam()", "get isAlive()"]
+        },
+        "dock": {
+          "module": { "includes": ["e[e.Dashboard=1]=\"Dashboard\",e[e.LeftHand=2]=\"LeftHand\""] },
+          "exports": {
+            "EDockLocation": { "type": "object", "props": { "Dashboard": 1, "World": 4, "Theater": 5 } }
+          }
+        },
+        "inputFocus": {
+          "module": { "includes": ["BPanelHasFocus(e,t=!0)", "\"defocus_panel\""] },
+          "exports": {
+            "store": { "type": "object", "methods": ["BPanelHasFocus", "BPanelSubviewHasFocus", "RemoveInputFocus"] }
+          },
+          "expects": ["m_entryAtTopOfStack.m_unPanelSGID"]
+        },
+        "localize": {
+          "module": { "includes": ["LocalizeStringFromFallback(", "m_mapFallbackTokens"] },
+          "exports": {
+            "localize": { "type": "function", "includes": [".LocalizeString(e)", "$s/g"] }
+          },
+          "expects": ["[\"en\",\"english\"],[\"de\",\"german\"],[\"fr\",\"french\"]", "for(let t of navigator.languages)"]
+        },
+        "controls": {
+          "checkOnly": true,
+          "module": { "includes": ["\"#AdditionalOptionsTooltip\"", "\"#FloatInWorld\""] },
+          "expects": ["icon:{enum:38},invocation:2", "\"#FloatInWorld\"),icon:{enum:26},invocation:1", "\"#ReturnToDashboard\"),icon:{enum:27}",
+            "\"#ViewInTheater\"),icon:{enum:28}", "icon:{enum:\"left\"==t?29:30}", "icon:{enum:22},icon_active:{enum:24}",
+            "icon:{enum:40},icon_active:{enum:39}", "onlyVisibleIn:\"additional-options\"", "controlAdditionalOptionsItems.length>0",
+            "SetDockLocation(l.yWq.World)"]
+        },
+        "closeIcon": {
+          "checkOnly": true,
+          "module": { "includes": ["icon_close_black.png"] },
+          "expects": ["case 31:"]
+        },
+        "frameControls": {
+          "checkOnly": true,
+          "module": { "includes": ["legacy-frame-controls-additional-options-anchor-", "controlAdditionalOptionsItems.filter("] },
+          "expects": ["id:`legacy-frame-controls-${", "id:`legacy-frame-controls-additional-options-${", "parent_id:p,translation:{x:-34*",
+            "\"ButtonControl\"", "onClick:()=>{", "control:e,key:e.action_id", "const v={x:0,y:.15,z:.05}"]
+        },
+        "panel": {
+          "checkOnly": true,
+          "module": { "includes": ["getNodeType(){return\"panel\"}"] },
+          "expects": ["addEmbeddedPanelUVs(this)", "\"embedded-uv-index\"", "uv_min", "\"curvature-origin-id\"", "\"only-visible-with-laser\"",
+            "\"meters-per-pixel\"", "\"sort-depth-bias\""]
+        },
+        "panelAnchor": {
+          "checkOnly": true,
+          "module": { "includes": ["getNodeType(){return\"panel-anchor\"}"] },
+          "expects": ["\"anchor-u\"", "\"anchor-v\""]
+        },
+        "sgApp": {
+          "checkOnly": true,
+          "module": { "includes": ["window.SGApp=this", "addEmbeddedPanelUVs("] },
+          "expects": ["removeEmbeddedPanelUVs(", "updateAllPanelBounds(){", "m_fCurrentScale", "t.forceLayoutUpdate=this.forceLayoutUpdate",
+            "e.updateLayoutValues()", "getEmbeddedIndex()"]
+        },
+        "sceneGraphDom": {
+          "checkOnly": true,
+          "module": { "includes": ["\"update_scene_graph\"", "case\"VSG-TRANSFORM\""] },
+          "expects": [".buildNode;if(", "\"parent-id\"", "\"translation\""]
+        },
+        "docking": {
+          "checkOnly": true,
+          "module": { "includes": ["SetInTheater(e=!0){", "GetTrackedDeviceIndexForControllerRole"] },
+          "expects": ["SetDockLocation(e){", "SetJustFloatedFromDashboard("]
+        }
+      }
     }
   }
 }

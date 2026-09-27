@@ -144,6 +144,7 @@ the two files below).
       windowDistance.world.max = 10.0;
       steamCloseButton.enable = true;
       windowCurvature.enable = true;
+      frameControls.enable = true;
     };
     firefox.enable = true;
     # Only relevant with Steam Developer Mode on (see hidden-apps below).
@@ -168,7 +169,7 @@ home-manager switch --flake .#steamos
 ```
 
 Individual modules are available as
-`homeManagerModules.{session,portal,keyboard-layout,steam-keyboard-patch,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,dashboard-windows,steam-close-button,window-curvature,clipboard-sync,firefox}`;
+`homeManagerModules.{session,portal,keyboard-layout,steam-keyboard-patch,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox}`;
 `default` imports all of them.
 
 **Steam Developer Mode** (a Steam setting, not managed here) makes the "+"
@@ -214,6 +215,11 @@ menu list every desktop entry, including terminals such as Konsole.
 | `steamFrame.dashboard.windowCurvature.barDragPixelsPerUnit` | number (px) | `30` | Drag distance per 1.0 of curvature on the bottom-bar button. |
 | `steamFrame.dashboard.windowCurvature.barDragRoom` | unsigned int (px) | `160` | Transparent room added above and below a window's bottom bar while its curvature button is dragged, so the laser stays on the bar. `0`: none. |
 | `steamFrame.dashboard.windowCurvature.haptics` | bool | `true` | Controller haptics while dragging: snap at snap points, edge at 0 and `max`, a tick per other step. |
+| `steamFrame.dashboard.frameControls.enable` | bool | `false` | Move the control icons under dashboard windows between the bottom bar and the More Options (three-dot) menu: long press an icon or menu row, then "Show in bar". Per control type, for all windows, kept across SteamVR restarts. See [Window control bar](#window-control-bar-dashboardframecontrols). |
+| `steamFrame.dashboard.frameControls.longPressMs` | int, 300-10000 (ms) | `1500` | Hold time of the long press. A ring shows the progress from half of it (at most after 1 s). |
+| `steamFrame.dashboard.frameControls.inBar` | list of control names | `[ ]` | Controls that start in the bar: `keyboard`, `float`, `dashboard`, `theater`, `dockLeft`, `dockRight`, `close`, `curvature`, or `"icon:<n>"`. A popup choice wins until the entry changes. |
+| `steamFrame.dashboard.frameControls.inMenu` | list of control names | `[ ]` | Controls that start in the three-dot menu (same names). |
+| `steamFrame.dashboard.frameControls.floatInTheater` | bool | `false` | Give theater windows the "Float" control (stock only shows it for dashboard-docked windows). |
 | `steamFrame.steamvrDebugger.enable` | bool | `true` if a UI patch uses port 8087, else `false` | SteamVR dashboard DevTools on `127.0.0.1:8087` (`VRWebHelper/DebuggerEnabled`), needed by dashboard patches. See [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable). |
 | `steamFrame.hiddenApps` | list of str | `[ ]` | Desktop entry ids (without `.desktop`) to hide from the "+" and KDE menus. |
 | `steamFrame.clipboardSync.enable` | bool | `true` | Clipboard bridge between the Steam session and the nested desktop. |
@@ -835,6 +841,83 @@ offline (`window-curvature` in `modules/lib/signatures.json`,
 `scripts/check-signatures.mjs`); if a lookup fails, the patch reports it and
 leaves the dashboard stock. Tested with SteamVR build 11008059.
 
+### Window control bar (`dashboard.frameControls.*`)
+
+**Problem:** the controls under a SteamVR dashboard window are fixed: some
+sit in the window's bottom bar (keyboard, float or back to the dashboard,
+theater, close), others only in its More Options (three-dot) menu
+(curvature, dock to a controller), and in the theater the "Float" button is
+gone.
+
+**Fix:** a UI patch (see above) of SteamVR's dashboard page (`vrwebhelper`,
+`127.0.0.1:8087`, title `systemui`; it turns on the
+[SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable)):
+
+- **long press** (`longPressMs`) a bar icon or a three-dot menu row: after
+  half the time (at most after 1 s) a ring around the icon shows the
+  progress, so ordinary clicks show nothing; moving the laser or leaving
+  the icon doesn't cancel it, releasing early does. Then a small popup
+  opens above the icon (or above the menu) with **Show in bar**; toggling
+  it moves that control between the bar and the menu, **for all windows**.
+  The release after the long press doesn't trigger the control. The
+  popup closes on a press elsewhere, Escape, 1 s after the laser left it,
+  and after toggling.
+- a control moved into the bar joins the group left of the three-dot
+  button; the three-dot button itself can't be moved and, as in SteamVR,
+  shows only while its menu has entries.
+- `inBar` / `inMenu` set where controls start; a choice made in the popup
+  wins until that control's entry changes. `floatInTheater` gives theater
+  windows the "Float" button back (same call as the stock one: the window
+  floats in the world).
+
+```nix
+steamFrame.dashboard.frameControls = {
+  enable = true;
+  # longPressMs = 1500;
+  # inBar = [ "curvature" ];  inMenu = [ "theater" ];
+  # floatInTheater = true;
+};
+```
+
+How it works: each window hands its control lists to
+`Frame.prototype.SetControlsItems(bottom, tabHover, additional)`; the patch
+wraps it and stores a re-partitioned copy (stock order kept, gaps merged).
+Controls are identified by their action icon (`icon:<n>`), the same in every
+window and language. Placements are kept in the `systemui` page
+(`window.__sfuiFrameControlsState`) and in its `localStorage`, so they
+survive restarts of the patch service and of SteamVR. The popup is a
+scene-graph panel of its own, attached to the pressed button's anchor like
+SteamVR's tooltips and three-dot menu, so the bar and the menu don't change
+size or move. SteamVR closes the three-dot menu as soon as the laser's focus
+leaves the bar and the menu; while its popup is open that close is held
+back and applied (unless the laser is on the bar or menu again) when the
+popup closes. `window.__sfuiFrameControls.dump()` lists every window's
+controls, `.placement()` the current choices, `.reset()` forgets them,
+`.log` recent events.
+
+With [Window curvature](#window-curvature-dashboardwindowcurvature), the
+curvature control keeps its drag: a drag that starts before the ring shows
+cancels the long press; once the ring shows, the long press takes the press
+over (its `sfui-curv-*` contract), so a still hold on the curvature control
+opens the popup.
+
+**Limitations:**
+
+- SteamVR delivers no right-click or thumbstick click to the dashboard, so
+  there is no context menu on a secondary button.
+- Only the laser: with controller (gamepad) navigation the controls are
+  stock.
+- Placements are per control type, not per window.
+
+**Caveats:** depends on SteamVR UI internals: MobX, the `Frame` class, the
+action store, the dock-location enum, the input-focus store and the
+localization function are found by signature, and the rest (the control
+list layout, the icon numbers, the frame-controls panel and anchor ids, the
+scene-graph DOM walk and `SGApp`'s embedded-UV table, the menu's auto-close)
+is checked offline (`frame-controls` in `modules/lib/signatures.json`,
+`scripts/check-signatures.mjs`); if a lookup fails, the patch reports it and
+leaves the dashboard stock. Tested with SteamVR build 11008059.
+
 ### SteamVR debugger (`steamvrDebugger.enable`)
 
 Patches of the SteamVR dashboard need its DevTools port, which SteamVR only
@@ -843,7 +926,8 @@ opens with the setting `VRWebHelper/DebuggerEnabled` (port
 (`mkDefault`) as soon as a patch in `steamFrame.uiPatches.patches` uses port
 8087 (e.g. [Dashboard windows](#dashboard-windows-dashboard),
 [Steam close button](#steam-close-button-dashboardsteamclosebuttonenable),
-[Window curvature](#window-curvature-dashboardwindowcurvature)).
+[Window curvature](#window-curvature-dashboardwindowcurvature),
+[Window control bar](#window-control-bar-dashboardframecontrols)).
 
 SteamVR rewrites `~/.config/openvr/config/steamvr.vrsettings` while it runs
 and on exit, so the file can't be managed by Home Manager, and edits while it
