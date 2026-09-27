@@ -39,7 +39,10 @@
 //             shadows (box-shadow in the background colour at the top and
 //             bottom edge), shown by Steam's can-scroll-up/-down classes, which
 //             go stale the same way. The same state goes in data-sfui-shadow
-//             on the scroller and sets the pseudo-elements' opacity.
+//             on the scroller and sets the pseudo-elements' opacity. Once
+//             maxRows caps the scroller, the inner panel is what scrolls (as in
+//             Steam's own design; the outer element keeps the shadows fixed),
+//             so the state is read from whichever of the two overflows.
 // Steam's gamepad navigation derives a panel's layout from its computed
 // style (display: grid), so up/down/left/right move between tiles.
 // With the pinned-desktop patch, its pinned row (.sfui-pinned-desktop,
@@ -51,7 +54,7 @@
 // which removes markers, stylesheets, observers and the timer.
 ((find, sigs, opts) => {
   const NAME = 'launcher-menu-grid';
-  const VERSION = 5;
+  const VERSION = 6;
   const COLS = opts.columns;
   const ROWS = opts.maxRows ?? null;
   if (!(Number.isInteger(COLS) && COLS >= 1) || !(ROWS === null || (Number.isInteger(ROWS) && ROWS >= 1)))
@@ -191,11 +194,16 @@ ${PINNED} > [role=button] * { flex-grow: 0 !important; text-align: center !impor
 
   // Scroll indicator state from the actual scroll position (Steam's
   // thresholds), for both the mask fade and the edge shadows.
+  // The element that actually scrolls: the inner panel once maxRows caps
+  // the scroller, otherwise the scroller.
+  const scrolling = (sc, panel) =>
+    panel && (panel.scrollHeight > panel.clientHeight + 1 || panel.scrollTop > 0) ? panel : sc;
   const fade = (sc) => {
     const r = regions.get(sc);
     if (!r) return;
-    const top = sc.scrollTop > 1;
-    const bottom = sc.scrollHeight - sc.scrollTop > sc.clientHeight + 1;
+    const el = scrolling(sc, r.panel);
+    const top = el.scrollTop > 1;
+    const bottom = el.scrollHeight - el.scrollTop > el.clientHeight + 1;
     const v = top && bottom ? 'both' : top ? 'top' : bottom ? 'bottom' : 'none';
     if (sc.getAttribute(SHADOW) !== v) sc.setAttribute(SHADOW, v);
     if (r.fade && r.fade.getAttribute(FADE) !== v) r.fade.setAttribute(FADE, v);
@@ -234,12 +242,16 @@ ${PINNED} > [role=button] * { flex-grow: 0 !important; text-align: center !impor
     const ro = docs.get(d)?.ro;
     const r = regions.get(sc);
     if (r) {
-      if (r.panel !== panel) { ro?.unobserve(r.panel); r.panel = panel; ro?.observe(panel); }
+      if (r.panel !== panel) {
+        ro?.unobserve(r.panel); r.panel.removeEventListener('scroll', r.onScroll);
+        r.panel = panel; ro?.observe(panel); panel.addEventListener('scroll', r.onScroll, { passive: true });
+      }
       return;
     }
     const onScroll = guard(() => fade(sc));
     regions.set(sc, { d, list, panel, fade: fadeOf(sc, list), onScroll });
     sc.addEventListener('scroll', onScroll, { passive: true });
+    panel.addEventListener('scroll', onScroll, { passive: true });
     ro?.observe(sc);
     ro?.observe(panel);
   };
@@ -249,6 +261,7 @@ ${PINNED} > [role=button] * { flex-grow: 0 !important; text-align: center !impor
     if (!r) return;
     regions.delete(sc);
     sc.removeEventListener('scroll', r.onScroll);
+    r.panel.removeEventListener('scroll', r.onScroll);
     const ro = docs.get(r.d)?.ro;
     ro?.unobserve(sc);
     ro?.unobserve(r.panel);
