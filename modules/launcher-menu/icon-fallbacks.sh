@@ -1,15 +1,12 @@
 # shellcheck shell=bash
 # Hicolor fallbacks for desktop entry icons that only Breeze has.
-#
 # Usage: steam-frame-icon-fallbacks [EXTRA_NAME...]
-#   BREEZE_APPS=<breeze-icons>/share/icons/breeze/apps: link the Icon= names
-#     of the desktop entries Steam sees (plus EXTRA_NAMEs) that no hicolor
-#     theme dir has but Breeze does, as
-#     $XDG_DATA_HOME/icons/hicolor/scalable/apps/<name>.svg -> Breeze's SVG.
-#   BREEZE_APPS unset: remove all links made before (disabled).
-# Links made are listed in a manifest; only those, and only while they still
-# point into a breeze-icons store path, are ever removed. Nothing else in the
-# icon dir is touched.
+#   BREEZE_APPS=<breeze-icons>/share/icons/breeze/apps: link each Icon= name
+#     (of the entries Steam sees, plus EXTRA_NAMEs) that no hicolor dir has
+#     but Breeze does as $XDG_DATA_HOME/icons/hicolor/scalable/apps/<name>.svg.
+#   BREEZE_APPS unset: remove the links made before.
+# Only links listed in the manifest and still pointing into breeze-icons are
+# ever removed.
 
 data_home=${XDG_DATA_HOME:-$HOME/.local/share}
 dest=$data_home/icons/hicolor/scalable/apps

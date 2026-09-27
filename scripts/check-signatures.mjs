@@ -1,12 +1,9 @@
 #!/usr/bin/env node
-// check-signatures.mjs: checks, without Steam running and without a browser,
-// that every finder signature the runtime UI patches use (modules/lib/
-// signatures.json) still matches the installed Steam / SteamVR web UI
-// bundles: each module signature must match exactly one webpack module, each
-// export signature exactly one export of it, and the strings a patch relies
-// on ("expects") should still be there; a "stylesheet" signature (CSS a patch
-// relies on, e.g. a variable) must match exactly one stylesheet of the
-// bundle's "styles" directory. Run it after a Steam update:
+// check-signatures.mjs: checks offline (no Steam, no browser) that every
+// signature in modules/lib/signatures.json still matches the installed Steam /
+// SteamVR web UI bundles: module and export signatures exactly once,
+// "expects" strings still present (warnings), "stylesheet" signatures exactly
+// one file of the bundle's "styles" directory. Run it after a Steam update:
 //
 //   nix shell nixpkgs#nodejs -c node scripts/check-signatures.mjs
 //
@@ -20,12 +17,10 @@
 // Exit status: 0 all found, 1 something missing/ambiguous (or a warning with
 // --strict), 2 usage/IO error.
 //
-// Modules are extracted by webpack-modules.mjs (factory sources exactly as
-// Function.prototype.toString sees them in the page). To check export
-// signatures, the matched module's factory is run in a throwaway VM context
-// in which every import and unknown global is an inert stub, so top-level
-// definitions (objects, functions, classes, singletons) exist and are
-// matched with the same code the patches use (modules/lib/finders.js).
+// Modules come from webpack-modules.mjs (factory sources as the page's
+// Function.prototype.toString sees them). For export signatures the matched
+// factory runs in a throwaway VM context where imports and unknown globals
+// are inert stubs, and is matched with modules/lib/finders.js.
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';

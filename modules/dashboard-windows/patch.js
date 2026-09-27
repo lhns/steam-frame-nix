@@ -1,51 +1,32 @@
 // dashboard-windows: resize and grab-distance limits of SteamVR dashboard
-// windows (Steam, app windows, overlays, the theater screen, the dashboard
-// itself). Target: SteamVR's dashboard page (vrwebhelper, DevTools
-// 127.0.0.1:8087, title "systemui").
-//
-// This file is a function expression, called by the file lib/default.nix
-// (mkPatch) generates: (<this file>)(find, sigs, opts, hooks), with find the
-// finder library (lib/finders.js), sigs this patch's module signatures
-// (lib/signatures.json, "dashboard-windows"), opts the options from
-// dashboard-windows.nix (null = stock) and hooks the shared method hooks
-// (lib/hooks.js), e.g. opts
+// windows (Steam, app windows, overlays, theater screen, the dashboard).
+// Target: SteamVR dashboard (vrwebhelper, DevTools 127.0.0.1:8087, title
+// "systemui"). mkPatch patch (see lib/default.nix); opts (null = stock):
 //   { maxScale: 4.0,
 //     distance: { world: {min: null, max: 10}, theater: {...}, dashboard: {...} } }
 //
-// How it works: systemui builds a scene graph from its DOM and sends it to
-// vrcompositor through its mailbox WebSocket,
+// systemui sends its scene graph to vrcompositor via
 //   mailbox.SendMessage("vrcompositor_systemlayer", {type: "update_scene_graph", scene_graph})
-// and vrcompositor enforces the limits it finds there:
-// - "frame-resize-scale-min"/"-max" on every window frame (stock 0.25 / 2,
-//   relative to the window's default size; the theater screen's default is
-//   2.8x larger): range of the resize handle;
-// - "min-distance"/"max-distance" (meters) on grab nodes: how close / far a
-//   grabbed window can be pulled in / pushed back (thumbstick / scroll):
+// and vrcompositor enforces the limits in it:
+// - "frame-resize-scale-min"/"-max" on window frames (stock 0.25 / 2, relative
+//   to the default size; the theater's default is 2.8x larger);
+// - "min-distance"/"max-distance" (m) on grab nodes (pull in / push back):
 //     world     "grab-scale"     0.25 / 5  windows placed in the world
 //     theater   "grab-transform" 1    / 6  the theater screen
 //     dashboard "grab-transform" 0.3  / 4  the dashboard itself
 //   (the keyboard's grab-transform, 0.2 / 1, is left alone).
-// These are constants/literals in systemui's bundle (not patchable at the
-// source), so this patch hooks the mailbox class's SendMessage (on its
-// prototype, which existing instances use; through lib/hooks.js, which
-// window-curvature shares) and rewrites them in outgoing scene graphs (a
-// fresh object per update, so editing it in place is safe).
-// Grab nodes are identified by node type plus their exact stock values: after
-// a SteamVR update that changes them, the distance rewrite is a no-op.
-// Then systemui is asked for one scene-graph resend (its own debounced
-// scheduler: rebuilds the unchanged graph, no visible UI change), so new
-// limits apply immediately.
+// They are literals in systemui's bundle, so SendMessage is hooked on the
+// mailbox prototype (lib/hooks.js, shared with window-curvature) and outgoing
+// scene graphs (fresh objects per update) are edited in place. Grab nodes are
+// matched by type plus exact stock values, so if SteamVR changes them the
+// distance rewrite becomes a no-op. A scene-graph resend (systemui's debounced
+// scheduler) applies new limits at once.
 //
-// State: window.__sfuiDashboardWindows (mailbox prototype, resend function,
-// options id, per-kind rewrite counters in .hits). The hook is registered
-// as NAME; unpatch.js removes it and resends the stock graph. (VERSION 2
-// wrapped SendMessage itself and read the rewrite from the state's
-// `rewrite`, which is never set any more, so a leftover wrapper is inert; the
-// hooks library unwinds one still on top.)
-// The mailbox class and the scheduler are found by signature, not by
-// webpack module id or minified export name; if one doesn't match, the patch
-// returns an error and changes nothing. Idempotent: same VERSION and options
-// -> "unchanged"; otherwise the rewrite is replaced in place.
+// State: window.__sfuiDashboardWindows (proto, resend, options id, counters in
+// .hits); hook name NAME. (VERSION 2 wrapped SendMessage itself and read
+// state.rewrite, no longer set, so a leftover wrapper is inert; hooks.js
+// unwinds one on top.) Signature mismatch -> error, nothing changed. Same
+// VERSION and options -> "unchanged", else the rewrite is replaced in place.
 ((find, sigs, opts, hooks) => {
   const NAME = 'dashboard-windows';
   const VERSION = 3;

@@ -12,18 +12,12 @@
 //    keymap -- are typed by the helper instead
 //  - Enter types Return for app windows, even if a Steam search box had focus
 //    before (Steam then labels it "Search" and closes the keyboard instead)
-// Everything goes through the CDP binding window.__vrkbdKey("<op>:<arg>"),
-// executed by helper.mjs with xdotool on :0. Every replaced function keeps its
-// original as __vrkbdOrig (unpatch.js restores them, through the references
-// this patch remembers in window.__vrkbdRefs).
+// Key output goes through the CDP binding window.__vrkbdKey("<op>:<arg>"),
+// run by helper.mjs with xdotool on :0. Replaced functions keep their
+// original as __vrkbdOrig; window.__vrkbdRefs etc. are for unpatch.js.
 //
-// This file is a function expression, called by the file lib/default.nix
-// (mkPatch) generates: (<this file>)(find, sigs, opts), with find the finder
-// library (lib/finders.js) and sigs this patch's module signatures
-// (lib/signatures.json, "steam-keyboard-patch"). Steam's webpack modules are
-// located by those signatures, not by module id or minified export name; if
-// one doesn't match, the patch returns an error and changes nothing.
-// Idempotent: safe to evaluate repeatedly.
+// mkPatch patch (see lib/default.nix); no options. On a signature mismatch
+// it returns an error and changes nothing. Idempotent.
 ((find, sigs) => {
   const VERSION = 10;
   const send = (msg) => window.__vrkbdKey && window.__vrkbdKey(msg);
@@ -51,13 +45,11 @@
   };
 
   // ---- bottom row ------------------------------------------------------------
-  // The keyboard window has a fixed height, so no extra row: Esc/Ctrl/Alt go
-  // left of the space bar, and Steam's arrow keys become four separate keys
-  // (stock layouts pair them as [Left, Up-when-shifted], [Right, Down-when-shifted]).
-  // Every entry is a [normal, shifted, altgr] triple: Steam's stock bottom row
-  // lacks explicit variants, so with Shift the close icon jumps and with AltGr
-  // keys turn into empty full-width panels. null as the shifted variant means
-  // "same key, no shift label".
+  // Fixed window height, so no extra row: Esc/Ctrl/Alt go left of the space
+  // bar and the stock paired arrows ([Left, Up-shifted], [Right, Down-shifted])
+  // become four keys. Entries are explicit [normal, shifted, altgr] triples:
+  // without them Shift moves the close icon and AltGr yields empty
+  // full-width keys. null shifted = same key, no shift label.
   const HALF = 2;                                  // key type "Half"; widths set by the stylesheet
   const k = (key, label) => ({ key, label, type: HALF });
   const same = (x) => [x, null, x];
@@ -89,11 +81,10 @@
   }
 
   // ---- text: characters Steam's key emulation can't produce --------------------
-  // All keyboard text for gamescope windows ends up in
-  // SteamClient.Input.ControllerKeyboardSendText (via several paths, incl. the
-  // VR text override), which only maps plain ASCII on the base/shift levels;
-  // everything else comes out as "1". Hand those characters to the helper, in
-  // order; the rest passes through unchanged. (helper.mjs checks the same set.)
+  // All text for gamescope windows ends in ControllerKeyboardSendText, which
+  // only maps plain ASCII on the base/shift levels (else "1"). Those
+  // characters go to the helper, in order; the rest passes through.
+  // (helper.mjs checks the same set.)
   const viaHelper = (c) => c.codePointAt(0) > 127 || '|@{[]}\\~^`'.includes(c);
   wrap(SteamClient.Input, 'ControllerKeyboardSendText', (orig) => function (text, ...rest) {
     if (typeof text !== 'string') return orig.call(this, text, ...rest);
@@ -108,16 +99,13 @@
   });
 
   // ---- Enter for app windows ------------------------------------------------------
-  // The manager keeps the props of the last focused Steam text field
-  // (m_ActiveElementProps, set on DOM focus) until that field gets a gamepad
-  // blur, which doesn't happen when you leave the dashboard. Search boxes
-  // carry strEnterKeyLabel "#SearchEnterKeyLabel" ("Suchen") and an
-  // onEnterKeyPress returning "VKClose", so when the keyboard is then opened
-  // for an app window, Enter shows "Suchen", runs the Steam search and hides
-  // the keyboard instead of typing Return. While the keyboard serves
-  // something other than this Steam UI (the same test Steam uses for its
-  // text dispatch, in the VirtualKeyboardManager's module), ignore those
-  // props and the dismiss-on-Enter flag.
+  // The manager keeps the last focused Steam text field's props
+  // (m_ActiveElementProps) until a gamepad blur, which leaving the dashboard
+  // doesn't send. A search box's props (Enter label "Search", onEnterKeyPress
+  // -> "VKClose") then make Enter search and hide the keyboard in app windows.
+  // While the keyboard serves something other than this Steam UI (Steam's own
+  // test, VirtualKeyboardManager module), ignore those props and the
+  // dismiss-on-Enter flag.
   const forOther = (m) => {
     const s = Status.VRKeyboardStatus, ui = m.m_Instance;
     return !!s?.bIsOpen && !(s.sOverlayKey && s.sOverlayKey === ui?.GetVROverlayKey?.()) &&

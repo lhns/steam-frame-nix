@@ -1,83 +1,62 @@
 // window-curvature: adjustable curvature per SteamVR dashboard window. The
-// stock "Toggle Curvature" control becomes a wheel wherever it is shown: the
-// row of a window's More Options (three-dot) menu (with the value on the
-// right of the row) and, when the control sits in the window's bottom bar
-// (e.g. moved there by frame-controls), that bar button (no value shown:
-// the steps and snap points are felt as controller haptics). Click toggles
-// (curved -> flat, flat -> stock curve), dragging up/down with the laser sets
-// the curvature live.
+// stock "Toggle Curvature" control becomes a wheel: in the More Options menu
+// row (value shown on the right) and, if the control is in the bottom bar
+// (e.g. via frame-controls), on that bar button (no value; steps and snap
+// points are felt as haptics). Click toggles (curved -> flat, flat -> stock
+// curve); dragging up/down with the laser sets the curvature live.
 //
-// Target: SteamVR's dashboard page (vrwebhelper, DevTools 127.0.0.1:8087,
-// title "systemui"). This file is a function expression, called by the file
-// lib/default.nix (mkPatch) generates: (<this file>)(find, sigs, opts, hooks),
-// with find the finder library (lib/finders.js), sigs this patch's module
-// signatures (lib/signatures.json, "window-curvature"), opts the options from
-// window-curvature.nix and hooks the shared method hooks (lib/hooks.js).
+// Target: SteamVR dashboard (vrwebhelper, DevTools 127.0.0.1:8087, title
+// "systemui"). mkPatch patch (see lib/default.nix); opts: { default, max,
+// step, snap, snapPoints, dragThreshold, dragPixelsPerUnit,
+// barDragPixelsPerUnit, barDragRoom, haptics }.
 //
-// How stock curvature works (systemui's `curvature` frame component, found
-// by signature; frame.curvature):
-//   shouldCurve   on/off: m_bCurveOverride (set by ToggleCurvature(), cleared
-//                 when the dock location changes), else the stock default:
-//                 curved when docked in the dashboard, theater per setting,
-//                 flat elsewhere (world, hands).
-//   curvatureOriginDistance = shouldCurve ? DashboardStore.curvatureDistance
-//                 (dashboard distance + 1.8 m, e.g. 2.95) : 1000.
-//   The frame renders a transform node with id curvatureTransformOriginID
-//   ("frame:<id>:curvature-origin") at translation z = that distance, and
-//   every panel of the frame references it as "curvature-origin-id";
-//   vrcompositor bends the panels onto a cylinder around that point. So
-//   curvature = 1 / radius, and "flat" is just a very distant origin (1000).
-// Those computed properties can't be overridden (non-configurable MobX
-// instance properties), so this patch hooks the mailbox's SendMessage
-// (lib/hooks.js, shared with dashboard-windows) and rewrites the origin's
-// translation in outgoing scene graphs: distance = stock distance / value,
-// value 1 = SteamVR's stock curve, 2 = twice as curved (half the radius),
-// 0 = flat (the stock toggle off). On/off stays the stock state
-// (ToggleCurvature), so the stock toggle and this control always agree.
+// Stock curvature (frame.curvature, systemui's `curvature` component):
+// shouldCurve = m_bCurveOverride (set by ToggleCurvature(), cleared on dock
+// change) else curved when docked in the dashboard, theater per setting, flat
+// elsewhere. The frame renders transform "frame:<id>:curvature-origin" at
+// z = shouldCurve ? DashboardStore.curvatureDistance (dashboard distance +
+// 1.8 m) : 1000; its panels reference it as "curvature-origin-id" and
+// vrcompositor bends them onto a cylinder around it (curvature = 1/radius).
+// Those MobX properties are non-configurable, so this patch hooks the mailbox
+// SendMessage (lib/hooks.js, shared with dashboard-windows) and rewrites the
+// origin's z in outgoing scene graphs to stock / value (1 = stock, 2 = half
+// the radius, 0 = flat = stock toggle off). On/off stays the stock state, so
+// stock toggle and wheel always agree.
 //
-// Values are kept per window (key: the frame's first overlay key) in
-// window.__sfuiWindowCurvatureState (schema 1: { values, log }), which
-// unpatch and upgrades leave in place (not persisted across a dashboard
-// reload / SteamVR restart). A window without its own value uses
-// opts.default when placed in the world or on a hand, and 1 (stock) when
-// docked in the dashboard or the theater, so the docked Steam window stays
-// concentric with the dashboard bar.
+// Values per window (key: first overlay key) in
+// window.__sfuiWindowCurvatureState (schema 1: { values, log }); kept across
+// re-patch and unpatch, not across a dashboard reload. Without a stored value:
+// opts.default in the world or on a hand, 1 when docked in the dashboard or
+// theater (so the Steam window stays concentric with the dashboard bar).
 //
-// Bar button: the bar panel (vsg-node#legacy-frame-controls-<frameID>,
-// origin TopCenter) is one button high, and the laser's position stops at
-// the edge of the pressed panel. While a drag on the bar button runs, the
-// panel gets opts.barDragRoom px of transparent padding above and below
-// (stock window.forceLayoutUpdate() re-measures it), and the panel's origin
-// is moved by the same amount in outgoing scene graphs, so the bar stays
-// where it is in VR. The padding moves the bar down in page coordinates;
-// laser events the compositor still maps with the old layout are recognised
-// (the laser moves continuously) and shifted. opts.barDragPixelsPerUnit
-// sets the drag speed there.
+// Bar button: the bar panel (#legacy-frame-controls-<frameID>, origin
+// TopCenter) is one button high and the laser stops at the pressed panel's
+// edge. During a bar drag the panel gets opts.barDragRoom px of transparent
+// padding above and below (window.forceLayoutUpdate() re-measures) and its
+// origin is compensated in outgoing scene graphs so the bar stays put in VR.
+// Laser events still mapped with the old layout are detected and shifted.
 //
-// Haptics (opts.haptics): VRHTML.VROverlay.TriggerOverlayHapticEffect with
-// the stock EOverlayHapticEffect values (sigs.hapticEffects): SlidingEdge at
-// 0 and max, Snap at a snap point, Sliding for other steps (at most every
-// 30 ms).
+// Haptics (opts.haptics): VROverlay.TriggerOverlayHapticEffect with stock
+// EOverlayHapticEffect values: SlidingEdge at 0/max, Snap at snap points,
+// Sliding otherwise (at most every 30 ms).
 //
-// Contract with other patches (e.g. a long press on frame controls): this
-// patch owns press-and-drag on its controls.
+// Contract with other patches (e.g. frame-controls' long press); this patch
+// owns press-and-drag on its controls:
 //   - Every element it drives has the class `sfui-curv-ctl`.
-//   - When a press on one becomes a drag (opts.dragThreshold px vertical),
-//     it dispatches a bubbling CustomEvent `sfui-curv-dragstart` on the
-//     element (detail { frameID, where: 'menu' | 'bar' }); when that drag
-//     ends (release or cancelPress), `sfui-curv-dragend`.
-//   - window.__sfuiWindowCurvature.cancelPress() ends the current press on
-//     any of its controls without its click (a drag stays at its value);
-//     returns whether a press was active.
-// A patch with its own gesture on these elements lets mousemove through
-// while that gesture is undecided, drops it on `sfui-curv-dragstart`, and
-// calls cancelPress() when it takes the press over. Neither side reads the
-// other's thresholds or restores the other's state afterwards.
+//   - When a press becomes a drag (opts.dragThreshold px vertical) it
+//     dispatches a bubbling CustomEvent `sfui-curv-dragstart` on the element
+//     (detail { frameID, where: 'menu' | 'bar' }); when that drag ends
+//     (release or cancelPress), `sfui-curv-dragend`.
+//   - window.__sfuiWindowCurvature.cancelPress() ends the current press
+//     without its click (a drag keeps its value); returns whether a press
+//     was active.
+// A patch with its own gesture on these elements lets mousemove through while
+// undecided, drops its gesture on `sfui-curv-dragstart`, and calls
+// cancelPress() when it takes the press over. Neither side reads the other's
+// thresholds or restores the other's state.
 //
-// Debugging: window.__sfuiWindowCurvature: dump() (per frame: dock, on/off,
-// stored/applied value, distances, controls), hits (scene-graph rewrite and
-// haptic counters), log (last events, also in the state), setValue(frameID,
-// v), controls(), cancelPress().
+// Debugging: window.__sfuiWindowCurvature: dump(), hits (rewrite/haptic
+// counters), log, setValue(frameID, v), controls(), cancelPress().
 ((find, sigs, opts, hooks) => {
   const NAME = 'window-curvature';
   const VERSION = 11;
@@ -230,11 +209,8 @@
     resend();
   };
 
-  // Sets the shown value of a frame: 0 = curvature off, > 0 = on with that
-  // strength. On/off goes through the stock ToggleCurvature (what the
-  // control's stock click invokes), so Steam's state and the icon match.
-  // Going to 0 forgets the window's value (turning it on again, e.g. by
-  // docking it in the dashboard, uses the default).
+  // 0 = off, > 0 = on with that strength. On/off via stock ToggleCurvature so
+  // Steam's state and icon match. 0 forgets the stored value.
   const setValue = (f, v, why) => {
     const c = curvatureOf(f);
     if (!c) return;
@@ -283,10 +259,9 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
     document.head.appendChild(s);
   };
 
-  // The frame's Toggle Curvature action: a toggle (invocation 2) with the
-  // curvature icons. Its menu row is found by position among the menu's
-  // rows, checked against (else looked up by) the action's label; its bar
-  // button by the React `control` prop of the bar's buttons.
+  // Toggle Curvature action: invocation 2 with the curvature icons. Menu row:
+  // by position, verified (else found) by label; bar button: by React
+  // `control` prop.
   const isCurvatureAction = (a) => {
     const p = a?.partialParams;
     return p?.invocation === 2 && p?.icon?.enum === ICON_OFF && p?.icon_active?.enum === ICON_ON;
@@ -315,11 +290,9 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
     return null;
   };
 
-  // Digits have no descenders, so their ink sits above the centre of the line
-  // box that translateY(-50%) centres. The ink box is measured once (canvas
-  // measureText: font metrics vs. actual digit bounds) and the number shifted
-  // by the difference, so it is optically centred between the arrows.
-  // (CSS text-box-trim would do this; Steam's Chromium lacks it.)
+  // Digits have no descenders, so translateY(-50%) centres them too high;
+  // shift by the measured ink offset (canvas measureText) to centre them
+  // optically between the arrows. (Steam's Chromium lacks text-box-trim.)
   let ctx2d;
   const inkShift = (el) => {
     const cs = getComputedStyle(el);
@@ -356,15 +329,11 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
   }
 
   // ---- input -----------------------------------------------------------------------------
-  // Every press/click on a control is stopped at the element, so React
-  // (listening at the root) never runs the stock onClick; the click is
-  // re-implemented on mouseup when the press never became a drag. Drag:
-  // vertical and relative (the cylinder bends horizontally, so the pointer's
-  // y on the panel barely moves while the curvature changes). A press
-  // becomes a drag after dragThreshold px (then re-based, so there is no
-  // jump); the value follows at dragPixelsPerUnit (bar: barDragPixelsPerUnit)
-  // px per 1.0, see dragValue. One press at a time, window capture listeners
-  // while it lasts.
+  // Presses/clicks are stopped at the element so React (root listener) never
+  // runs the stock onClick; a press that never became a drag is a click on
+  // mouseup. Drag is vertical and relative (the cylinder bends horizontally,
+  // so y barely moves as curvature changes); after dragThreshold px it
+  // re-bases (no jump). One press at a time, window capture listeners.
   const stop = (e) => e.stopPropagation();
   const STOPPED = ['click', 'dblclick', 'mouseup', 'pointerdown', 'pointerup', 'contextmenu'];
   let press = null;                               // { c, y0, v0, last, moved, shift, stale }
@@ -518,9 +487,9 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
     return 'ok';
   };
 
-  // Wanted controls: open menus, and bars that hold the curvature action;
-  // injected with retries until React has rendered them (bars only while
-  // the frame is visible: a hidden frame has no bar panel).
+  // Inject into open menus and bars holding the curvature action, retrying
+  // until React rendered them (bars only while visible: hidden frames have no
+  // bar panel).
   let syncTimer = null, retries = 0;
   const failed = new Map();                       // key -> last reason logged
   const sync = () => {

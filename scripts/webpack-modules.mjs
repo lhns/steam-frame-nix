@@ -5,14 +5,11 @@
 //   const mods = loadBundles('/home/deck/.local/share/Steam/steamui');
 //   // Map "<id>" -> { id, file, factory, source }
 //
-// Module maps are object literals of `<id>: <factory>` entries, found at
-//   - `.push([[<chunk ids>],{…}` (chunk files: webpackChunk<name>.push), and
-//   - `<x>={<id>:…` (the runtime's own modules, e.g. library.js).
-// A small tokenizer (strings, templates, comments, regex literals) finds the
-// literal's closing brace; the literal alone is then evaluated in a fresh VM
-// context, which only creates the factory functions (nothing runs), so
-// `source` is exactly Function.prototype.toString of the factory, as a
-// finder sees it in the running page (require.m[id]).
+// Module maps are object literals of `<id>: <factory>`, found at
+// `.push([[<chunk ids>],{…}` (chunk files) and `<x>={<id>:…` (the runtime's
+// own modules). A small tokenizer finds the closing brace; the literal alone
+// is evaluated in a fresh VM context (defines factories, runs nothing), so
+// `source` equals Function.prototype.toString as a finder sees it.
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import vm from 'node:vm';

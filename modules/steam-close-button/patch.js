@@ -1,65 +1,44 @@
 // steam-close-button: a Close (X) button on the SteamVR dashboard's main
-// "Steam" window (Steam's library, overlay valve.steam.gamepadui.main).
-// Target: SteamVR's dashboard page (vrwebhelper, DevTools 127.0.0.1:8087,
-// title "systemui").
+// "Steam" window (overlay valve.steam.gamepadui.main).
+// Target: SteamVR dashboard (vrwebhelper, DevTools 127.0.0.1:8087, title
+// "systemui"). mkPatch patch (see lib/default.nix); no options.
 //
-// This file is a function expression, called by the file lib/default.nix
-// (mkPatch) generates: (<this file>)(find, sigs, opts), with find the finder
-// library (lib/finders.js) and sigs this patch's module signatures
-// (lib/signatures.json, "steam-close-button": MobX, the dock-location enum,
-// the frame's `closing` component class, plus check-only anchors for the
-// dashboard internals used below). No options.
-//
-// The button: every dashboard frame has a `closing` component; its X renders
-// when closing.showCloseButton, i.e. when one of closeMethodPriority's methods
-// is possible. Method 0 is "componentProps.onCloseRequested exists", and
+// The button: a frame's `closing` component shows X when a close method is
+// possible; method 0 is "componentProps.onCloseRequested exists", with
 // componentProps = {...defaultComponentProps, ...frame.props.componentProps.closing}.
-// The main frame passes no closing props, so this patch replaces that
-// instance's plain `defaultComponentProps` field with a copy that adds
-// onCloseRequested (original kept as the non-enumerable __sfuiOrig), then
-// re-assigns frame.props (a shallow copy, in a MobX action) so the computed
-// componentProps re-evaluates and the button appears. React re-assigning
-// frame.props later keeps it (the defaults are merged every time).
+// The main frame passes no closing props, so this instance's
+// defaultComponentProps is replaced by a copy adding onCloseRequested
+// (original as non-enumerable __sfuiOrig) and frame.props is re-assigned (in a
+// MobX action) so the computed re-evaluates. Later React props updates keep it.
 //
-// Clicking X (RequestClose -> onCloseRequested); the frame can't be
-// destroyed, so it is put out of view:
+// Clicking X: the frame can't be destroyed, so it is put out of view:
 //  * undocked (world/theater/hand) -> docked back into the dashboard;
-//  * if it was the active dashboard frame -> the dashboard switches to the
-//    most recently active other frame that is alive, docked in the dashboard
-//    and has a dashboard-bar tab (the call a tab click makes);
-//  * with none -> "bar only": the dashboard stays open with no active frame,
-//    just the dashboard bar (a docked frame renders only while active).
-// Stock SteamVR has that state (e.g. when a VRLink remote frame vanishes)
-// but never keeps it, so while bar-only is on and no frame is active:
+//  * if it was active -> switch to the most recently active other frame that
+//    is alive, docked and has a dashboard-bar tab (as a tab click does);
+//  * with none -> "bar only": dashboard open with no active frame.
+// Stock SteamVR has that state but never keeps it, so while bar-only is on
+// and no frame is active:
 //  - an instance override of Dashboard.autoSwitchOverlayIfNeeded returns
-//    early (its onDashboardTabsUpdated autorun, and reopening the dashboard
-//    with the Steam button, would otherwise switch right back to Steam);
+//    early (its autorun, and reopening the dashboard, would switch back);
 //  - an instance override of Dashboard.onShowOverlayRequestFromSteam drops
-//    the FIRST ShowOverlay("valve.steam.gamepadui.main") from Steam after each
-//    dashboard open, within STEAM_SHOW_CAP_MS (Steam's main VR window sends
-//    it by itself 50 ms .. 1.7 s after the open). Trade-off: should Steam not
-//    send it, the user's first explicit Steam-menu pick (e.g. Library) in
-//    that session is swallowed once; a second one works.
-// A Steam tab click (DashboardTabClicked -> switchToFrameInternal) and
-// SteamVR's own CVRSteamPrivate::SwitchToDashboardOverlay path aren't
-// filtered. Bar-only ends as soon as any frame becomes active.
+//    the FIRST ShowOverlay(main) from Steam after each dashboard open, within
+//    STEAM_SHOW_CAP_MS (Steam sends it by itself 50 ms .. 1.7 s after open).
+//    Trade-off: if Steam doesn't send it, the user's first explicit Steam-menu
+//    pick in that session is swallowed once.
+// Steam tab clicks and SteamVR's SwitchToDashboardOverlay aren't filtered.
+// Bar-only ends as soon as any frame becomes active.
 //
-// State that must outlive this instance (bar-only flag, last open time,
-// pending Steam request, frame history, suppression log) is kept in
-// window.__sfuiSteamCloseState (schema 1), which upgrades take over.
-// Teardown (unpatch.js, a newer VERSION) only removes overrides, reactions
-// and markers: it never switches frames and leaves the state, so a
-// re-injection (service restart, switch) continues bar-only. It is in-page
-// only: a dashboard (vrwebhelper) reload starts fresh (see loadState).
+// State (bar-only flag, open time, pending request, history, log) lives in
+// window.__sfuiSteamCloseState (schema 1), taken over by upgrades. Teardown
+// never switches frames and keeps the state, so a re-injection continues
+// bar-only; a dashboard reload starts fresh.
 //
-// Without the Dashboard component, X hides the dashboard. RequestClose shows
-// a spinner after onCloseRequested (it expects the frame to go away); it is
-// reset right after. A MobX reaction keeps the history of active frames and
-// re-applies when the main frame changes (the 15 s re-injection covers the
-// rest). window.__sfuiSteamClose: plan() (what a click would do now, no side
-// effects), wouldIgnoreSteamShow(), barOnly, state, teardown().
-// Results: "patched" / "unchanged", with " (bar-only, N ignored Steam
-// requests)" while there is something to report, so the injector logs it.
+// Without the Dashboard component, X hides the dashboard. RequestClose's
+// spinner (it expects the frame to go away) is reset right after. A MobX
+// reaction tracks active-frame history and re-applies when the main frame
+// changes. window.__sfuiSteamClose: plan() (what a click would do),
+// wouldIgnoreSteamShow(), barOnly, state, teardown(). Result: "patched" /
+// "unchanged", plus " (bar-only, N ignored Steam requests)" when relevant.
 ((find, sigs, opts) => {
   const NAME = 'steam-close-button';
   const VERSION = 5;

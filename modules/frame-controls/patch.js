@@ -1,81 +1,59 @@
-// frame-controls: move the control icons under SteamVR dashboard windows
-// between the window's bottom bar and its More Options (three-dot) menu.
-// A long press on a bar icon or a menu row (opts.longPressMs; a ring around
-// the icon shows the progress from half that time, at most after 1 s) opens a
-// small popup with a "Show in bar" checkbox; toggling it moves that control for all
-// windows. Short presses stay stock. The three-dot button itself can't be
-// moved (stock shows it while its menu has entries). opts.floatInTheater
-// gives theater windows the "Float" control back.
+// frame-controls: move SteamVR dashboard window controls between the bottom
+// bar and the More Options (three-dot) menu. A long press (opts.longPressMs;
+// progress ring from half that time, at most after 1 s) on a bar icon or menu
+// row opens a "Show in bar" popup; toggling it moves that control in all
+// windows. Short presses stay stock; the three-dot button can't be moved.
+// opts.floatInTheater gives theater windows the "Float" control back.
 //
-// Target: SteamVR's dashboard page (vrwebhelper, DevTools 127.0.0.1:8087,
-// title "systemui"). This file is a function expression, called by the file
-// lib/default.nix (mkPatch) generates: (<this file>)(find, sigs, opts), with
-// find the finder library (lib/finders.js), sigs this patch's module
-// signatures (lib/signatures.json, "frame-controls") and opts the options
-// from frame-controls.nix.
+// Target: SteamVR dashboard (vrwebhelper, DevTools 127.0.0.1:8087, title
+// "systemui"). mkPatch patch (see lib/default.nix); opts: { inBar, inMenu,
+// longPressMs, floatInTheater }.
 //
-// Stock frame controls (systemui): each window (Frame) renders its controls
-// as <FrameControlsItem params={type, action_id}> (type 2 = action button,
-// 1 = spacer); the items register while rendering and the frame's
-// <FrameControls> hands the lists to Frame.prototype.SetControlsItems(bottom,
-// tabHover, additional) (a MobX action). Items inside onlyVisibleIn=
-// "additional-options" (curvature, dock to a controller) go to `additional`.
-// systemui draws the controls of every window itself (also the Steam window):
-// panel vsg-node#legacy-frame-controls-<frameID> from `bottom`, and, while
-// the menu is open, #legacy-frame-controls-additional-options-<frameID> from
-// `additional`. Buttons are div.ButtonControl whose React `control` prop is
-// the item; stock actions run on click (primary button only).
+// Stock: each Frame renders <FrameControlsItem params={type, action_id}>
+// (2 = action, 1 = spacer); <FrameControls> passes the lists to the MobX
+// action Frame.prototype.SetControlsItems(bottom, tabHover, additional)
+// (onlyVisibleIn="additional-options" items go to `additional`). systemui
+// draws them as panels vsg-node#legacy-frame-controls-<frameID> (bar) and
+// #legacy-frame-controls-additional-options-<frameID> (open menu); buttons are
+// div.ButtonControl with the item as React prop `control`.
 //
-// Placement: SetControlsItems is wrapped; the stock lists are remembered per
-// frame and a re-partitioned copy is stored (stock order kept; a control
-// moved into the bar joins the group left of the three-dot button, which
-// keeps a group of its own; adjacent spacer runs are merged so gaps don't
-// widen). Without a placement differing from stock the stock arrays pass
-// through unchanged. A change re-applies the remembered lists of every frame
-// (no React re-render needed). The tab-hover list is untouched.
-// Placement is global per control type: a control's key is its action icon,
-// "icon:<enum>" (the same in every window and language; action ids are per
-// frame instance and app window keys change with every app start). Effective
-// placement: the popup's choice, else opts.inBar / opts.inMenu, else stock; a
-// popup choice is dropped when the option for that control changes. Kept in
-// window.__sfuiFrameControlsState (survives patch restarts and upgrades;
-// unpatch keeps it) and mirrored to the page's localStorage, so it also
-// survives SteamVR restarts.
+// Placement: SetControlsItems is wrapped; stock lists are remembered per frame
+// and a re-partitioned copy is stored (stock order kept; a control moved to the
+// bar joins the group left of the three-dot button; adjacent spacer runs are
+// merged). A change re-applies all remembered lists (no re-render needed).
+// Keyed per control type by action icon, "icon:<enum>" (action ids are per
+// frame, app window keys per app start). Effective: popup choice, else
+// opts.inBar/inMenu, else stock; a popup choice is dropped when that control's
+// option changes. State in window.__sfuiFrameControlsState (kept across
+// re-patch and unpatch) and localStorage (survives SteamVR restarts).
 //
-// Long press: SteamVR delivers only primary-button laser input to the
-// dashboard (no right-click; the thumbstick click arrives as nothing), so a
-// long press is the trigger. Nothing is stopped or restyled while holding;
-// the timer keeps running when the laser moves or leaves the control and is
-// cancelled by an early release (or a curvature drag, below). When it completes, the popup opens and
-// the one click that follows the release on that control is swallowed, so
-// its stock action doesn't run.
-// window-curvature (its controls own press-and-drag) contract: its elements
-// carry the class sfui-curv-ctl; a drag there dispatches a bubbling
+// Long press: the dashboard only gets primary-button laser input (no right
+// click; thumbstick click arrives as nothing). Holding changes nothing; the
+// timer survives the laser leaving the control, an early release cancels it.
+// On completion the popup opens and the next click on that control is
+// swallowed so its stock action doesn't run.
+// Contract with window-curvature (whose controls own press-and-drag): its
+// elements carry class sfui-curv-ctl; a drag there dispatches a bubbling
 // CustomEvent 'sfui-curv-dragstart' (cancels the long press before the ring
-// shows); once the ring shows, the long press takes the press over with
-// window.__sfuiWindowCurvature.cancelPress(), so drifting doesn't start a
-// drag. Neither side reads the other's thresholds.
+// shows); once the ring shows, the long press takes over the press via
+// window.__sfuiWindowCurvature.cancelPress(). Neither reads the other's
+// thresholds.
 //
-// Popup: in a scene-graph panel of its own, attached like the stock menu, so
-// neither the bar nor the menu panel changes. The dashboard builds its scene
-// graph by walking the DOM (vsg-transform elements from their attributes,
-// other nodes through an element's buildNode()); panel textures are regions
-// of the page, published per panel through SGApp's embedded-UV table. So:
+// Popup: its own scene-graph panel so the bar/menu panels don't change. The
+// dashboard builds its scene graph from the DOM (vsg-transform attributes,
+// other nodes via element.buildNode()); panel textures are page regions
+// published through SGApp's embedded-UV table. So, after the bar's transform:
 //   <vsg-transform parent-id=<anchor> translation=...>
-//     <vsg-node> buildNode: a panel with the bar/menu panel's own properties
+//     <vsg-node> buildNode: panel copying the bar/menu panel's properties
 //                (key, meters-per-pixel, curvature origin, laser visibility),
 //                origin bottom centre, own UVs and embedded-UV slot
-//       popup
-// inserted after the bar's transform. Bar controls: the pressed button's
-// anchor (the tooltips' anchor), 0.15 up (the tooltips' offset): above the
-// icon. Menu rows: the three-dot button's popout anchor (from which the stock
-// menu is placed), centred on the menu and GAP_PX above it. The stock menu
-// closes when the compositor's input focus leaves the bar and menu panels,
-// which pointing at the popup does, so while a menu popup is open a close of
-// that menu is deferred (Frame.prototype.SetControlAdditionalOptionsOpen
-// wrapped) and settled when the popup closes. The popup closes on a press
-// outside it, Escape, 1 s after the laser left it and its bar/menu, and after
-// toggling. Without SGApp/anchors the popup goes into the bar/menu panel.
+// Anchor: bar -> the button's tooltip anchor, 0.15 up (tooltip offset); menu
+// -> the three-dot popout anchor, centred on the menu, GAP_PX above it. The
+// stock menu closes when compositor focus leaves bar and menu, which pointing
+// at the popup does, so while a menu popup is open that close is deferred
+// (SetControlAdditionalOptionsOpen wrapped) and settled on popup close. Closes
+// on a press outside, Escape, 1 s after the laser left popup and bar/menu, and
+// after toggling. Without SGApp/anchors the popup goes into the bar/menu panel.
 //
 // Debugging: window.__sfuiFrameControls: log, dump(), placement(),
 // setPlacement(name or "icon:N", 'bar' | 'menu' | null), reset().

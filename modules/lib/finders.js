@@ -1,15 +1,12 @@
-// finders.js: signature-based lookup of webpack modules, their exports and
-// React fibers in Steam's (and SteamVR's) web UIs, so runtime patches don't
-// depend on webpack module ids or minified export names, which change with
-// every Steam update. In the spirit of Decky Loader's @decky/ui
-// (findModule, findModuleChild, findInReactTree) and Vencord's `find`.
+// finders.js: signature-based lookup of webpack modules, exports and React
+// fibers in Steam's and SteamVR's web UIs, so patches don't depend on module
+// ids or minified names (which change with every Steam update). Like Decky
+// Loader's @decky/ui finders and Vencord's `find`.
 //
-// This file is a single expression. Evaluated in a page it installs the
-// library as window.__sfuiFind (unless an equal or newer VERSION is already
-// there) and evaluates to it; lib/default.nix passes it to the patches that
-// need it, together with their signatures from signatures.json. The same
-// file is evaluated by scripts/check-signatures.mjs in Node, so patches and
-// the offline check match signatures with the same code.
+// A single expression: installs window.__sfuiFind (unless an equal or newer
+// VERSION is there) and evaluates to it; mkPatch passes it as `find`.
+// scripts/check-signatures.mjs evaluates the same file in Node, so the
+// offline check matches exactly like the patches.
 //
 // Signatures (plain JSON, see signatures.json):
 //   text signature, matched against a source text (a module factory's or a
@@ -188,9 +185,8 @@
   }
 
   // Module signature -> { id, module (exports object), exports: { name: value },
-  // keys: { name: export key } }. Cached per page (this library lives on the
-  // page's window); a cached result is reused while the module factory is
-  // still registered and every export still has the same value.
+  // keys: { name: export key } }. Cached per page while the factory is still
+  // registered and every export keeps its value.
   const cache = new Map();
   function resolve(req, sig, name = 'module') {
     const ck = name + '\n' + JSON.stringify(sig);

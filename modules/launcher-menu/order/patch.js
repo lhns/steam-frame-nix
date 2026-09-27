@@ -1,10 +1,8 @@
-// launcher-menu order: sorts the VR dashboard's "+" menu (non-Steam programs)
-// alphabetically (case-insensitive), Desktop included.
-// Steam renders SteamClient.Apps.ScanForInstalledNonSteamApps() in the order
-// it returns (GLib hash-table order, i.e. random-ish); its hook looks the
-// function up at call time, so wrapping it here in SharedJSContext is enough.
-// The original is kept as __sfuiOrig (unpatch.js restores it). Idempotent;
-// bump VERSION when changing the wrapper.
+// order: sorts the VR dashboard's "+" menu alphabetically (case-insensitive),
+// Desktop included. Steam shows ScanForInstalledNonSteamApps() in GLib
+// hash-table order and looks the function up at call time, so wrapping it in
+// SharedJSContext suffices. Original kept as __sfuiOrig for unpatch.js; bump
+// VERSION on changes.
 (() => {
   const VERSION = 3;
   const NAME = 'launcher-menu-order';

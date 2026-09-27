@@ -1,25 +1,15 @@
-// launcher-menu show-all: the VR dashboard's "+" menu lists all programs
-// without Steam's Developer Mode.
-// Steam filters the programs of ScanForInstalledNonSteamApps() by the base
-// name of their executable: some are always hidden (steam, vrurlhandler),
-// and without Developer Mode (client setting developer_mode_enabled) also a
-// second list: firewall-config, vlc, dolphin, cmake-gui, plasma-discover,
-// konsole, systemsettings, qrenderdoc, sh, lxterminal. The menu's filter
-// spreads that list into its block list only when Developer Mode is off
-// (`bDevMode || block.push(...devModeOnly)`), and nothing else uses it.
+// show-all: the VR dashboard's "+" menu lists all programs without Steam's
+// Developer Mode.
+// mkPatch patch (see lib/default.nix); no opts; sigs: "launcher-menu-show-all"
+// (the module exporting the list, plus a check-only anchor for the filter).
 //
-// This file is a function expression, called by the file lib/default.nix
-// (mkPatch) generates: (<this file>)(find, sigs), with find the finder
-// library (lib/finders.js) and sigs this patch's module signatures
-// (lib/signatures.json, "launcher-menu-show-all": the module exporting the
-// list, plus a check-only anchor for the filter). No options.
-//
-// The patch gives that one array an own, empty Symbol.iterator, so spreading
-// it adds nothing; its contents stay as they are (the signature keeps
-// matching on re-injection) and the Developer Mode setting itself, used
-// elsewhere (settings pages, controller pairing, ...), is not touched. The
-// menu re-filters whenever it rescans, i.e. on every open. The array is
-// remembered as window.__sfuiShowAllApps for unpatch.js. Idempotent.
+// Steam hides some executables always (steam, vrurlhandler) and, without
+// Developer Mode, a second list (firewall-config, vlc, dolphin, cmake-gui,
+// plasma-discover, konsole, systemsettings, qrenderdoc, sh, lxterminal) via
+// `bDevMode || block.push(...devModeOnly)`; nothing else uses that array.
+// The patch gives it an own, empty Symbol.iterator, so spreading adds
+// nothing while its contents (and the signature) stay intact and the setting
+// itself is untouched. Remembered as window.__sfuiShowAllApps for unpatch.js.
 ((find, sigs) => {
   const VERSION = 1;
   let mods;

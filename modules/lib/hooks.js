@@ -1,33 +1,23 @@
-// hooks.js: shared method hooks for runtime patches. Several patches can
-// intercept the same method (e.g. SendMessage of the SteamVR dashboard's
-// mailbox, which dashboard-windows and window-curvature both use to rewrite
-// outgoing scene graphs) through ONE wrapper per method, instead of a chain
-// of per-patch wrappers: a wrapper can't be taken out of the middle of a
-// chain, so patches restarted in varying order would pile up inert wrappers
-// (or run a rewrite twice).
+// hooks.js: shared method hooks. Patches that intercept the same method (e.g.
+// the SteamVR dashboard mailbox's SendMessage, used by dashboard-windows and
+// window-curvature) share ONE wrapper per method: a wrapper can't be removed
+// from the middle of a chain, so per-patch wrappers restarted in varying
+// order would pile up (or run a rewrite twice).
 //
-// This file is a single expression. Evaluated in a page it installs the
-// library as window.__sfuiHooks (unless an equal or newer VERSION is already
-// there; a newer one takes over the registry) and evaluates to it;
-// lib/default.nix (mkPatch) passes it to every patch as its 4th argument.
-//
-//   before(obj, method, name, fn)  registers (or replaces) hook `name` on
-//       obj[method] (e.g. a class prototype): fn.call(this, args) runs before
-//       the original with the call's arguments array (which it may modify in
-//       place). Installs the wrapper if needed. Idempotent. A hook that
-//       throws is skipped (count and last message in errors[name]).
-//   remove(obj, method, name)      unregisters it; once no hook is left the
-//       wrapper is removed too (if nothing wrapped the method since).
-//   has(obj, method, name)         registered and the wrapper installed.
-//
-// The wrapper (marked fn.__sfuiHooks = method, original in fn.__sfuiOrig)
-// looks the hooks up per call, so re-registering, removing and upgrading the
-// library take effect in place. Hooks run once per call, even if a wrapper
-// ended up in the method's chain twice (then also not for a call the method
-// makes to itself). Hooks are called in registration order.
-// Migration: per-patch wrappers from before this library (fn.__sfuiPatch ===
-// name, original in fn.__sfuiOrig) on top of obj[method] are unwound when
-// `name` registers.
+// A single expression: installs window.__sfuiHooks (unless an equal or newer
+// VERSION is there; a newer one takes over the registry) and evaluates to it;
+// mkPatch passes it to every patch as `hooks`.
+//   before(obj, method, name, fn)  register/replace hook `name`:
+//       fn.call(this, args) runs before the original and may modify the args
+//       array in place. Idempotent. Throwing hooks are skipped and counted in
+//       errors[name].
+//   remove(obj, method, name)      unregister; the wrapper goes with the last
+//       hook (if nothing wrapped the method since).
+//   has(obj, method, name)         registered and wrapper installed.
+// The wrapper (fn.__sfuiHooks = method, original in fn.__sfuiOrig) looks hooks
+// up per call, in registration order, and runs them once per call even if it
+// is in the chain twice. Legacy per-patch wrappers (fn.__sfuiPatch === name)
+// on top of obj[method] are unwound when `name` registers.
 (() => {
   const VERSION = 1;
   const G = globalThis;

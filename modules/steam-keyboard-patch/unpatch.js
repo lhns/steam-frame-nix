@@ -1,8 +1,7 @@
-// Reverts patch.js in Steam's SharedJSContext; evaluated by helper.mjs
-// when it stops (service stopped, module disabled). Every patched function
-// keeps its original as __vrkbdOrig; the patched objects Steam doesn't expose
-// globally were remembered by patch.js (window.__vrkbdRefs, __vrkbdLayouts,
-// __vrkbdProto, __vrkbdInst). Safe to run when nothing is patched.
+// Reverts patch.js in Steam's SharedJSContext (run by helper.mjs on stop).
+// Patched functions keep their original as __vrkbdOrig; objects Steam doesn't
+// expose are in window.__vrkbdRefs/__vrkbdLayouts/__vrkbdProto/__vrkbdInst.
+// Safe when not patched.
 (() => {
   const refs = window.__vrkbdRefs;
   if (!refs && !window.__vrkbdProto && !window.__vrkbdLayouts) return 'not patched';

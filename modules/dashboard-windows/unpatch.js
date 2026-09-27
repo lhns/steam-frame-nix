@@ -1,8 +1,6 @@
-// Reverts dashboard-windows/patch.js: removes its SendMessage hook (the
-// shared wrapper goes too once no other patch uses it) and resends the scene
-// graph, so vrcompositor gets the stock limits again right away. Also
-// restores the mailbox SendMessage if VERSION 2's own wrapper is on top.
-// Safe when not patched.
+// Reverts dashboard-windows/patch.js: removes its SendMessage hook (and a
+// VERSION 2 own wrapper if on top) and resends the scene graph so the stock
+// limits apply at once. Safe when not patched.
 (() => {
   const NAME = 'dashboard-windows';
   const st = window.__sfuiDashboardWindows;

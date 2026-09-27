@@ -1,11 +1,8 @@
-// Reverts frame-controls/patch.js: ends a running long press, closes the
-// popup (and removes its scene-graph panel), gives every window its stock
-// control lists back and removes its wrappers (Frame.prototype
-// SetControlsItems / SetControlAdditionalOptionsOpen; a wrapper something
-// else wrapped since stays in the chain but is inert), listeners, style and
-// the Float actions it added to theater windows.
-// window.__sfuiFrameControlsState (placements, log) and its localStorage
-// mirror are kept for a re-injection. Safe when not patched.
+// Reverts frame-controls/patch.js: ends a long press, closes the popup, restores
+// stock control lists, removes wrappers (a wrapper wrapped by something else
+// since stays inert in the chain), listeners, style and the theater Float
+// actions. Keeps window.__sfuiFrameControlsState and its localStorage mirror.
+// Safe when not patched.
 (() => {
   const s = window.__sfuiFrameControls;
   if (!s) return 'not patched';

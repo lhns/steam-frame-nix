@@ -1,32 +1,20 @@
-// launch: what happens when a program of the VR dashboard's "+" menu
-// (#VRDashboard_LaunchNonSteamApp) is activated.
+// launch: what activating a program in the VR dashboard's "+" menu does.
+// mkPatch patch (see lib/default.nix); opts: { closeOnLaunch, debounceSeconds }.
 //
-// This file is a function expression, called by the file lib/default.nix
-// (mkPatch) generates: (<this file>)(find, sigs, opts), with find the finder
-// library (lib/finders.js) and opts the options from launcher-menu.nix, e.g.
-// { closeOnLaunch: true, debounceSeconds: 10 }.
-//
-// Stock, an item's onActivate only calls
-// SteamClient.Apps.LaunchNonSteamApp(strCmdline) (plus the nav sound); the
-// "+" popup stays open until the new window takes over, so users click again
-// and start the program twice. That call is the only use of
-// LaunchNonSteamApp in Steam's UI and is looked up at call time, so this
-// patch wraps it in SharedJSContext (the dashboard bar's realm):
-// - debounceSeconds > 0: a launch of the same command line within that many
-//   seconds of the last accepted one is ignored (console.info, and reported
-//   in the steam-ui-patches journal on the next re-injection);
-// - closeOnLaunch: after a launch (ignored or not), the "+" popup is closed
-//   through the bar button's own popup handle (closePopup(), what stock does
-//   after adding a desktop window). The handle is found through React props,
-//   not minified names: in any popup document (the dashboard bar's), a
-//   .VRDashboardBarSmallButton element whose fiber ancestors include the bar
-//   button (prop refBarPopopHandle) and, above it, the "+" component (prop
-//   allowLaunchProgram). scripts/check-signatures.mjs checks these names
+// Stock, an item only calls SteamClient.Apps.LaunchNonSteamApp(cmdline) and
+// the popup stays open until the new window appears, so users click twice.
+// That call is its only UI use and is looked up at call time, so it is wrapped
+// here in SharedJSContext:
+// - debounceSeconds > 0: the same command line within that many seconds of
+//   the last accepted launch is ignored (console.info; reported in the
+//   steam-ui-patches journal on the next re-injection);
+// - closeOnLaunch: afterwards the "+" popup is closed via the bar button's
+//   popup handle (closePopup(), as stock does after adding a desktop window),
+//   found through React props: a .VRDashboardBarSmallButton whose fiber
+//   ancestors have refBarPopopHandle and, above, allowLaunchProgram
 //   ("launcher-menu-launch" in lib/signatures.json).
-// Works for every activation path (pointer, controller, the pinned Desktop
-// copy, which clicks the stock item). The original is kept as __sfuiOrig
-// (unpatch.js restores it). Idempotent; bump VERSION when changing the
-// wrapper.
+// Covers every activation path (pointer, controller, pinned Desktop copy).
+// Original kept as __sfuiOrig for unpatch.js; bump VERSION on changes.
 ((find, sigs, opts) => {
   const VERSION = 2;
   const NAME = 'launcher-menu-launch';

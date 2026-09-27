@@ -1,57 +1,26 @@
-// grid: shows the programs of the VR dashboard's "+" menu (section
-// #VRDashboard_LaunchNonSteamApp) as a grid of tiles: large icon, name
-// centred below (up to 2 lines).
+// grid: shows the programs section of the VR dashboard's "+" menu
+// (#VRDashboard_LaunchNonSteamApp) as a grid of tiles (icon, name below).
+// mkPatch patch (see lib/default.nix); opts: { columns, maxRows } (maxRows
+// null: the stock 600 px max height).
 //
-// This file is a function expression, called by the file lib/default.nix
-// (mkPatch) generates: (<this file>)(find, sigs, opts), with find the finder
-// library (lib/finders.js) and opts { columns: 4, maxRows: 4 } from
-// launcher-menu.nix (maxRows null: the list fills up to the menu's stock
-// 600 px max height).
-//
-// Pure restyling, evaluated in SharedJSContext (the bar popups share its
-// realm): Steam's own items (with their onActivate, focus handling and
-// sounds) stay where they are, so launching and the other launcher-menu
-// patches keep working unchanged. A timer attaches a MutationObserver to
-// every dashboard bar popup document (g_PopupManager); whenever the menu
-// renders, the programs section is found through React fibers (the section
-// component, which has a `header` prop, keyed "programs"; the "windows"
-// section, "add desktop window", stays a list) and its elements get
-// data-sfui-grid="<role>" markers, which a stylesheet in that document turns
-// into:
-// - list:     the section (flex column: heading + scroll region) is as wide
-//             as the popup window (100vw, a fixed 300 px);
-// - panel:    the item container becomes a CSS grid of N columns; it still
-//             scrolls inside the stock scroll region, so the heading stays;
-// - tile internals (wrap, label, iconbox, icon, labelbox, marquee, text)
-//             are laid out as a column;
-// - scroller: the stock scroll region. With maxRows, its max-height (CSS
-//             variable) is set to the bottom of row maxRows, measured at
-//             layout time (labels have 1 or 2 lines), so the menu shrinks to
-//             that many rows and the rest scrolls;
-// - fade:     the element with Steam's ScrollFade class. Steam computes its
-//             ScrolledToTop/ScrolledToBottom state only on React renders and
-//             scroll events, so it is stale once the grid changes the layout
-//             (e.g. a bottom fade although nothing overflows). The state is
-//             recomputed (same thresholds) on scroll, resize and mutation and
-//             put in data-sfui-fade (none/top/bottom/both), which selects the
-//             same gradients as Steam's stylesheet (var(--scroll-fade-size)).
-// - shadow:   the other stock indicator: the scroller's ::before/::after
-//             shadows (box-shadow in the background colour at the top and
-//             bottom edge), shown by Steam's can-scroll-up/-down classes, which
-//             go stale the same way. The same state goes in data-sfui-shadow
-//             on the scroller and sets the pseudo-elements' opacity. Once
-//             maxRows caps the scroller, the inner panel is what scrolls (as in
-//             Steam's own design; the outer element keeps the shadows fixed),
-//             so the state is read from whichever of the two overflows.
-// Steam's gamepad navigation derives a panel's layout from its computed
-// style (display: grid), so up/down/left/right move between tiles.
-// With the pinned-desktop patch, its pinned row (.sfui-pinned-desktop,
-// outside the grid) is made slim and its content centred.
-// Anchors (section keys, `header` prop, ScrollFade classes and gradients)
-// are checked by scripts/check-signatures.mjs ("launcher-menu-grid" in
-// lib/signatures.json).
-// unpatch.js (or a new VERSION or options) calls __sfuiLauncherGrid.stop(),
-// which removes markers, stylesheets, observers and the timer.
+// Pure restyling in SharedJSContext (the bar popups share its realm): Steam's
+// items and handlers stay, so the other launcher-menu patches keep working. A
+// timer attaches a MutationObserver to every bar popup document
+// (g_PopupManager); the section is found via React fibers (component with a
+// `header` prop, key "programs"; "windows" stays a list) and its elements get
+// data-sfui-grid="<role>" markers that a stylesheet turns into:
+// - list/panel: full-width section; the item container is an N-column grid
+//   still scrolling inside the stock scroll region (heading stays);
+// - scroller: with maxRows, max-height = bottom of row maxRows, measured at
+//   layout time (labels have 1 or 2 lines);
+// - fade/shadow: Steam computes ScrollFade and can-scroll-up/-down only on
+//   renders and scroll events, so they go stale after the grid relayout. The
+//   state is recomputed (Steam's thresholds) into data-sfui-fade/-shadow; once
+//   maxRows caps the scroller, the inner panel is what scrolls.
+// Gamepad navigation follows the computed display: grid. The pinned-desktop
+// row (.sfui-pinned-desktop) is made slim and centred.
+// Anchors: "launcher-menu-grid" in lib/signatures.json.
+// unpatch.js (or a new VERSION/options) calls __sfuiLauncherGrid.stop().
 ((find, sigs, opts) => {
   const NAME = 'launcher-menu-grid';
   const VERSION = 6;
@@ -143,9 +112,8 @@ ${PINNED} > [role=button] * { flex-grow: 0 !important; text-align: center !impor
   const regionsOf = (d) => [...regions].filter(([, r]) => r.d === d).map(([sc]) => sc);
   const px = (x) => parseFloat(x) || 0;
 
-  // Section of an item: the nearest fiber ancestor that is a function
-  // component with a `header` prop; its key names the section, its first
-  // host descendant is the list container.
+  // Section of an item: nearest function-component fiber with a `header`
+  // prop; its key names the section, its first host node is the list.
   const sectionOf = (item) => {
     const f = find.findFiberUp(item, (x) => typeof x.type === 'function' &&
       x.memoizedProps && typeof x.memoizedProps === 'object' && 'header' in x.memoizedProps, 60);
@@ -192,10 +160,8 @@ ${PINNED} > [role=button] * { flex-grow: 0 !important; text-align: center !impor
     for (let w = label.parentElement; w && w !== item; w = w.parentElement) mark(w, 'wrap');
   };
 
-  // Scroll indicator state from the actual scroll position (Steam's
-  // thresholds), for both the mask fade and the edge shadows.
-  // The element that actually scrolls: the inner panel once maxRows caps
-  // the scroller, otherwise the scroller.
+  // Scroll state (Steam's thresholds) of the element that actually scrolls:
+  // the inner panel once maxRows caps the scroller, else the scroller.
   const scrolling = (sc, panel) =>
     panel && (panel.scrollHeight > panel.clientHeight + 1 || panel.scrollTop > 0) ? panel : sc;
   const fade = (sc) => {

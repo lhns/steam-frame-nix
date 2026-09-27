@@ -1,31 +1,16 @@
-// pinned-desktop: in the VR dashboard's "+" menu (section
-// #VRDashboard_LaunchNonSteamApp), "Desktop" (the nested Plasma session) is
-// pinned above or below the scrolling program list instead of scrolling with
-// it.
+// pinned-desktop: pins "Desktop" (the nested Plasma session) above or below
+// the scrolling list of the VR dashboard's "+" menu.
+// mkPatch patch (see lib/default.nix); opts: { position: "top" | "bottom" }.
 //
-// This file is a function expression, called by the file lib/default.nix
-// (mkPatch) generates: (<this file>)(find, sigs, opts), with find the finder
-// library (lib/finders.js) and opts { position: "top" } or
-// { position: "bottom" } from launcher-menu.nix.
-//
-// DOM patch, evaluated in SharedJSContext (the bar popups share its realm):
-// a timer attaches a MutationObserver to every dashboard bar popup document
-// (g_PopupManager); whenever the menu renders, the stock Desktop item (found
-// through its React fiber: list key == strExePath "steamos-nested-desktop")
-// is hidden by CSS and a pinned block is inserted into the list container:
-// "bottom" appends it after the scroll region (1px separator, then a clone of
-// the item), "top" inserts it right before the scroll region, i.e. below the
-// menu heading (clone, then separator). The clone keeps the item's classes,
-// icon and CSS :hover; clicking it clicks the hidden stock item, so Steam's
-// own handler runs (nav sound + SteamClient.Apps.LaunchNonSteamApp). The
-// list container is a flex column with a max-height, so the scroll region
-// shrinks to make room and the menu keeps its size.
-// Anchors: React props and keys (the list key, the section's `header` prop)
-// and the bar popups' window names ("valve.steam.gamepadui.barpopup...");
-// scripts/check-signatures.mjs checks that Steam's UI still has them
-// ("launcher-menu-pinned-desktop" in lib/signatures.json).
-// unpatch.js (or a new VERSION/position) calls __sfuiPinnedDesktop.stop(),
-// which removes the pinned blocks, CSS, markers, observers and the timer.
+// DOM patch in SharedJSContext: a timer attaches a MutationObserver to every
+// bar popup document (g_PopupManager). The stock Desktop item (fiber list key
+// == strExePath "steamos-nested-desktop") is hidden by CSS and a clone plus a
+// 1 px separator is inserted before ("top") or after ("bottom") the scroll
+// region. Clicking the clone clicks the hidden item, so Steam's own handler
+// runs. The list container is a flex column with a max-height, so the scroll
+// region shrinks and the menu keeps its size.
+// Anchors: "launcher-menu-pinned-desktop" in lib/signatures.json.
+// unpatch.js (or a new VERSION/position) calls __sfuiPinnedDesktop.stop().
 ((find, sigs, opts) => {
   const NAME = 'launcher-menu-pinned-desktop';
   const VERSION = 3;
