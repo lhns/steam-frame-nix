@@ -99,6 +99,32 @@
           "module": { "includes": ["\"valve.steam.gamepadui.barpopup\""] }
         }
       }
+    },
+    "dashboard-windows": {
+      "bundle": "vrwebui-systemui",
+      "modules": {
+        "mailbox": {
+          "module": { "includes": ["\"mailbox_send \"", "WebSocketSend(", "\"vrcompositor_systemlayer\""] },
+          "exports": {
+            "Mailbox": { "type": "class", "protoMethods": ["SendMessage", "WebSocketSend"] }
+          }
+        },
+        "sceneGraph": {
+          "module": { "includes": ["\"update_scene_graph\"", "NextSGID()", "scene_graph:"] },
+          "exports": {
+            "resend": { "type": "function", "length": 0, "includes": ["NextSGID()", "setTimeout"] }
+          },
+          "expects": ["\"vrcompositor_systemlayer\"", ".SendMessage("]
+        },
+        "windowFrame": {
+          "checkOnly": true,
+          "module": { "includes": ["\"frame-resize-scale-max\"", "\"frame-resize-scale-min\""] }
+        },
+        "grabScale": {
+          "checkOnly": true,
+          "module": { "includes": ["\"grab-scale\"", "\"min-distance\"", "\"max-distance\""] }
+        }
+      }
     }
   }
 }

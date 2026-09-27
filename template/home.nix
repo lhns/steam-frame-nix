@@ -25,6 +25,13 @@
   #     closeOnLaunch = true;
   #     launchDebounce = 10;
   #   };
+  #   # SteamVR dashboard windows: resizable up to 4x (stock 2x), pushed
+  #   # back up to 10 m in the world / 12 m in theater mode (stock 5 / 6 m):
+  #   dashboard = {
+  #     windowMaxScale = 4.0;
+  #     windowDistance.world.max = 10.0;
+  #     windowDistance.theater.max = 12.0;
+  #   };
   #   firefox.enable = true;             # launcher for the Firefox Flatpak
   #   # Hidden from the "+" menu (with Steam Developer Mode on):
   #   hiddenApps = [ "lxterminal" "cmake-gui" "firewall-config" "renderdoc" ];

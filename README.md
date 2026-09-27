@@ -3,8 +3,8 @@
 [Home Manager](https://github.com/nix-community/home-manager) modules for the
 Valve Steam Frame: SteamOS on `aarch64-linux`, standalone home-manager on a
 non-NixOS system. They work around quirks of the Frame's two graphical
-sessions (portal config, keyboard layout, VR keyboard, "+" menu, clipboard,
-Firefox)
+sessions (portal config, keyboard layout, VR keyboard, "+" menu, VR
+dashboard windows, clipboard, Firefox)
 declaratively, so every change can be reverted by activating an older
 home-manager generation.
 
@@ -133,6 +133,10 @@ the two files below).
       closeOnLaunch = true;
       launchDebounce = 10;
     };
+    dashboard = {
+      windowMaxScale = 4.0;
+      windowDistance.world.max = 10.0;
+    };
     firefox.enable = true;
     # Only relevant with Steam Developer Mode on (see hidden-apps below).
     hiddenApps = [ "lxterminal" "cmake-gui" "firewall-config" "renderdoc" ];
@@ -156,7 +160,7 @@ home-manager switch --flake .#steamos
 ```
 
 Individual modules are available as
-`homeManagerModules.{session,portal,keyboard-layout,steam-keyboard-patch,hidden-apps,steam-ui-patches,launcher-menu,clipboard-sync,firefox}`;
+`homeManagerModules.{session,portal,keyboard-layout,steam-keyboard-patch,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,dashboard-windows,clipboard-sync,firefox}`;
 `default` imports all of them.
 
 **Steam Developer Mode** (a Steam setting, not managed here) makes the "+"
@@ -182,6 +186,9 @@ menu list every desktop entry, including terminals such as Konsole.
 | `steamFrame.launcherMenu.pinDesktop` | null or `"top"` / `"bottom"` | `null` | Pin "Desktop" above or below the "+" menu's scrolling list (always visible). `null`: a normal list entry. |
 | `steamFrame.launcherMenu.closeOnLaunch` | bool | `false` | Close the "+" menu as soon as a program in it is clicked. |
 | `steamFrame.launcherMenu.launchDebounce` | unsigned int (seconds) | `0` | Ignore repeated launches of the same program from the "+" menu within this time. `0`: off. |
+| `steamFrame.dashboard.windowMaxScale` | null or number | `null` | Largest resize-handle scale of SteamVR dashboard windows, relative to their default size. `null`: stock (2). See [Dashboard windows](#dashboard-windows-dashboard). |
+| `steamFrame.dashboard.windowDistance.{world,theater,dashboard}.{min,max}` | null or number (m) | `null` | How close / far grabbed windows can be pulled in / pushed back. `null`: stock (world 0.25-5, theater 1-6, dashboard 0.3-4 m). |
+| `steamFrame.steamvrDebugger.enable` | bool | `true` if a UI patch uses port 8087, else `false` | SteamVR dashboard DevTools on `127.0.0.1:8087` (`VRWebHelper/DebuggerEnabled`), needed by dashboard patches. See [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable). |
 | `steamFrame.hiddenApps` | list of str | `[ ]` | Desktop entry ids (without `.desktop`) to hide from the "+" and KDE menus. |
 | `steamFrame.clipboardSync.enable` | bool | `true` | Clipboard bridge between the Steam session and the nested desktop. |
 | `steamFrame.clipboardSync.package` | package | built from `dnut/clipboard-sync` | The clipboard-sync package. |
@@ -306,7 +313,7 @@ Steam's client UI (and SteamVR's dashboard, `vrwebhelper`) are web pages in
 CEF with a local DevTools port: `127.0.0.1:8080` for Steam (SteamOS starts
 it with `-cef-enable-debugging`), `127.0.0.1:8087` for SteamVR when its
 debugger is enabled (`VRWebHelper/DebuggerEnabled` in
-`steamvr.vrsettings`). The `steam-ui-patches` user service (`injector.mjs`,
+`steamvr.vrsettings`, see [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable)). The `steam-ui-patches` user service (`injector.mjs`,
 Node) uses them to patch the running UI; Steam's files are never modified.
 
 Each entry of `steamFrame.uiPatches.patches`:
@@ -423,7 +430,9 @@ nix shell nixpkgs#nodejs -c node scripts/check-signatures.mjs
 ```
 
 It reads the bundles Steam's UI page loads (`~/.local/share/Steam/steamui`:
-the scripts of `index.html` and every chunk its webpack runtime can load),
+the scripts of `index.html` and every chunk its webpack runtime can load; for
+[Dashboard windows](#dashboard-windows-dashboard) also SteamVR's dashboard,
+`/opt/steamvr/resources/webinterface/dashboard/systemui.html`),
 extracts all webpack module factories and evaluates every signature of
 `modules/lib/signatures.json` against them with the same finder code the
 patches use (exports are checked by running the matched module in an inert
@@ -445,7 +454,7 @@ If something is missing, look at the module that used to match (the new
 bundle's module sources: `scripts/webpack-modules.mjs`) and adjust the
 signature in `signatures.json` (bump the patch's `VERSION` if its code
 changes). Options: `--signatures FILE` adds your own signatures (same
-format; the bundle `vrwebui-systemui` is SteamVR's dashboard),
+format; bundles `steamui` and `vrwebui-systemui`, SteamVR's dashboard),
 `--dir steamui=DIR` checks another copy, `--patch NAME`, `--strict` (fail on
 warnings), `--json`. Live, `journalctl --user -u steam-keyboard-patch -u
 steam-ui-patches` shows what each patch reported.
@@ -491,6 +500,85 @@ All are reverted when the options are turned off (next switch). These
 patches use Steam APIs (`SteamClient.Apps`) and React props rather than
 webpack modules; the offline checker verifies those anchors too.
 Tested with Steam client 1790377368.
+
+### Dashboard windows (`dashboard.*`)
+
+**Problem:** SteamVR dashboard windows (Steam, app windows, overlays, the
+theater screen) can only be enlarged to twice their default size, and
+grabbed windows can only be pushed back to 5 m (6 m in theater mode), too
+close for a big virtual screen.
+
+**Fix:** a UI patch (see above) of SteamVR's dashboard page (`vrwebhelper`,
+`127.0.0.1:8087`, title `systemui`); it turns on the
+[SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable). The dashboard
+describes its windows to `vrcompositor` as a scene graph
+(`update_scene_graph` messages over its mailbox WebSocket), and the
+compositor enforces the limits it finds there. They are constants in the
+dashboard's JS, so the patch wraps the mailbox's `SendMessage` and rewrites
+them in every outgoing scene graph:
+
+| Option | Scene-graph property | Stock |
+|---|---|---|
+| `windowMaxScale` | `frame-resize-scale-max` of every window frame | 2 (range 0.25-2, relative to the window's default size; the theater screen's default is 2.8x larger) |
+| `windowDistance.world.{min,max}` | `min-distance` / `max-distance` of `grab-scale` nodes: windows placed in the world | 0.25-5 m |
+| `windowDistance.theater.{min,max}` | same, `grab-transform` of the theater screen | 1-6 m |
+| `windowDistance.dashboard.{min,max}` | same, `grab-transform` of the dashboard itself | 0.3-4 m |
+| (not patched) | `grab-transform` of the keyboard | 0.2-1 m |
+
+Distances are how close / far a grabbed window can be pulled in / pushed
+back (thumbstick or scroll while dragging). `null` (default) keeps the stock
+value; unset `min`/`max` of a set range stay stock. The patch is only
+registered when at least one option is set.
+
+After patching, the dashboard is asked to send its (unchanged) scene graph
+once more, so changes take effect immediately, without touching any window;
+turning the options off reverts to stock the same way (next switch).
+
+```nix
+steamFrame.dashboard = {
+  windowMaxScale = 4.0;              # resize up to 4x (theater: 11.2x)
+  windowDistance.world.max = 10.0;   # push windows back up to 10 m
+  windowDistance.theater.max = 12.0;
+};
+```
+
+**Caveats:** depends on SteamVR UI internals: the mailbox class and the
+scene-graph scheduler are found by signature (`dashboard-windows` in
+`modules/lib/signatures.json`, checked offline by
+`scripts/check-signatures.mjs` after a SteamVR update); if one doesn't match,
+the patch reports it and leaves the dashboard stock. Grab nodes are recognized by their type *and* their
+exact stock values, so if a SteamVR update changes those, the distance
+options silently do nothing (the scale option still applies). The patch's
+state, including counters of rewritten nodes per kind, is
+`window.__sfuiDashboardWindows` in the `systemui` page (DevTools).
+
+### SteamVR debugger (`steamvrDebugger.enable`)
+
+Patches of the SteamVR dashboard need its DevTools port, which SteamVR only
+opens with the setting `VRWebHelper/DebuggerEnabled` (port
+`VRWebHelper/DebuggerPort`, default 8087). It is enabled automatically
+(`mkDefault`) as soon as a patch in `steamFrame.uiPatches.patches` uses port
+8087 (e.g. [Dashboard windows](#dashboard-windows-dashboard)).
+
+SteamVR rewrites `~/.config/openvr/config/steamvr.vrsettings` while it runs
+and on exit, so the file can't be managed by Home Manager, and edits while it
+runs are lost. Instead the `steamvr-webhelper-debugger` oneshot merges just
+that key (with `jq`, other settings untouched) before every SteamVR start (a
+drop-in on SteamOS's `steamvr.service` makes it Want/After the oneshot).
+SteamVR reads the setting only at startup: **the first time, restart SteamVR
+once** (e.g. reboot) before dashboard patches work; until then the
+`steam-ui-patches` service keeps polling `127.0.0.1:8087`.
+
+Turning it off sets the key back to `false` at the next SteamVR start, but
+only if this module set it (marker in
+`~/.local/state/steam-frame-nix/`); a setting you made yourself is left
+alone.
+
+**Security:** SteamOS's `steamvr-web-debug-portforward.service` forwards
+`0.0.0.0:8088` to this port, so with the debugger on, anyone on the same
+network could run code in the SteamVR dashboard. Masking it is recommended
+(see "DevTools on the LAN" in [UI patches](#ui-patches-uipatchespatches));
+the patches only use `127.0.0.1`.
 
 ### Hidden apps (`hiddenApps`)
 
