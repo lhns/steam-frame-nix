@@ -156,6 +156,66 @@
           "module": { "includes": ["\"grab-scale\"", "\"min-distance\"", "\"max-distance\""] }
         }
       }
+    },
+    "steam-close-button": {
+      "bundle": "vrwebui-systemui",
+      "modules": {
+        "mobx": {
+          "module": { "includes": ["runInAction:()=>", "makeObservable:()=>", "reaction:()=>"] }
+        },
+        "dock": {
+          "module": { "includes": ["e[e.Dashboard=1]=\"Dashboard\",e[e.LeftHand=2]=\"LeftHand\""] },
+          "exports": {
+            "EDockLocation": { "type": "object", "props": { "Dashboard": 1, "LeftHand": 2, "RightHand": 3, "World": 4, "Theater": 5 } }
+          }
+        },
+        "closing": {
+          "module": { "includes": ["this.componentName=\"closing\"", "closeMethodPriority"] },
+          "exports": {
+            "Closing": { "type": "class", "includes": ["componentName=\"closing\"", "RequestClose()"] }
+          },
+          "expects": ["defaultComponentProps=", "null!=this.componentProps.onCloseRequested", "get showCloseButton()",
+            "m_bShowSpinner=!0"]
+        },
+        "frameComponent": {
+          "checkOnly": true,
+          "module": { "includes": ["this.defaultComponentProps", "FramePageComponent '"] },
+          "expects": ["get componentProps()", ".componentProps)", "[this.componentName]"]
+        },
+        "frame": {
+          "checkOnly": true,
+          "module": { "includes": ["e[e.Alive=2]=\"Alive\""] },
+          "expects": ["this.m_eState=", "this.closing=", "this.docking=", "this.tab=", "get isActiveDashboardFrame()",
+            "this.props="]
+        },
+        "frameStore": {
+          "checkOnly": true,
+          "module": { "includes": ["window.FrameStore="] },
+          "expects": ["GetFrame(e){"]
+        },
+        "dashboardStore": {
+          "checkOnly": true,
+          "module": { "includes": ["window.DashboardStore="] },
+          "expects": ["_setActiveFrame(e,t){", "\"_setActiveFrame\"", "get mainSteamFrame()", "m_unMainSteamFrameID",
+            "get activeFrameID()", "get activeFrame()", "get visibilityState()", "get isFullyVisible()"]
+        },
+        "dashboard": {
+          "checkOnly": true,
+          "module": { "includes": ["window.Dashboard=this", "autoSwitchOverlayIfNeeded(){"] },
+          "expects": ["onShowOverlayRequestFromSteam(e){",
+            "SetImplementation(\"ShowOverlay\",(e=>{this.onShowOverlayRequestFromSteam(e)}))",
+            "this.autoSwitchOverlayIfNeeded()", "switchToFrameInternal(e,t,r){", "\"hideDashboard\"",
+            "visibleInDashboardBar"]
+        },
+        "docking": {
+          "checkOnly": true,
+          "module": { "includes": ["get dockLocation()", "SetDockLocation(e"], "excludes": ["get associatedSummonOverlayKeys()"] }
+        },
+        "overlayKeys": {
+          "checkOnly": true,
+          "module": { "includes": ["\"valve.steam.gamepadui.main\"", "\"valve.steam.gamepadui.appoverlay\""] }
+        }
+      }
     }
   }
 }

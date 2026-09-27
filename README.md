@@ -4,7 +4,7 @@
 Valve Steam Frame: SteamOS on `aarch64-linux`, standalone home-manager on a
 non-NixOS system. They work around quirks of the Frame's two graphical
 sessions (portal config, keyboard layout, VR keyboard, "+" menu, VR
-dashboard windows, clipboard, Firefox)
+dashboard windows, a close button for Steam's VR window, clipboard, Firefox)
 declaratively, so every change can be reverted by activating an older
 home-manager generation.
 
@@ -141,6 +141,7 @@ the two files below).
     dashboard = {
       windowMaxScale = 4.0;
       windowDistance.world.max = 10.0;
+      steamCloseButton.enable = true;
     };
     firefox.enable = true;
     # Only relevant with Steam Developer Mode on (see hidden-apps below).
@@ -165,7 +166,7 @@ home-manager switch --flake .#steamos
 ```
 
 Individual modules are available as
-`homeManagerModules.{session,portal,keyboard-layout,steam-keyboard-patch,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,dashboard-windows,clipboard-sync,firefox}`;
+`homeManagerModules.{session,portal,keyboard-layout,steam-keyboard-patch,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,dashboard-windows,steam-close-button,clipboard-sync,firefox}`;
 `default` imports all of them.
 
 **Steam Developer Mode** (a Steam setting, not managed here) makes the "+"
@@ -197,6 +198,7 @@ menu list every desktop entry, including terminals such as Konsole.
 | `steamFrame.launcherMenu.iconFallbacks` | list of str | `[ "utilities-terminal" "preferences-system" ]` | Icon names installed as hicolor copies of Breeze app icons, so the "+" menu shows them (Konsole, KDE System Settings). `[ ]`: none. Takes effect after a Steam restart. |
 | `steamFrame.dashboard.windowMaxScale` | null or number | `null` | Largest resize-handle scale of SteamVR dashboard windows, relative to their default size. `null`: stock (2). See [Dashboard windows](#dashboard-windows-dashboard). |
 | `steamFrame.dashboard.windowDistance.{world,theater,dashboard}.{min,max}` | null or number (m) | `null` | How close / far grabbed windows can be pulled in / pushed back. `null`: stock (world 0.25-5, theater 1-6, dashboard 0.3-4 m). |
+| `steamFrame.dashboard.steamCloseButton.enable` | bool | `false` | Close (X) button on the dashboard's Steam window: switches to the previous window, or leaves just the dashboard bar. See [Steam close button](#steam-close-button-dashboardsteamclosebuttonenable). |
 | `steamFrame.steamvrDebugger.enable` | bool | `true` if a UI patch uses port 8087, else `false` | SteamVR dashboard DevTools on `127.0.0.1:8087` (`VRWebHelper/DebuggerEnabled`), needed by dashboard patches. See [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable). |
 | `steamFrame.hiddenApps` | list of str | `[ ]` | Desktop entry ids (without `.desktop`) to hide from the "+" and KDE menus. |
 | `steamFrame.clipboardSync.enable` | bool | `true` | Clipboard bridge between the Steam session and the nested desktop. |
@@ -614,13 +616,78 @@ options silently do nothing (the scale option still applies). The patch's
 state, including counters of rewritten nodes per kind, is
 `window.__sfuiDashboardWindows` in the `systemui` page (DevTools).
 
+### Steam close button (`dashboard.steamCloseButton.enable`)
+
+**Problem:** every SteamVR dashboard window has a close (X) button except
+Steam's own (the library, overlay `valve.steam.gamepadui.main`): it can't be
+put away, and with no other window open the dashboard always shows it.
+
+**Fix:** a UI patch (see above) of SteamVR's dashboard page (`vrwebhelper`,
+`127.0.0.1:8087`, title `systemui`; it turns on the
+[SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable)) gives the Steam
+window an X. The window can't really be closed, so clicking it:
+
+- docks the window back into the dashboard if it was placed in the world
+  (or theater / hand);
+- if it was the dashboard's active window, switches to the most recently
+  active other window that is still open, in the dashboard and has a tab in
+  the dashboard bar (like a tab click);
+- with none left, leaves the dashboard open with **just its bar** ("bar
+  only"), no window shown.
+
+Bar-only is kept when the dashboard is closed and reopened (SteamVR would
+otherwise pick Steam again) and across restarts of the patch service
+(`home-manager switch`, re-injection); it ends as soon as any window becomes
+active: the Steam tab or another tab, a Steam menu pick, a launched app or a
+new window. It does not survive a SteamVR restart (or a reload of the
+dashboard page): the dashboard then starts with Steam as usual.
+
+```nix
+steamFrame.dashboard.steamCloseButton.enable = true;
+```
+
+How: the X of a dashboard window is its `closing` component, shown when a
+close method is possible; the patch adds an `onCloseRequested` to the Steam
+window's default component props. For bar-only it clears the active frame
+and overrides two methods of the dashboard instance while bar-only is on:
+`autoSwitchOverlayIfNeeded` (stock: no active frame → show Steam) does
+nothing, and `onShowOverlayRequestFromSteam` drops the first
+`ShowOverlay("valve.steam.gamepadui.main")` Steam sends by itself after each
+dashboard open (within 10 s). The patch's state (bar-only, recent windows,
+ignored requests) is `window.__sfuiSteamCloseState` in the `systemui` page;
+`window.__sfuiSteamClose.plan()` tells what a click would do right now,
+without doing it. The journal (`journalctl --user -u steam-ui-patches`)
+shows `bar-only` and the number of ignored Steam requests.
+
+**Limitations:**
+
+- If Steam ever doesn't send that automatic request after an open, the
+  first Steam menu pick (e.g. Library) in bar-only is swallowed once; a
+  second one works.
+- Showing Steam through SteamVR's own `CVRSteamPrivate::SwitchToDashboardOverlay`
+  path (not through the dashboard page) isn't filtered and ends bar-only.
+- With a VRLink remote dashboard, SteamVR ignores the local active-frame
+  change, so bar-only has no effect there.
+- Turning the option off (next switch) removes the button but leaves a
+  dashboard that is bar-only at that moment without an active window until
+  the next tab click or dashboard open.
+
+**Caveats:** depends on SteamVR UI internals: MobX, the dock-location enum
+and the `closing` component class are found by signature, and the names the
+patch relies on (`DashboardStore._setActiveFrame`, `mainSteamFrame`,
+`Dashboard.autoSwitchOverlayIfNeeded`, …) are checked offline
+(`steam-close-button` in `modules/lib/signatures.json`,
+`scripts/check-signatures.mjs`); if a lookup fails, the patch reports it and
+leaves the dashboard stock. Tested with SteamVR build 11008059.
+
 ### SteamVR debugger (`steamvrDebugger.enable`)
 
 Patches of the SteamVR dashboard need its DevTools port, which SteamVR only
 opens with the setting `VRWebHelper/DebuggerEnabled` (port
 `VRWebHelper/DebuggerPort`, default 8087). It is enabled automatically
 (`mkDefault`) as soon as a patch in `steamFrame.uiPatches.patches` uses port
-8087 (e.g. [Dashboard windows](#dashboard-windows-dashboard)).
+8087 (e.g. [Dashboard windows](#dashboard-windows-dashboard),
+[Steam close button](#steam-close-button-dashboardsteamclosebuttonenable)).
 
 SteamVR rewrites `~/.config/openvr/config/steamvr.vrsettings` while it runs
 and on exit, so the file can't be managed by Home Manager, and edits while it
