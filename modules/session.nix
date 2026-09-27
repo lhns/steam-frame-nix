@@ -55,7 +55,7 @@ in {
       restart = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         default = [ ];
-        example = [ "vr-keyboard.service" ];
+        example = [ "steam-keyboard-patch.service" ];
         description = "User units restarted on every switch (outer user manager).";
       };
       stop = lib.mkOption {

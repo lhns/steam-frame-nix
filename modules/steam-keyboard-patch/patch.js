@@ -1,4 +1,4 @@
-// Injected into Steam's SharedJSContext (CEF, 127.0.0.1:8080) by vrkbd-helper.
+// Injected into Steam's SharedJSContext (CEF, 127.0.0.1:8080) by helper.mjs.
 // Extends Steam's VR keyboard for gamescope app windows:
 //  - bottom row: Esc Ctrl Alt [space] AltGr and four separate arrow keys
 //  - Ctrl/Alt chords and Esc are pressed for real (Steam can't: in VR
@@ -9,7 +9,7 @@
 //    into "1" -- anything non-ASCII or needing AltGr / a dead key on the X
 //    keymap -- are typed by the helper instead
 // Everything goes through the CDP binding window.__vrkbdKey("<op>:<arg>"),
-// executed by vrkbd-helper with xdotool on :0.
+// executed by helper.mjs with xdotool on :0.
 // Idempotent: safe to evaluate repeatedly.
 (() => {
   const VERSION = 5;

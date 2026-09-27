@@ -11,10 +11,14 @@ let
   cfg = config.steamFrame.clipboardSync;
 in {
   options.steamFrame.clipboardSync = {
-    enable = lib.mkEnableOption ''
-      clipboard-sync between the Steam session and the nested desktop
-      (KDE autostart; on switch, stale builds and duplicates are stopped)
-    '';
+    enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;   # without it the nested desktop's clipboard is isolated
+      description = ''
+        Whether to run clipboard-sync between the Steam session and the nested
+        desktop (KDE autostart; on switch, stale builds and duplicates are stopped).
+      '';
+    };
     package = lib.mkOption {
       type = lib.types.package;
       default = pkgs.rustPlatform.buildRustPackage {

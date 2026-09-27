@@ -15,7 +15,7 @@
       session = ./modules/session.nix;
       portal = ./modules/portal.nix;
       keyboard-layout = ./modules/keyboard-layout.nix;
-      vr-keyboard = ./modules/vr-keyboard.nix;
+      steam-keyboard-patch = ./modules/steam-keyboard-patch.nix;
       hidden-apps = ./modules/hidden-apps.nix;
       # Built with the consumer's pkgs; only the source comes from our input.
       # The key lets the module system deduplicate it when it is imported both

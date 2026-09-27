@@ -1,4 +1,4 @@
-// Reverts vrkbd-patch.js in Steam's SharedJSContext; evaluated by vrkbd-helper
+// Reverts patch.js in Steam's SharedJSContext; evaluated by helper.mjs
 // when it stops (service stopped, module disabled). Every patched function
 // keeps its original as __vrkbdOrig. Safe to run when nothing is patched.
 (() => {

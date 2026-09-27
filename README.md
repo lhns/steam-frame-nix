@@ -75,8 +75,7 @@ Requirements: Nix with flakes enabled and standalone home-manager.
 
   steamFrame = {
     keyboardLayout = "de";
-    vrKeyboard.enable = true;
-    clipboardSync.enable = true;
+    steamKeyboardPatch.enable = true;
     firefox.enable = true;
     # Only relevant with Steam Developer Mode on (see hidden-apps below).
     hiddenApps = [ "lxterminal" "cmake-gui" "firewall-config" "renderdoc" ];
@@ -100,7 +99,7 @@ home-manager switch --flake .#steamos
 ```
 
 Individual modules are available as
-`homeManagerModules.{session,portal,keyboard-layout,vr-keyboard,hidden-apps,clipboard-sync,firefox}`;
+`homeManagerModules.{session,portal,keyboard-layout,steam-keyboard-patch,hidden-apps,clipboard-sync,firefox}`;
 `default` imports all of them.
 
 **Steam Developer Mode** (a Steam setting, not managed here) makes the "+"
@@ -119,9 +118,9 @@ menu list every desktop entry, including terminals such as Konsole.
 | `steamFrame.portalFix.enable` | bool | `true` | Working portal config for the Steam session (OpenURI). |
 | `steamFrame.keyboardLayout` | null or str | `null` | XKB layout for the Steam session, e.g. `"de"`. `null` = no drop-in (US). |
 | `steamFrame.keyboardVariant` | null or str | `null` | XKB variant for the Steam session. |
-| `steamFrame.vrKeyboard.enable` | bool | `false` | Esc/Ctrl/Alt/AltGr and arrow keys on Steam's VR keyboard. |
+| `steamFrame.steamKeyboardPatch.enable` | bool | `false` | Runtime patch of Steam's on-screen keyboard: Esc/Ctrl/Alt, separate arrows, real Ctrl/Alt chords and hold, AltGr/non-ASCII characters. |
 | `steamFrame.hiddenApps` | list of str | `[ ]` | Desktop entry ids (without `.desktop`) to hide from the "+" and KDE menus. |
-| `steamFrame.clipboardSync.enable` | bool | `false` | Clipboard bridge between the Steam session and the nested desktop. |
+| `steamFrame.clipboardSync.enable` | bool | `true` | Clipboard bridge between the Steam session and the nested desktop. |
 | `steamFrame.clipboardSync.package` | package | built from `dnut/clipboard-sync` | The clipboard-sync package. |
 | `steamFrame.firefox.enable` | bool | `false` | Launcher for the Flathub Firefox Flatpak (`org.mozilla.firefox`) with the fixes below. |
 | `steamFrame.firefox.vrFullscreenFix` | bool | `true` | Link a `user.js` with `full-screen-api.ignore-widgets` into existing profiles. |
@@ -174,7 +173,7 @@ the Steam session starts.
 
 **Remove when** SteamOS applies a layout setting to gamescope.
 
-### VR keyboard (`vrKeyboard.enable`)
+### Steam keyboard patch (`steamKeyboardPatch.enable`)
 
 **Problem:** Steam's VR keyboard has hardcoded layouts without Ctrl, Alt or
 Esc. In VR, Steam can't press real keys
@@ -183,15 +182,15 @@ and its text emulation (`ControllerKeyboardSendText`) only maps plain ASCII:
 non-ASCII characters and anything needing AltGr or a dead key on the German
 keymap (`| @ { [ ] } \ ~ ^`, backtick, `ä ö ü €`) come out as `1`.
 
-**Fix:** the `vr-keyboard` user service (`vrkbd-helper.mjs`, Node) injects
-`vrkbd-patch.js` into Steam's UI at runtime through Steam's CEF DevTools port
+**Fix:** the `steam-keyboard-patch` user service (`helper.mjs`, Node) injects
+`patch.js` into Steam's UI at runtime through Steam's CEF DevTools port
 (`127.0.0.1:8080`; SteamOS starts Steam with `-cef-enable-debugging`) and
 re-injects it after Steam restarts or the keyboard popup is recreated.
 Steam's files are never modified. Enabling and disabling take effect on
 `home-manager switch`, no reboot or Steam restart needed: when the helper
 stops (service stopped, or the option disabled, which stops it via
 `userServices.stop`) it reverts the patch in Steam's running UI
-(`vrkbd-unpatch.js`). The service is restarted on every switch (via
+(`unpatch.js`). The service is restarted on every switch (via
 `userServices.restart`) so a changed patch is re-injected.
 
 - Bottom row becomes `Esc Ctrl Alt [Space] AltGr ← ↑ ↓ → Close`.
