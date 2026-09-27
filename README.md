@@ -3,13 +3,35 @@
 [Home Manager](https://github.com/nix-community/home-manager) modules for the
 Valve Steam Frame: SteamOS on `aarch64-linux`, standalone home-manager on a
 non-NixOS system. They work around quirks of the Frame's two graphical
-sessions (portal config, keyboard layout, VR keyboard, "+" menu, VR
-dashboard windows, a close button for Steam's VR window, clipboard, Firefox)
-declaratively, so every change can be reverted by activating an older
-home-manager generation.
+sessions (portal config, keyboard layout, clipboard, Firefox) and extend
+Steam's and SteamVR's UIs at runtime (VR keyboard, "+" menu, dashboard
+window limits, a close button for Steam's VR window, window curvature,
+window controls) declaratively, so every change can be reverted by
+activating an older home-manager generation.
 
 All options live under `steamFrame.*`. The portal fix and clipboard sync are
 on by default; everything else is opt-in.
+
+- [Install](#install) · [Two sessions](#two-sessions) · [Usage](#usage) ·
+  [Options](#options)
+- [UI patches](#ui-patches-uipatchespatches):
+  [finders and signatures](#finders-and-signatures),
+  [after a Steam update](#after-a-steam-update)
+- [Fixes in detail](#fixes-in-detail):
+  [session](#session-settings-and-background-services-sessionnix),
+  [portal](#portal-portalfix),
+  [keyboard layout](#keyboard-layout-keyboardlayout-keyboardvariant),
+  [Steam keyboard](#steam-keyboard-patch-steamkeyboardpatchenable),
+  [launcher menu](#launcher-menu-launchermenu),
+  [dashboard windows](#dashboard-windows-dashboard),
+  [Steam close button](#steam-close-button-dashboardsteamclosebuttonenable),
+  [window curvature](#window-curvature-dashboardwindowcurvature),
+  [window control bar](#window-control-bar-dashboardframecontrols),
+  [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable),
+  [hidden apps](#hidden-apps-hiddenapps),
+  [clipboard sync](#clipboard-sync-clipboardsyncenable),
+  [Firefox](#firefox-firefox)
+- [Rollback](#rollback)
 
 ## Install
 
@@ -93,8 +115,9 @@ Consequences:
 ## Usage
 
 Requirements: Nix with flakes enabled and standalone home-manager (see
-[Install](#install); `nix flake init -t github:lhns/steam-frame-nix` creates
-the two files below).
+[Install](#install)). A minimal configuration (`nix flake init -t
+github:lhns/steam-frame-nix` creates a commented version of these two files,
+[`template/`](template)):
 
 ```nix
 # flake.nix
@@ -125,7 +148,7 @@ the two files below).
 { config, ... }: {
   home.username = "steamos";
   home.homeDirectory = "/home/steamos";
-  home.stateVersion = "25.11";
+  home.stateVersion = "26.05";
   targets.genericLinux.enable = true;
 
   steamFrame = {
@@ -147,7 +170,7 @@ the two files below).
       frameControls.enable = true;
     };
     firefox.enable = true;
-    # Only relevant with Steam Developer Mode on (see hidden-apps below).
+    # Listed in the "+" menu only with showAllApps or Steam Developer Mode.
     hiddenApps = [ "lxterminal" "cmake-gui" "firewall-config" "renderdoc" ];
   };
 
@@ -173,7 +196,8 @@ Individual modules are available as
 `default` imports all of them.
 
 **Steam Developer Mode** (a Steam setting, not managed here) makes the "+"
-menu list every desktop entry, including terminals such as Konsole.
+menu list every desktop entry, including terminals such as Konsole;
+`launcherMenu.showAllApps` does the same without Developer Mode.
 
 ## Options
 
@@ -190,7 +214,7 @@ menu list every desktop entry, including terminals such as Konsole.
 | `steamFrame.keyboardVariant` | null or str | `null` | XKB variant for the Steam session. |
 | `steamFrame.steamKeyboardPatch.enable` | bool | `false` | Runtime patch of Steam's on-screen keyboard: Esc/Ctrl/Alt, separate arrows, real Ctrl/Alt chords and hold, AltGr/non-ASCII characters. |
 | `steamFrame.uiPatches.patches` | list of submodules | `[ ]` | Runtime patches of Steam's web UIs over their local DevTools ports, see [UI patches](#ui-patches-uipatchespatches). |
-| `steamFrame.uiPatches.lib` | attrs, read-only | | Helpers for patches: `mkPatch` (wraps a patch with the finder library and its signatures), see [Finders and signatures](#finders-and-signatures). |
+| `steamFrame.uiPatches.lib` | attrs, read-only | | Helpers for patches: `mkPatch` (wraps a patch with the finder library, its signatures, options and the shared method hooks), see [Finders and signatures](#finders-and-signatures). |
 | `steamFrame.launcherMenu.sort` | bool | `false` | Sort the VR "+" menu alphabetically. |
 | `steamFrame.launcherMenu.pinDesktop` | null or `"top"` / `"bottom"` | `null` | Pin "Desktop" above or below the "+" menu's scrolling list (always visible). `null`: a normal list entry. |
 | `steamFrame.launcherMenu.closeOnLaunch` | bool | `false` | Close the "+" menu as soon as a program in it is clicked. |
@@ -228,125 +252,17 @@ menu list every desktop entry, including terminals such as Konsole.
 | `steamFrame.firefox.vrFullscreenFix` | bool | `true` | Link a `user.js` with `full-screen-api.ignore-widgets` into existing profiles. |
 | `steamFrame.firefox.desktopProfile` | null or str | `"desktop"` | Separate profile used in the nested desktop; `null` disables it. |
 
-## Fixes in detail
-
-### Session settings and background services (`session.nix`)
-
-This module is used by the others; you normally don't set anything here.
-
-**Where things live.** Background services (systemd user services) and the
-KDE wallet belong to the Steam session. The nested desktop runs separately
-and can't see them. `runtimeDir` and `userBus` point at the Steam session's
-runtime directory and message bus, and `outerBusEnv` is a ready-made prefix
-for launchers that must reach them, e.g.
-`Exec=${config.steamFrame.outerBusEnv} flatpak run …`.
-
-**Starting services on switch.** When you run `home-manager switch` from a
-terminal in the nested desktop, Home Manager can't reach the service
-manager, prints "User systemd daemon not running" and skips starting or
-restarting services. So after every switch this module talks to the Steam
-session's service manager directly: it reloads the service files, then
-starts the services listed in `userServices.start`, stops the ones in
-`userServices.stop` and restarts the ones in `userServices.restart`. Other
-modules fill these lists (e.g. the keyboard patch restarts its helper so a
-new version takes effect).
-
-### Portal (`portalFix`)
-
-**Problem:** the Steam Frame image (SteamOS 0.3.0, build 20260922) points the
-Steam session's `xdg-desktop-portal` at
-`/usr/share/xdg-desktop-portal/gamescope-portals`, which has the holo and
-gamescope backends but no `gamescope-portals.conf`. With
-`XDG_DESKTOP_PORTAL_DIR` set, the portal reads config only from there, selects
-no backend and offers no OpenURI: no app in the Steam session can open links.
-
-**Fix:** an own portal dir in `~/.local/share` with links to Valve's
-`.portal` files plus a config (`default=holo;gamescope`), and a drop-in on
-`xdg-desktop-portal.service` pointing at it. Only the systemd-managed (outer)
-portal is affected; the desktop's portal keeps `kde-portals.conf`.
-
-**Remove when** SteamOS ships a `gamescope-portals.conf`
-(`steamFrame.portalFix.enable = false`).
-
-### Keyboard layout (`keyboardLayout`, `keyboardVariant`)
-
-**Problem:** gamescope and its Xwayland displays use xkbcommon defaults (US)
-unless `XKB_DEFAULT_*` is set; KDE's layout setting only affects the nested
-desktop. `~/.config/environment.d` isn't read by the user manager on the
-Frame.
-
-**Fix:** a drop-in on `gamescope-session.service` setting
-`XKB_DEFAULT_LAYOUT` (and `XKB_DEFAULT_VARIANT`). Takes effect the next time
-the Steam session starts.
-
-**Remove when** SteamOS applies a layout setting to gamescope.
-
-### Steam keyboard patch (`steamKeyboardPatch.enable`)
-
-**Problem:** Steam's VR keyboard has hardcoded layouts without Ctrl, Alt or
-Esc. In VR, Steam can't press real keys
-(`SteamClient.Input.ControllerKeyboardSetKeyState` throws "Unknown method"),
-and its text emulation (`ControllerKeyboardSendText`) only maps plain ASCII:
-non-ASCII characters and anything needing AltGr or a dead key on the German
-keymap (`| @ { [ ] } \ ~ ^`, backtick, `ä ö ü €`) come out as `1`.
-
-**Fix:** the `steam-keyboard-patch` user service (`helper.mjs`, Node) injects
-`patch.js` into Steam's UI at runtime through Steam's CEF DevTools port
-(`127.0.0.1:8080`; SteamOS starts Steam with `-cef-enable-debugging`) and
-re-injects it after Steam restarts or the keyboard popup is recreated.
-Steam's files are never modified. Enabling and disabling take effect on
-`home-manager switch`, no reboot or Steam restart needed: when the helper
-stops (service stopped, or the option disabled, which stops it via
-`userServices.stop`) it reverts the patch in Steam's running UI
-(`unpatch.js`). The service is restarted on every switch (via
-`userServices.restart`) so a changed patch is re-injected.
-
-- Bottom row becomes `Esc Ctrl Alt [Space] AltGr ← ↑ ↓ → Close`. It stays
-  stable with Shift or AltGr active (Steam's stock bottom row moves the
-  close icon with Shift and breaks apart with AltGr).
-- AltGr + arrows: `←` Pos1 (Home), `→` Ende (End), `↑` Bild↑ (Page Up),
-  `↓` Bild↓ (Page Down), shown as small hints on the arrow keys. Shift +
-  arrows send real Shift+arrow, for selecting text.
-- Ctrl/Alt chords and Esc are pressed with `xdotool key` on `:0`, where X
-  focus follows the window selected in VR.
-- While Ctrl/Alt is toggled and the keyboard is open, the real modifier is
-  held down (e.g. Ctrl+scroll to zoom).
-- Problem characters are typed with `xdotool type`; everything else still
-  goes through Steam.
-- Enter always types Return in app windows. Stock Steam keeps the last
-  focused Steam search box as the keyboard target, so Enter could be
-  labelled "Search" and close the keyboard instead of pressing Return.
-
-**Layouts:** the extra-character handling (which characters are routed to
-xdotool, and the keysym names used for umlauts in chords) targets the German
-(`de`) keymap. On other layouts it is harmless: those characters are simply
-typed by xdotool instead of Steam, and Esc/Ctrl/Alt/arrows work regardless.
-
-**Security:** requests come from Steam's UI JS, so the helper uses an
-allowlist: Ctrl/Alt chords with a single key, the extra keys (Esc, Del, Home,
-End, Page Up/Down, arrows), hold/release of Ctrl/Alt, and single non-ASCII or AltGr
-characters. It cannot type plain ASCII text or press Enter on its own.
-
-**Caveat:** the patch depends on Steam UI internals: the keyboard layouts
-module, the VR keyboard status and the keyboard manager. They are found by
-signature (content and shape, see [Finders and signatures](#finders-and-signatures)),
-not by webpack module id or minified export name, so ordinary Steam updates
-don't break it. If a signature stops matching, the patch leaves Steam
-untouched (stock keyboard) and logs which one
-(`journalctl --user -u steam-keyboard-patch`); see
-[After a Steam update](#after-a-steam-update). Tested with Steam client
-1790377368 (UI build 11041156).
-
-**Remove when** Steam's VR keyboard gets these keys itself.
-
-### UI patches (`uiPatches.patches`)
+## UI patches (`uiPatches.patches`)
 
 Steam's client UI (and SteamVR's dashboard, `vrwebhelper`) are web pages in
 CEF with a local DevTools port: `127.0.0.1:8080` for Steam (SteamOS starts
 it with `-cef-enable-debugging`), `127.0.0.1:8087` for SteamVR when its
-debugger is enabled (`VRWebHelper/DebuggerEnabled` in
-`steamvr.vrsettings`, see [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable)). The `steam-ui-patches` user service (`injector.mjs`,
-Node) uses them to patch the running UI; Steam's files are never modified.
+debugger is enabled (`VRWebHelper/DebuggerEnabled` in `steamvr.vrsettings`,
+see [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable)). The
+`steam-ui-patches` user service (`injector.mjs`, Node) uses them to patch
+the running UI; Steam's files are never modified. The launcher menu and
+dashboard features below are such patches (the Steam keyboard patch has
+its own helper service), and you can register your own.
 
 Each entry of `steamFrame.uiPatches.patches`:
 
@@ -512,6 +428,117 @@ format; bundles `steamui` and `vrwebui-systemui`, SteamVR's dashboard),
 warnings), `--json`. Live, `journalctl --user -u steam-keyboard-patch -u
 steam-ui-patches` shows what each patch reported.
 
+## Fixes in detail
+
+### Session settings and background services (`session.nix`)
+
+This module is used by the others; you normally don't set anything here.
+
+**Where things live.** Background services (systemd user services) and the
+KDE wallet belong to the Steam session. The nested desktop runs separately
+and can't see them. `runtimeDir` and `userBus` point at the Steam session's
+runtime directory and message bus, and `outerBusEnv` is a ready-made prefix
+for launchers that must reach them, e.g.
+`Exec=${config.steamFrame.outerBusEnv} flatpak run …`.
+
+**Starting services on switch.** When you run `home-manager switch` from a
+terminal in the nested desktop, Home Manager can't reach the service
+manager, prints "User systemd daemon not running" and skips starting or
+restarting services. So after every switch this module talks to the Steam
+session's service manager directly: it reloads the service files, then
+starts the services listed in `userServices.start`, stops the ones in
+`userServices.stop` and restarts the ones in `userServices.restart`. Other
+modules fill these lists (e.g. the keyboard patch restarts its helper so a
+new version takes effect).
+
+### Portal (`portalFix`)
+
+**Problem:** the Steam Frame image (SteamOS 0.3.0, build 20260922) points the
+Steam session's `xdg-desktop-portal` at
+`/usr/share/xdg-desktop-portal/gamescope-portals`, which has the holo and
+gamescope backends but no `gamescope-portals.conf`. With
+`XDG_DESKTOP_PORTAL_DIR` set, the portal reads config only from there, selects
+no backend and offers no OpenURI: no app in the Steam session can open links.
+
+**Fix:** an own portal dir in `~/.local/share` with links to Valve's
+`.portal` files plus a config (`default=holo;gamescope`), and a drop-in on
+`xdg-desktop-portal.service` pointing at it. Only the systemd-managed (outer)
+portal is affected; the desktop's portal keeps `kde-portals.conf`.
+
+**Remove when** SteamOS ships a `gamescope-portals.conf`
+(`steamFrame.portalFix.enable = false`).
+
+### Keyboard layout (`keyboardLayout`, `keyboardVariant`)
+
+**Problem:** gamescope and its Xwayland displays use xkbcommon defaults (US)
+unless `XKB_DEFAULT_*` is set; KDE's layout setting only affects the nested
+desktop. `~/.config/environment.d` isn't read by the user manager on the
+Frame.
+
+**Fix:** a drop-in on `gamescope-session.service` setting
+`XKB_DEFAULT_LAYOUT` (and `XKB_DEFAULT_VARIANT`). Takes effect the next time
+the Steam session starts.
+
+**Remove when** SteamOS applies a layout setting to gamescope.
+
+### Steam keyboard patch (`steamKeyboardPatch.enable`)
+
+**Problem:** Steam's VR keyboard has hardcoded layouts without Ctrl, Alt or
+Esc. In VR, Steam can't press real keys
+(`SteamClient.Input.ControllerKeyboardSetKeyState` throws "Unknown method"),
+and its text emulation (`ControllerKeyboardSendText`) only maps plain ASCII:
+non-ASCII characters and anything needing AltGr or a dead key on the German
+keymap (`| @ { [ ] } \ ~ ^`, backtick, `ä ö ü €`) come out as `1`.
+
+**Fix:** the `steam-keyboard-patch` user service (`helper.mjs`, Node) injects
+`patch.js` into Steam's UI at runtime through Steam's CEF DevTools port
+(`127.0.0.1:8080`; SteamOS starts Steam with `-cef-enable-debugging`) and
+re-injects it after Steam restarts or the keyboard popup is recreated.
+Steam's files are never modified. Enabling and disabling take effect on
+`home-manager switch`, no reboot or Steam restart needed: when the helper
+stops (service stopped, or the option disabled, which stops it via
+`userServices.stop`) it reverts the patch in Steam's running UI
+(`unpatch.js`). The service is restarted on every switch (via
+`userServices.restart`) so a changed patch is re-injected.
+
+- Bottom row becomes `Esc Ctrl Alt [Space] AltGr ← ↑ ↓ → Close`. It stays
+  stable with Shift or AltGr active (Steam's stock bottom row moves the
+  close icon with Shift and breaks apart with AltGr).
+- AltGr + arrows: `←` Pos1 (Home), `→` Ende (End), `↑` Bild↑ (Page Up),
+  `↓` Bild↓ (Page Down), shown as small hints on the arrow keys. Shift +
+  arrows send real Shift+arrow, for selecting text.
+- Ctrl/Alt chords and Esc are pressed with `xdotool key` on `:0`, where X
+  focus follows the window selected in VR.
+- While Ctrl/Alt is toggled and the keyboard is open, the real modifier is
+  held down (e.g. Ctrl+scroll to zoom).
+- Problem characters are typed with `xdotool type`; everything else still
+  goes through Steam.
+- Enter always types Return in app windows. Stock Steam keeps the last
+  focused Steam search box as the keyboard target, so Enter could be
+  labelled "Search" and close the keyboard instead of pressing Return.
+
+**Layouts:** the extra-character handling (which characters are routed to
+xdotool, and the keysym names used for umlauts in chords) targets the German
+(`de`) keymap. On other layouts it is harmless: those characters are simply
+typed by xdotool instead of Steam, and Esc/Ctrl/Alt/arrows work regardless.
+
+**Security:** requests come from Steam's UI JS, so the helper uses an
+allowlist: Ctrl/Alt chords with a single key, the extra keys (Esc, Del, Home,
+End, Page Up/Down, arrows), hold/release of Ctrl/Alt, and single non-ASCII or AltGr
+characters. It cannot type plain ASCII text or press Enter on its own.
+
+**Caveat:** the patch depends on Steam UI internals: the keyboard layouts
+module, the VR keyboard status and the keyboard manager. They are found by
+signature (content and shape, see [Finders and signatures](#finders-and-signatures)),
+not by webpack module id or minified export name, so ordinary Steam updates
+don't break it. If a signature stops matching, the patch leaves Steam
+untouched (stock keyboard) and logs which one
+(`journalctl --user -u steam-keyboard-patch`); see
+[After a Steam update](#after-a-steam-update). Tested with Steam client
+1790377368 (UI build 11041156).
+
+**Remove when** Steam's VR keyboard gets these keys itself.
+
 ### Launcher menu (`launcherMenu.*`)
 
 **Problem:** the VR dashboard's "+" menu (non-Steam programs) lists programs
@@ -590,11 +617,11 @@ the program twice.
   `developer_mode_enabled` accessor and the list); the offline checker also
   verifies the filter still spreads the list.
 
-All are reverted when the options are turned off (next switch). These
-patches use Steam APIs (`SteamClient.Apps`), React props and CSS rather
-than webpack modules; the offline checker verifies those anchors too
-(including the scroll fade's class names and stylesheet, checked as a
-`stylesheet` signature against Steam's CSS files).
+All are reverted when the options are turned off (next switch). Apart from
+`showAllApps` (a webpack module, found by signature), these patches use
+Steam APIs (`SteamClient.Apps`), React props and CSS; the offline checker
+verifies those anchors too (including the scroll fade's class names and
+stylesheet, checked as a `stylesheet` signature against Steam's CSS files).
 Tested with Steam client 1790377368.
 
 #### Icon fallbacks (`launcherMenu.iconFallbacks`)
@@ -758,7 +785,8 @@ flat.
 [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable)) makes the whole
 "Toggle Curvature" row a control, with the window's value on its right and
 small arrows above/below it. When the control sits in the window's bottom
-bar instead (e.g. moved there by a patch of your own), that button works
+bar instead (e.g. moved there with the
+[window control bar](#window-control-bar-dashboardframecontrols)), that button works
 the same way, without the value: the steps are felt as haptics.
 
 - **click**: curved → flat, flat → stock curve (1);
@@ -951,8 +979,9 @@ the patches only use `127.0.0.1`.
 
 ### Hidden apps (`hiddenApps`)
 
-**Problem:** with Steam Developer Mode on, the "+" menu lists every desktop
-entry GLib would show, including system tools you never want in VR.
+**Problem:** with Steam Developer Mode on (or `launcherMenu.showAllApps`),
+the "+" menu lists every desktop entry GLib would show, including system
+tools you never want in VR.
 
 **Fix:** a user entry with `Hidden=true` in `~/.local/share/applications`
 masks the system one (also in the KDE menu).
@@ -960,7 +989,9 @@ masks the system one (also in the KDE menu).
 The "+" menu itself always hides executables named `steam` or
 `vrurlhandler`, and unless Developer Mode is on also terminals and similar
 tools such as `konsole`, `dolphin`, `vlc`, `sh` and `lxterminal` (filter in
-Steam's UI JS). Enable Developer Mode to get Konsole in VR.
+Steam's UI JS). Enable Developer Mode or
+[`launcherMenu.showAllApps`](#launcher-menu-launchermenu) to get Konsole in
+VR.
 
 ### Clipboard sync (`clipboardSync.enable`)
 
