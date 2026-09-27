@@ -195,7 +195,8 @@ menu list every desktop entry, including terminals such as Konsole.
 | `steamFrame.launcherMenu.grid.enable` | bool | `false` | Show the "+" menu's programs as a grid of tiles (large icon, name below) instead of a list. |
 | `steamFrame.launcherMenu.grid.columns` | int, 1-8 | `4` | Tiles per row (popup is 300 px wide: 3 ≈ 92 px, 4 ≈ 68 px, 5 ≈ 53 px tiles). |
 | `steamFrame.launcherMenu.grid.maxRows` | null or positive int | `null` | Rows visible at once, the rest scrolls. `null`: fill up to the menu's max height (600 px). |
-| `steamFrame.launcherMenu.iconFallbacks` | list of str | `[ "utilities-terminal" "preferences-system" ]` | Icon names installed as hicolor copies of Breeze app icons, so the "+" menu shows them (Konsole, KDE System Settings). `[ ]`: none. Takes effect after a Steam restart. |
+| `steamFrame.launcherMenu.iconFallbacks.enable` | bool | `true` | On every switch, link hicolor fallbacks (Breeze app icons) for desktop entries whose icon Steam can't find, so the "+" menu shows them (SteamOS: Konsole, KDE System Settings). `false` removes the links. See [Icon fallbacks](#icon-fallbacks-launchermenuiconfallbacks). |
+| `steamFrame.launcherMenu.iconFallbacks.extra` | list of str | `[ ]` | Further icon names to provide even if no desktop entry the scan sees uses them. |
 | `steamFrame.dashboard.windowMaxScale` | null or number | `null` | Largest resize-handle scale of SteamVR dashboard windows, relative to their default size. `null`: stock (2). See [Dashboard windows](#dashboard-windows-dashboard). |
 | `steamFrame.dashboard.windowDistance.{world,theater,dashboard}.{min,max}` | null or number (m) | `null` | How close / far grabbed windows can be pulled in / pushed back. `null`: stock (world 0.25-5, theater 1-6, dashboard 0.3-4 m). |
 | `steamFrame.dashboard.steamCloseButton.enable` | bool | `false` | Close (X) button on the dashboard's Steam window: switches to the previous window, or leaves just the dashboard bar. See [Steam close button](#steam-close-button-dashboardsteamclosebuttonenable). |
@@ -551,19 +552,30 @@ desktop's icon theme. Konsole (`Icon=utilities-terminal`) and KDE System
 Settings (`Icon=preferences-system`), which SteamOS ships, have their icons
 only in Breeze, so they show up without an icon in the "+" menu.
 
-**Fix:** for each name in `iconFallbacks` (default: those two), the largest
-Breeze app icon from nixpkgs' `kdePackages.breeze-icons` is installed as
-`~/.nix-profile/share/icons/hicolor/scalable/apps/<name>.svg`
-(`~/.nix-profile/share` is on Steam's `XDG_DATA_DIRS`); desktop entries are
-left alone. Add names for other programs that lack an icon (the `Icon=`
-value of their desktop entry), e.g.
-`iconFallbacks = [ "utilities-terminal" "preferences-system" "system-file-manager" ];`;
-`[ ]` installs nothing. A name Breeze has no app icon for fails the build
-with an error naming it.
+**Fix:** on every `home-manager switch`, a small activation script looks
+through the desktop entries Steam sees (`applications/` in
+`~/.local/share` and Steam's `XDG_DATA_DIRS`; an entry shadowed by one with
+the same desktop-file ID, and `Hidden`/`NoDisplay` entries, are skipped).
+For each `Icon=` name that no hicolor theme dir (or `pixmaps`) has but
+nixpkgs' `kdePackages.breeze-icons` app icons do, it links the largest
+Breeze SVG as `~/.local/share/icons/hicolor/scalable/apps/<name>.svg`.
+Desktop entries are left alone. `iconFallbacks.extra` adds names to
+provide even if no scanned entry uses them (a name Breeze lacks is
+reported and skipped). The links made are listed in
+`~/.local/state/steam-frame-nix/icon-fallbacks`; links no longer needed are
+removed, and `iconFallbacks.enable = false` removes them all. Only those
+links (still pointing into a breeze-icons store path) are ever removed;
+other files in the icon dir are never touched. Programs installed later get
+their fallback on the next switch.
 
-**Caveat:** Steam caches the icon lookup (GTK icon cache) for its lifetime,
-and files in the Nix store all have the same 1970 mtime, so new icons show
-up only after Steam is restarted (e.g. a reboot), not on the next switch.
+`iconFallbacks` used to be a list of icon names; setting a list now fails
+evaluation with a message: use `iconFallbacks.extra` for additional names,
+`iconFallbacks.enable = false` for what `[ ]` meant.
+
+A running Steam picks up the change without a restart: it caches the icon
+theme (GTK) and rescans it only when a theme directory's mtime changes, so
+the script bumps the mtime of `~/.local/share/icons/hicolor` whenever it
+adds or removes links.
 
 ### Dashboard windows (`dashboard.*`)
 

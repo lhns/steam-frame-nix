@@ -26,6 +26,9 @@
   #     closeOnLaunch = true;
   #     launchDebounce = 10;
   #     grid = { enable = true; columns = 4; maxRows = 4; };
+  #     # Icon fallbacks for programs without an icon in the menu are on by
+  #     # default; names to provide in addition to what the scan finds:
+  #     # iconFallbacks.extra = [ "system-file-manager" ];
   #   };
   #   # SteamVR dashboard windows: resizable up to 4x (stock 2x), pushed
   #   # back up to 10 m in the world / 12 m in theater mode (stock 5 / 6 m):

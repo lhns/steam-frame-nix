@@ -23,32 +23,23 @@
 # iconFallbacks is not a patch: Steam's scan of host programs resolves a
 # desktop entry's Icon= name only in the hicolor icon theme (and pixmaps),
 # so programs whose icon exists only in the desktop's Breeze theme (SteamOS'
-# Konsole and KDE System Settings) have no icon in the menu. Hicolor copies
-# from nixpkgs' Breeze are installed into the profile (~/.nix-profile/share
-# is on Steam's XDG_DATA_DIRS).
+# Konsole and KDE System Settings) have no icon in the menu. On every switch,
+# launcher-menu/icon-fallbacks.sh looks through the desktop entries Steam
+# sees and links the missing icons that nixpkgs' Breeze has into
+# ~/.local/share/icons/hicolor (see the script). Until 2026-09 iconFallbacks
+# was a list of names; setting a list now fails with a message pointing to
+# enable/extra.
 { config, lib, pkgs, ... }:
 let
   cfg = config.steamFrame.launcherMenu;
   inherit (import ./lib { inherit pkgs; }) mkPatch;
   sharedJSContext = { title = "SharedJSContext"; };
 
-  # Largest Breeze app icon (all are SVG) as hicolor/scalable/apps/<name>.svg.
-  breezeApps = "${pkgs.kdePackages.breeze-icons}/share/icons/breeze/apps";
-  iconFallbacks = pkgs.runCommand "launcher-menu-icon-fallbacks" { } ''
-    dir=$out/share/icons/hicolor/scalable/apps
-    mkdir -p $dir
-    for name in ${lib.escapeShellArgs cfg.iconFallbacks}; do
-      src=
-      for size in 64 48 32 24 22 16; do
-        if [ -e "${breezeApps}/$size/$name.svg" ]; then src="${breezeApps}/$size/$name.svg"; break; fi
-      done
-      if [ -z "$src" ]; then
-        echo "steamFrame.launcherMenu.iconFallbacks: no Breeze app icon \"$name\" (${breezeApps}/<size>/$name.svg)" >&2
-        exit 1
-      fi
-      cp -L "$src" "$dir/$name.svg"
-    done
-  '';
+  iconFallbacks = pkgs.writeShellApplication {
+    name = "steam-frame-icon-fallbacks";
+    runtimeInputs = [ pkgs.coreutils pkgs.findutils pkgs.gawk ];
+    text = builtins.readFile ./launcher-menu/icon-fallbacks.sh;
+  };
 in {
   imports = [ ./steam-ui-patches.nix ];
 
@@ -122,23 +113,76 @@ in {
       };
     };
     iconFallbacks = lib.mkOption {
-      type = lib.types.listOf (lib.types.strMatching "[A-Za-z0-9._+-]+");
-      default = [ "utilities-terminal" "preferences-system" ];
-      example = [ "utilities-terminal" "preferences-system" "system-file-manager" ];
+      default = { };
       description = ''
-        Icon names (Icon= of desktop entries) installed as hicolor icons,
-        copied from nixpkgs' Breeze app icons, so the "+" menu shows them:
-        Steam resolves program icons only in the hicolor theme, not in the
-        desktop's Breeze theme. The default covers the entries SteamOS ships
-        whose icons exist only in Breeze: Konsole (utilities-terminal) and
-        KDE System Settings (preferences-system). A name Breeze has no app
-        icon for fails the build, naming it. [] installs nothing. Steam
-        picks up new icons only after a restart.
+        Hicolor fallbacks for program icons only the desktop's Breeze theme
+        has, so the "+" menu shows them: Steam resolves program icons only in
+        the hicolor theme.
       '';
+      # The option used to be a list of icon names: keep a list from being
+      # silently misread and fail with a message instead (see the assertion).
+      type = lib.types.coercedTo (lib.types.listOf lib.types.str)
+        (names: { legacyList = names; })
+        (lib.types.submodule {
+          options = {
+            enable = lib.mkOption {
+              type = lib.types.bool;
+              default = true;
+              description = ''
+                On every switch, look through the desktop entries Steam sees
+                (XDG data dirs, shadowed and Hidden/NoDisplay entries skipped)
+                and, for each Icon= name no hicolor theme dir (or pixmaps)
+                has but nixpkgs' Breeze app icons do (SteamOS: Konsole's
+                utilities-terminal, KDE System Settings' preferences-system),
+                link the Breeze SVG as
+                ~/.local/share/icons/hicolor/scalable/apps/<name>.svg. Links
+                no longer needed are removed; only links made by this option
+                (listed in ~/.local/state/steam-frame-nix/icon-fallbacks) are
+                ever touched. false removes them all.
+              '';
+            };
+            extra = lib.mkOption {
+              type = lib.types.listOf (lib.types.strMatching "[A-Za-z0-9._+-]+");
+              default = [ ];
+              example = [ "system-file-manager" ];
+              description = ''
+                Icon names to provide even if no desktop entry the scan sees
+                uses them (still only if hicolor lacks them). A name Breeze
+                has no app icon for is reported on switch and skipped.
+              '';
+            };
+            legacyList = lib.mkOption {
+              type = lib.types.nullOr (lib.types.listOf lib.types.str);
+              default = null;
+              internal = true;
+              visible = false;
+            };
+          };
+        });
     };
   };
 
-  config.home.packages = lib.optional (cfg.iconFallbacks != [ ]) iconFallbacks;
+  config.assertions = [ {
+    assertion = cfg.iconFallbacks.legacyList == null;
+    message = ''
+      steamFrame.launcherMenu.iconFallbacks is no longer a list of icon names
+      (set to ${builtins.toJSON cfg.iconFallbacks.legacyList}). Use
+        iconFallbacks.enable = true;   # default: utilities-terminal, preferences-system
+        iconFallbacks.extra = [ ... ]; # further names
+      or iconFallbacks.enable = false; for none (what [ ] used to mean).
+    '';
+  } ];
+
+  # After installPackages, so the new profile's desktop entries and icons count.
+  # Disabled, the script removes its links (no BREEZE_APPS).
+  config.home.activation.steamFrameIconFallbacks =
+    lib.hm.dag.entryAfter [ "writeBoundary" "installPackages" ] (
+      if cfg.iconFallbacks.enable then ''
+        run env BREEZE_APPS=${pkgs.kdePackages.breeze-icons}/share/icons/breeze/apps \
+          ${lib.getExe iconFallbacks} ${lib.escapeShellArgs cfg.iconFallbacks.extra}
+      '' else ''
+        run ${lib.getExe iconFallbacks}
+      '');
 
   config.steamFrame.uiPatches.patches =
     lib.optional cfg.sort {
