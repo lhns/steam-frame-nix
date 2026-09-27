@@ -10,6 +10,9 @@
   for (const l of window.__vrkbdLayouts || []) unwrap(l, 'rgLayout');
   unwrap(SteamClient.Input, 'ControllerKeyboardSendText');
   unwrap(window.__vrkbdProto, 'TypeKeyInternal');
+  const Manager = window.__vrkbdWr(5363).PE.prototype;
+  unwrap(Manager, 'GetEnterKeyLabel');
+  unwrap(Manager, 'HandleVirtualKeyDown');
   clearInterval(window.__vrkbdHoldTimer);
 
   const inst = window.__vrkbdInst;

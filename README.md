@@ -261,6 +261,9 @@ stops (service stopped, or the option disabled, which stops it via
   held down (e.g. Ctrl+scroll to zoom).
 - Problem characters are typed with `xdotool type`; everything else still
   goes through Steam.
+- Enter always types Return in app windows. Stock Steam keeps the last
+  focused Steam search box as the keyboard target, so Enter could be
+  labelled "Search" and close the keyboard instead of pressing Return.
 
 **Layouts:** the extra-character handling (which characters are routed to
 xdotool, and the keysym names used for umlauts in chords) targets the German

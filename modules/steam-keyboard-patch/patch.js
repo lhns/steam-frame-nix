@@ -10,12 +10,14 @@
 //  - characters Steam's own key emulation (ControllerKeyboardSendText) turns
 //    into "1" -- anything non-ASCII or needing AltGr / a dead key on the X
 //    keymap -- are typed by the helper instead
+//  - Enter types Return for app windows, even if a Steam search box had focus
+//    before (Steam then labels it "Search" and closes the keyboard instead)
 // Everything goes through the CDP binding window.__vrkbdKey("<op>:<arg>"),
 // executed by helper.mjs with xdotool on :0. Every replaced function keeps its
 // original as __vrkbdOrig (unpatch.js restores them).
 // Idempotent: safe to evaluate repeatedly.
 (() => {
-  const VERSION = 8;
+  const VERSION = 9;
   const send = (msg) => window.__vrkbdKey && window.__vrkbdKey(msg);
   const wr = window.__vrkbdWr ||
     (webpackChunksteamui.push([[Symbol('vrkbd')], {}, (r) => { window.__vrkbdWr = r; }]), window.__vrkbdWr);
@@ -88,6 +90,35 @@
       } else run += c;
     }
     if (run) return orig.call(this, run, ...rest);
+  });
+
+  // ---- Enter for app windows ------------------------------------------------------
+  // The manager keeps the props of the last focused Steam text field
+  // (m_ActiveElementProps, set on DOM focus) until that field gets a gamepad
+  // blur, which doesn't happen when you leave the dashboard. Search boxes
+  // carry strEnterKeyLabel "#SearchEnterKeyLabel" ("Suchen") and an
+  // onEnterKeyPress returning "VKClose", so when the keyboard is then opened
+  // for an app window, Enter shows "Suchen", runs the Steam search and hides
+  // the keyboard instead of typing Return. While the keyboard serves
+  // something other than this Steam UI (Steam's own test, L() in module
+  // 5363), ignore those props and the dismiss-on-Enter flag.
+  const Manager = wr(5363).PE.prototype;
+  const forOther = (m) => {
+    const s = Status.VRKeyboardStatus, ui = m.m_Instance;
+    return !!s?.bIsOpen && !(s.sOverlayKey && s.sOverlayKey === ui?.GetVROverlayKey?.()) &&
+      !(s.unAppID && s.unAppID === ui?.MainRunningAppID);
+  };
+  wrap(Manager, 'GetEnterKeyLabel', (orig) => function (...a) {
+    return forOther(this) ? undefined : orig.apply(this, a);
+  });
+  wrap(Manager, 'HandleVirtualKeyDown', (orig) => function (key, ...rest) {
+    if (key !== 'Enter' || !forOther(this)) return orig.call(this, key, ...rest);
+    const props = this.m_ActiveElementProps, dismiss = this.m_bDismissOnEnter;
+    this.m_ActiveElementProps = null; this.m_bDismissOnEnter = false;
+    try { return orig.call(this, key, ...rest); } finally {
+      if (this.m_ActiveElementProps === null) this.m_ActiveElementProps = props;
+      if (this.m_bDismissOnEnter === false) this.m_bDismissOnEnter = dismiss;
+    }
   });
 
   // ---- keyboard component -------------------------------------------------------
