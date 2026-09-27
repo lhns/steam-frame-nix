@@ -12,6 +12,7 @@ const UNPATCH = readFileSync(unpatchPath, 'utf8');
 let current = null;                               // CDP `call` of the live session, if any
 const CDP = 'http://127.0.0.1:8080/json/list';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// :0 is the Steam session's Xwayland, where the VR app windows live.
 const ENV = { ...process.env, DISPLAY: process.env.VRKBD_DISPLAY || ':0', LC_ALL: 'C.UTF-8' };
 
 // Allowlist: requests come from Steam's UI JS, so the helper must not be able
@@ -76,14 +77,25 @@ async function session() {
     const v = r.result?.result?.value ?? r.result?.exceptionDetails?.exception?.description;
     if (v !== 'patched' || process.env.VRKBD_VERBOSE) console.log('inject:', v);
   };
+  // New JS contexts (UI reload, popups) come in bursts: inject once after them.
+  let soon = null;
+  const injectSoon = () => { clearTimeout(soon); soon = setTimeout(() => inject().catch(() => {}), 3000); };
   await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
   ws.onmessage = (e) => {
     const m = JSON.parse(e.data);
     if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); }
     else if (m.method === 'Runtime.bindingCalled' && m.params.name === '__vrkbdKey') handle(m.params.payload);
-    else if (m.method === 'Runtime.executionContextCreated') setTimeout(inject, 3000);
+    else if (m.method === 'Runtime.executionContextCreated') injectSoon();
   };
-  const closed = new Promise((res) => { ws.onclose = () => { current = null; res(); }; });
+  const closed = new Promise((res) => {
+    ws.onclose = () => {
+      current = null;
+      clearTimeout(soon);
+      for (const r of pending.values()) r({});    // unblock calls that will never be answered
+      pending.clear();
+      res();
+    };
+  });
   current = call;
   await call('Runtime.enable');
   await call('Runtime.addBinding', { name: '__vrkbdKey' });
