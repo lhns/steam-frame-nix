@@ -351,7 +351,8 @@ Next steps:
     Run it from a terminal in the nested desktop. Flakes only see files
     tracked by git: 'git add' new files first.
   - Konsole in the Steam session's "+" menu needs Steam Developer Mode
-    (Steam Settings > System > Enable Developer Mode).
+    (Steam Settings > System > Enable Developer Mode) or
+    steamFrame.launcherMenu.showAllApps = true.
   - Status: install.sh status. Remove everything: install.sh uninstall
 EOF
 }

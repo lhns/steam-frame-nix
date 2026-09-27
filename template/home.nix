@@ -51,7 +51,7 @@
   #     frameControls.enable = true;
   #   };
   #   firefox.enable = true;             # launcher for the Firefox Flatpak
-  #   # Hidden from the "+" menu (with Steam Developer Mode on):
+  #   # Hidden from the "+" menu (listed with Developer Mode or showAllApps):
   #   hiddenApps = [ "lxterminal" "cmake-gui" "firewall-config" "renderdoc" ];
   # };
 }
