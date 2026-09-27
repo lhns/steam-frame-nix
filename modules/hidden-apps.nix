@@ -1,5 +1,6 @@
 # Hide system apps from menus, including the Steam session's "+" menu (with
-# Developer Mode on it lists every desktop entry GLib would show). A user
+# Developer Mode on, or launcherMenu.showAllApps, it lists every desktop entry
+# GLib would show). A user
 # entry with Hidden=true in ~/.local/share/applications masks the one in
 # /usr/share/applications. Also hides them from the nested desktop's KDE menu.
 { config, lib, ... }: {

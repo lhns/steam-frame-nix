@@ -27,7 +27,8 @@
 // unpatch.js (or a new VERSION/position) calls __sfuiPinnedDesktop.stop(),
 // which removes the pinned blocks, CSS, markers, observers and the timer.
 ((find, sigs, opts) => {
-  const VERSION = 2;
+  const NAME = 'launcher-menu-pinned-desktop';
+  const VERSION = 3;
   const POS = opts.position === 'top' ? 'top' : 'bottom';
   const KEY = 'steamos-nested-desktop';
   const HIDDEN = 'data-sfui-desktop-hidden';
@@ -42,10 +43,10 @@
   const prev = window.__sfuiPinnedDesktop;
   if (prev?.version === VERSION && prev.position === POS) { prev.scan(); return 'unchanged'; }
   prev?.stop?.();
-  window.__sfuiDesktopFooter?.stop?.();          // predecessor of this patch
   if (!window.g_PopupManager) return 'g_PopupManager missing';
 
   const docs = new Map();                         // popup document -> MutationObserver
+  const guard = (f) => (...a) => { try { f(...a); } catch (e) { console.error(`sfui ${NAME}:`, e); } };
   // The stock Desktop item: role=button element whose fiber ancestors include
   // the list entry keyed by the program's exe path.
   const isDesktop = (el) => {
@@ -128,7 +129,7 @@
       s.id = STYLE_ID; s.textContent = CSS;
       (d.head ?? d.documentElement).appendChild(s);
     }
-    const obs = new MutationObserver(() => { try { update(d); } catch (e) { console.error('sfui pinned-desktop:', e); } });
+    const obs = new MutationObserver(guard(() => update(d)));
     obs.observe(d.body, { childList: true, subtree: true, characterData: true });
     docs.set(d, obs);
     update(d);
@@ -136,10 +137,8 @@
 
   const scan = () => {
     for (const [d, obs] of docs) if (!d.defaultView || d.defaultView.closed) { obs.disconnect(); docs.delete(d); }
-    for (const p of g_PopupManager.GetPopups()) {
-      if (!/barpopup/.test(p.m_strName ?? '')) continue;
-      try { attach(p.window?.document); } catch (e) { console.error('sfui pinned-desktop:', e); }
-    }
+    for (const p of g_PopupManager.GetPopups())
+      if (/barpopup/.test(p.m_strName ?? '')) guard(() => attach(p.window?.document))();
   };
 
   const timer = setInterval(scan, 1000);

@@ -1,8 +1,8 @@
 // frame-controls: move the control icons under SteamVR dashboard windows
 // between the window's bottom bar and its More Options (three-dot) menu.
 // A long press on a bar icon or a menu row (opts.longPressMs; a ring around
-// the icon fills up once half a second .. a second has passed) opens a small
-// popup with a "Show in bar" checkbox; toggling it moves that control for all
+// the icon shows the progress from half that time, at most after 1 s) opens a
+// small popup with a "Show in bar" checkbox; toggling it moves that control for all
 // windows. Short presses stay stock. The three-dot button itself can't be
 // moved (stock shows it while its menu has entries). opts.floatInTheater
 // gives theater windows the "Float" control back.
@@ -46,7 +46,7 @@
 // dashboard (no right-click; the thumbstick click arrives as nothing), so a
 // long press is the trigger. Nothing is stopped or restyled while holding;
 // the timer keeps running when the laser moves or leaves the control and is
-// cancelled only by an early release. When it completes, the popup opens and
+// cancelled by an early release (or a curvature drag, below). When it completes, the popup opens and
 // the one click that follows the release on that control is swallowed, so
 // its stock action doesn't run.
 // window-curvature (its controls own press-and-drag) contract: its elements

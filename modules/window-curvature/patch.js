@@ -2,7 +2,7 @@
 // stock "Toggle Curvature" control becomes a wheel wherever it is shown: the
 // row of a window's More Options (three-dot) menu (with the value on the
 // right of the row) and, when the control sits in the window's bottom bar
-// (e.g. moved there by another patch), that bar button (no value shown:
+// (e.g. moved there by frame-controls), that bar button (no value shown:
 // the steps and snap points are felt as controller haptics). Click toggles
 // (curved -> flat, flat -> stock curve), dragging up/down with the laser sets
 // the curvature live.

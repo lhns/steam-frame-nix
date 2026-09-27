@@ -1,24 +1,27 @@
 # The VR dashboard's "+" menu (non-Steam programs, #VRDashboard_LaunchNonSteamApp)
 # lists programs in the order SteamClient.Apps.ScanForInstalledNonSteamApps()
 # returns them: GLib hash-table order, effectively random, with "Desktop" (the
-# nested Plasma session) somewhere in a scrolling list. Two runtime patches of
-# Steam's UI (steam-ui-patches.nix, evaluated in SharedJSContext) fix that:
+# nested Plasma session) somewhere in a scrolling list. Runtime patches of
+# Steam's UI (steam-ui-patches.nix, evaluated in SharedJSContext), each
+# registered only when its option is set:
 # - order/: wraps ScanForInstalledNonSteamApps to sort the list by name;
 # - pinned-desktop/: hides Desktop in the scrolling list and pins a copy above
 #   or below it, with a separator; clicking the copy clicks the hidden
-#   original. The position is passed by calling the patch's function.
+#   original;
 # - launch/: wraps SteamClient.Apps.LaunchNonSteamApp (only called by this
 #   menu) to close the menu right after a program is started, and/or to
 #   ignore repeated launches of the same program within a few seconds (stock,
 #   the menu stays open until the program's window appears, inviting double
-#   launches). Options are passed by calling the patch's function.
+#   launches);
 # - grid/: restyles the programs section as a grid of tiles (icon, name
-#   below), optionally limited to maxRows visible rows.
-# All are reverted when turned off (next switch).
-# Depends on Steam UI internals (React props, popup names, the scroll fade's
-# classes and CSS), not on webpack module ids; scripts/check-signatures.mjs
-# checks them after a Steam update (lib/signatures.json). Tested with Steam
-# client 1790377368.
+#   below), optionally limited to maxRows visible rows;
+# - show-all/: empties the list of programs Steam hides without Developer
+#   Mode (the webpack module holding it is found by signature).
+# Options reach the patches through mkPatch's `opts`. All are reverted when
+# turned off (next switch). Besides that one module, they depend on Steam UI
+# internals such as React props, popup names and the scroll fade's classes
+# and CSS; scripts/check-signatures.mjs checks all of them after a Steam
+# update (lib/signatures.json). Tested with Steam client 1790377368.
 #
 # iconFallbacks is not a patch: Steam's scan of host programs resolves a
 # desktop entry's Icon= name only in the hicolor icon theme (and pixmaps),
@@ -91,8 +94,7 @@ in {
     grid = {
       enable = lib.mkEnableOption ''
         the "+" menu's programs as a grid of tiles (large icon, name below)
-        instead of a list. Runtime patch of Steam's UI (steamFrame.uiPatches)
-      '';
+        instead of a list. Runtime patch of Steam's UI (steamFrame.uiPatches)'';
       columns = lib.mkOption {
         type = lib.types.ints.between 1 8;
         default = 4;

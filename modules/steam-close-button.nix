@@ -16,20 +16,15 @@ let
 in {
   imports = [ ./steam-ui-patches.nix ./steamvr-debugger.nix ];
 
-  options.steamFrame.dashboard.steamCloseButton.enable = lib.mkOption {
-    type = lib.types.bool;
-    default = false;
-    description = ''
-      Close (X) button on the SteamVR dashboard's main Steam window. It
-      docks the window back into the dashboard if it was placed in the world,
-      then switches to the most recently active other dashboard window, or,
-      with none, leaves the dashboard open with just its bar ("bar only";
-      kept when the dashboard is closed and reopened, until a window is
-      activated, e.g. with the Steam tab). Runtime patch of the SteamVR
-      dashboard (steamFrame.uiPatches), applied immediately; turning it off
-      removes the button (next switch).
-    '';
-  };
+  options.steamFrame.dashboard.steamCloseButton.enable = lib.mkEnableOption ''
+    a Close (X) button on the SteamVR dashboard's main Steam window. It
+    docks the window back into the dashboard if it was placed in the world,
+    then switches to the most recently active other dashboard window, or,
+    with none, leaves the dashboard open with just its bar ("bar only";
+    kept when the dashboard is closed and reopened, until a window is
+    activated, e.g. with the Steam tab). Runtime patch of the SteamVR
+    dashboard (steamFrame.uiPatches), applied immediately; turning it off
+    removes the button (next switch)'';
 
   config = lib.mkIf cfg.enable {
     steamFrame.uiPatches.patches = [ {

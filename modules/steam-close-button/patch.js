@@ -46,8 +46,7 @@
 //
 // State that must outlive this instance (bar-only flag, last open time,
 // pending Steam request, frame history, suppression log) is kept in
-// window.__sfuiSteamCloseState (schema 1, shared with the earlier personal
-// version 4 of this patch, whose instance is handed over seamlessly).
+// window.__sfuiSteamCloseState (schema 1), which upgrades take over.
 // Teardown (unpatch.js, a newer VERSION) only removes overrides, reactions
 // and markers: it never switches frames and leaves the state, so a
 // re-injection (service restart, switch) continues bar-only. It is in-page

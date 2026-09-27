@@ -43,8 +43,7 @@ let
 in {
   options.steamFrame.firefox = {
     enable = lib.mkEnableOption ''
-      the Firefox Flatpak (org.mozilla.firefox) launcher with Steam Frame fixes
-    '';
+      the Firefox Flatpak (org.mozilla.firefox) launcher with Steam Frame fixes'';
     vrFullscreenFix = lib.mkOption {
       type = lib.types.bool;
       default = true;

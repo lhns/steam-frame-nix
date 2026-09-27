@@ -29,8 +29,7 @@ in {
     separate arrow keys, real Ctrl/Alt chords (held while toggled, e.g. for
     Ctrl+scroll), and working AltGr/non-ASCII characters. Injected into Steam's
     UI through its CEF DevTools port by an xdotool helper service; disabling
-    it reverts the patch on the next switch
-  '';
+    it reverts the patch on the next switch'';
 
   config = lib.mkMerge [
   (lib.mkIf config.steamFrame.steamKeyboardPatch.enable {
