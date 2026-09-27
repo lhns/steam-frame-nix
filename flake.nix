@@ -17,6 +17,8 @@
       keyboard-layout = ./modules/keyboard-layout.nix;
       steam-keyboard-patch = ./modules/steam-keyboard-patch.nix;
       hidden-apps = ./modules/hidden-apps.nix;
+      steam-ui-patches = ./modules/steam-ui-patches.nix;
+      launcher-menu = ./modules/launcher-menu.nix;
       # Built with the consumer's pkgs; only the source comes from our input.
       # The key lets the module system deduplicate it when it is imported both
       # directly and through `default`.

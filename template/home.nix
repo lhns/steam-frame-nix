@@ -17,6 +17,8 @@
   # steamFrame = {
   #   keyboardLayout = "de";             # XKB layout for the Steam session
   #   steamKeyboardPatch.enable = true;  # Esc/Ctrl/Alt/arrows on the VR keyboard
+  #   # VR "+" menu: sorted by name, Desktop pinned below the list:
+  #   launcherMenu = { sort = true; pinDesktop = "bottom"; };
   #   firefox.enable = true;             # launcher for the Firefox Flatpak
   #   # Hidden from the "+" menu (with Steam Developer Mode on):
   #   hiddenApps = [ "lxterminal" "cmake-gui" "firewall-config" "renderdoc" ];

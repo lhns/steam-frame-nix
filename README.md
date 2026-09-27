@@ -3,7 +3,8 @@
 [Home Manager](https://github.com/nix-community/home-manager) modules for the
 Valve Steam Frame: SteamOS on `aarch64-linux`, standalone home-manager on a
 non-NixOS system. They work around quirks of the Frame's two graphical
-sessions (portal config, keyboard layout, VR keyboard, clipboard, Firefox)
+sessions (portal config, keyboard layout, VR keyboard, "+" menu, clipboard,
+Firefox)
 declaratively, so every change can be reverted by activating an older
 home-manager generation.
 
@@ -126,6 +127,7 @@ the two files below).
   steamFrame = {
     keyboardLayout = "de";
     steamKeyboardPatch.enable = true;
+    launcherMenu = { sort = true; pinDesktop = "bottom"; };
     firefox.enable = true;
     # Only relevant with Steam Developer Mode on (see hidden-apps below).
     hiddenApps = [ "lxterminal" "cmake-gui" "firewall-config" "renderdoc" ];
@@ -149,7 +151,7 @@ home-manager switch --flake .#steamos
 ```
 
 Individual modules are available as
-`homeManagerModules.{session,portal,keyboard-layout,steam-keyboard-patch,hidden-apps,clipboard-sync,firefox}`;
+`homeManagerModules.{session,portal,keyboard-layout,steam-keyboard-patch,hidden-apps,steam-ui-patches,launcher-menu,clipboard-sync,firefox}`;
 `default` imports all of them.
 
 **Steam Developer Mode** (a Steam setting, not managed here) makes the "+"
@@ -169,6 +171,9 @@ menu list every desktop entry, including terminals such as Konsole.
 | `steamFrame.keyboardLayout` | null or str | `null` | XKB layout for the Steam session, e.g. `"de"`. `null` = no drop-in (US). |
 | `steamFrame.keyboardVariant` | null or str | `null` | XKB variant for the Steam session. |
 | `steamFrame.steamKeyboardPatch.enable` | bool | `false` | Runtime patch of Steam's on-screen keyboard: Esc/Ctrl/Alt, separate arrows, real Ctrl/Alt chords and hold, AltGr/non-ASCII characters. |
+| `steamFrame.uiPatches.patches` | list of submodules | `[ ]` | Runtime patches of Steam's web UIs over their local DevTools ports, see [UI patches](#ui-patches-uipatchespatches). |
+| `steamFrame.launcherMenu.sort` | bool | `false` | Sort the VR "+" menu alphabetically. |
+| `steamFrame.launcherMenu.pinDesktop` | null or `"top"` / `"bottom"` | `null` | Pin "Desktop" above or below the "+" menu's scrolling list (always visible). `null`: a normal list entry. |
 | `steamFrame.hiddenApps` | list of str | `[ ]` | Desktop entry ids (without `.desktop`) to hide from the "+" and KDE menus. |
 | `steamFrame.clipboardSync.enable` | bool | `true` | Clipboard bridge between the Steam session and the nested desktop. |
 | `steamFrame.clipboardSync.package` | package | built from `dnut/clipboard-sync` | The clipboard-sync package. |
@@ -281,6 +286,83 @@ manager). A Steam update can break it; the keys then just don't appear.
 Tested with Steam client 1790377368.
 
 **Remove when** Steam's VR keyboard gets these keys itself.
+
+### UI patches (`uiPatches.patches`)
+
+Steam's client UI (and SteamVR's dashboard, `vrwebhelper`) are web pages in
+CEF with a local DevTools port: `127.0.0.1:8080` for Steam (SteamOS starts
+it with `-cef-enable-debugging`), `127.0.0.1:8087` for SteamVR when its
+debugger is enabled (`VRWebHelper/DebuggerEnabled` in
+`steamvr.vrsettings`). The `steam-ui-patches` user service (`injector.mjs`,
+Node) uses them to patch the running UI; Steam's files are never modified.
+
+Each entry of `steamFrame.uiPatches.patches`:
+
+| Attribute | Default | Description |
+|---|---|---|
+| `name` | | Unique name (log). |
+| `endpoint` | `"http://127.0.0.1:8080"` | DevTools base URL; its `/json/list` is polled every 5 s. |
+| `target.title` / `target.titleRegex` / `target.urlRegex` | `null` | Pages to patch: all given criteria must match (regexes are JavaScript). |
+| `patch` | | JS file evaluated in every matching page (awaited). |
+| `unpatch` | `null` | JS file evaluated when the service stops, reverting the patch. |
+
+The injector keeps one DevTools session per matching page and evaluates its
+patches right away, after the page creates new JS contexts (reloads,
+debounced) and every 15 s, so patches must be idempotent: return e.g.
+`"patched"` once and `"unchanged"` (not logged) afterwards; other results
+are logged when they change (`journalctl --user -u steam-ui-patches`). On
+stop it evaluates the `unpatch` files, so the UI is stock again without a
+Steam restart. The service only exists while the list is non-empty; it is
+restarted on every switch (changed patches re-injected, removed ones
+reverted) and stopped once the list is empty.
+
+```nix
+steamFrame.uiPatches.patches = [ {
+  name = "my-patch";
+  target.title = "SharedJSContext";   # Steam's main JS context
+  patch = ./my-patch/patch.js;
+  unpatch = ./my-patch/unpatch.js;
+} ];
+```
+
+**DevTools on the LAN:** SteamOS images also forward these ports to all
+interfaces: `steam-web-debug-portforward.service` (`0.0.0.0:8081` →
+`8080`) and `steamvr-web-debug-portforward.service` (`0.0.0.0:8088` →
+`8087`), and firewalld's `public` zone allows ports 1024-65535. Anyone on
+the same network can then run code in Steam's UI. Masking both units is
+recommended; it is a system-level change, outside Home Manager (e.g. with
+[system-manager](https://github.com/numtide/system-manager): links
+`/etc/systemd/system/<unit>` → `/dev/null`). The injector itself only uses
+`127.0.0.1`.
+
+**Caveat:** patches depend on Steam UI internals and can break with a Steam
+update.
+
+### Launcher menu (`launcherMenu.*`)
+
+**Problem:** the VR dashboard's "+" menu (non-Steam programs) lists programs
+in the order `SteamClient.Apps.ScanForInstalledNonSteamApps()` returns them:
+GLib hash-table order, effectively random and changing with installed apps,
+with "Desktop" (the nested Plasma session) somewhere in the middle of a
+scrolling list.
+
+**Fix:** UI patches (see above) in Steam's `SharedJSContext`:
+
+- `sort = true`: a wrapper around `ScanForInstalledNonSteamApps` sorts the
+  programs by name (case-insensitive), Desktop included.
+- `pinDesktop = "top"` / `"bottom"`: Desktop is hidden in the scrolling list
+  and pinned above it (right below the menu heading) or below it, separated
+  by a thin line, so it is always visible without scrolling. The menu keeps
+  its size (the scrolling list gets shorter). Clicking the pinned copy clicks
+  the hidden original, so Steam's own launch handler runs. `null` (default)
+  leaves Desktop a normal list entry.
+
+  **Limitation:** the pinned copy is a plain DOM element, not part of Steam's
+  controller navigation: it works with the laser pointer, but thumbstick /
+  D-pad focus can't reach it.
+
+Both are reverted when the options are turned off (next switch).
+Tested with Steam client 1790377368.
 
 ### Hidden apps (`hiddenApps`)
 
