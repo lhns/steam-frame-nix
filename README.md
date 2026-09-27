@@ -10,6 +10,54 @@ home-manager generation.
 All options live under `steamFrame.*`. Everything except the portal fix is
 off by default.
 
+## Install
+
+On the Frame (or a Steam Deck), open a terminal (Konsole in the desktop
+mode / nested desktop) and run:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/lhns/steam-frame-nix/main/install.sh | bash -s -- install
+```
+
+`sudo` needs a password: if you never set one, run `passwd` first.
+
+What it does:
+
+1. Installs Nix with the [NixOS nix-installer](https://github.com/NixOS/nix-installer)
+   (`steam-deck` planner: the store lives in `/home/nix`, which survives
+   SteamOS updates; flakes enabled). The read-only root filesystem is
+   unlocked only for the installation. Skipped if Nix already works.
+2. Uses the Home Manager configuration in `~/.config/home-manager`, or
+   `--flake <dir-or-flakeref>`. If there is none, it creates one in
+   `~/nix-config` from this repo's template (a git repo, linked to
+   `~/.config/home-manager`) with your user name filled in.
+3. Activates it (`home-manager switch`); existing dotfiles that conflict are
+   renamed to `*.backup`.
+
+Re-running it just switches again. Afterwards, edit `~/nix-config/home.nix`
+and apply it with `home-manager switch` from a terminal in the nested
+desktop.
+
+```sh
+# status: Nix, Home Manager generation, steam-frame-nix services
+curl -fsSL https://raw.githubusercontent.com/lhns/steam-frame-nix/main/install.sh | bash -s -- status
+
+# uninstall Home Manager and Nix (--keep-nix keeps Nix)
+curl -fsSL https://raw.githubusercontent.com/lhns/steam-frame-nix/main/install.sh | bash -s -- uninstall
+```
+
+The uninstaller first stops the user services Home Manager installed (which
+also reverts the Steam keyboard patch), runs `home-manager uninstall`, then
+removes Nix and per-user Nix state. Your configuration directory, `*.backup`
+files, app data (e.g. `~/.local/share/docker`) and Flatpak apps are left
+alone.
+
+For a manual setup, start a configuration from the template:
+
+```sh
+nix flake init -t github:lhns/steam-frame-nix
+```
+
 ## Two sessions
 
 The Frame runs two graphical sessions at once, and most of the workarounds
@@ -39,7 +87,9 @@ Consequences:
 
 ## Usage
 
-Requirements: Nix with flakes enabled and standalone home-manager.
+Requirements: Nix with flakes enabled and standalone home-manager (see
+[Install](#install); `nix flake init -t github:lhns/steam-frame-nix` creates
+the two files below).
 
 ```nix
 # flake.nix

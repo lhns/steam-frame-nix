@@ -31,5 +31,11 @@
     homeManagerModules = modules // {
       default = { imports = builtins.attrValues modules; };
     };
+
+    # nix flake init -t github:lhns/steam-frame-nix
+    templates.default = {
+      path = ./template;
+      description = "Standalone Home Manager configuration for SteamOS using steam-frame-nix";
+    };
   };
 }
