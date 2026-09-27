@@ -3,8 +3,10 @@
 // pinned above or below the scrolling program list instead of scrolling with
 // it.
 //
-// This file is a function expression; launcher-menu.nix calls it with the
-// options: (<this file>)({ position: "top" }) or ({ position: "bottom" }).
+// This file is a function expression, called by the file lib/default.nix
+// (mkPatch) generates: (<this file>)(find, sigs, opts), with find the finder
+// library (lib/finders.js) and opts { position: "top" } or
+// { position: "bottom" } from launcher-menu.nix.
 //
 // DOM patch, evaluated in SharedJSContext (the bar popups share its realm):
 // a timer attaches a MutationObserver to every dashboard bar popup document
@@ -18,10 +20,14 @@
 // own handler runs (nav sound + SteamClient.Apps.LaunchNonSteamApp). The
 // list container is a flex column with a max-height, so the scroll region
 // shrinks to make room and the menu keeps its size.
+// Anchors: React props and keys (the list key, the section's `header` prop)
+// and the bar popups' window names ("valve.steam.gamepadui.barpopup...");
+// scripts/check-signatures.mjs checks that Steam's UI still has them
+// ("launcher-menu-pinned-desktop" in lib/signatures.json).
 // unpatch.js (or a new VERSION/position) calls __sfuiPinnedDesktop.stop(),
 // which removes the pinned blocks, CSS, markers, observers and the timer.
-((opts) => {
-  const VERSION = 1;
+((find, sigs, opts) => {
+  const VERSION = 2;
   const POS = opts.position === 'top' ? 'top' : 'bottom';
   const KEY = 'steamos-nested-desktop';
   const HIDDEN = 'data-sfui-desktop-hidden';
@@ -40,25 +46,19 @@
   if (!window.g_PopupManager) return 'g_PopupManager missing';
 
   const docs = new Map();                         // popup document -> MutationObserver
-  const fiberOf = (el) => { const k = Object.keys(el).find((k) => k.startsWith('__reactFiber$')); return k && el[k]; };
-
   // The stock Desktop item: role=button element whose fiber ancestors include
   // the list entry keyed by the program's exe path.
   const isDesktop = (el) => {
-    for (let f = fiberOf(el), i = 0; f && i < 12; f = f.return, i++)
-      if (f.key != null) return f.key === KEY || String(f.key).endsWith('/' + KEY);
-    return false;
+    const f = find.findFiberUp(el, (x) => x.key != null, 12);
+    return !!f && (f.key === KEY || String(f.key).endsWith('/' + KEY));
   };
   // The list container (host div of the section component, which has a `header` prop).
   const listOf = (el) => {
-    for (let f = fiberOf(el), i = 0; f && i < 60; f = f.return, i++) {
-      if (f.memoizedProps && 'header' in f.memoizedProps && typeof f.type === 'function') {
-        let c = f.child;
-        while (c && typeof c.type !== 'string') c = c.child;
-        return c?.stateNode ?? null;
-      }
-    }
-    return null;
+    const f = find.findFiberUp(el, (x) => x.memoizedProps && typeof x.memoizedProps === 'object' &&
+      'header' in x.memoizedProps && typeof x.type === 'function', 60);
+    let c = f?.child;
+    while (c && typeof c.type !== 'string') c = c.child;
+    return c?.stateNode ?? null;
   };
   // Child of the list container that holds the (scrolling) items.
   const scrollerOf = (orig, list) => {

@@ -14,15 +14,30 @@
 //    before (Steam then labels it "Search" and closes the keyboard instead)
 // Everything goes through the CDP binding window.__vrkbdKey("<op>:<arg>"),
 // executed by helper.mjs with xdotool on :0. Every replaced function keeps its
-// original as __vrkbdOrig (unpatch.js restores them).
+// original as __vrkbdOrig (unpatch.js restores them, through the references
+// this patch remembers in window.__vrkbdRefs).
+//
+// This file is a function expression, called by the file lib/default.nix
+// (mkPatch) generates: (<this file>)(find, sigs, opts), with find the finder
+// library (lib/finders.js) and sigs this patch's module signatures
+// (lib/signatures.json, "steam-keyboard-patch"). Steam's webpack modules are
+// located by those signatures, not by module id or minified export name; if
+// one doesn't match, the patch returns an error and changes nothing.
 // Idempotent: safe to evaluate repeatedly.
-(() => {
-  const VERSION = 9;
+((find, sigs) => {
+  const VERSION = 10;
   const send = (msg) => window.__vrkbdKey && window.__vrkbdKey(msg);
-  const wr = window.__vrkbdWr ||
-    (webpackChunksteamui.push([[Symbol('vrkbd')], {}, (r) => { window.__vrkbdWr = r; }]), window.__vrkbdWr);
-  const Layouts = wr(40222);                      // keyboard layouts (exports G$: enabled, r_: current)
-  const Status = wr(58508).qL;                    // .VRKeyboardStatus
+  let mods;
+  try {
+    mods = find.resolveAll(find.getWebpackRequire('webpackChunksteamui'), sigs);
+  } catch (e) {
+    return `signature not found, Steam left unpatched: ${e.message}`;
+  }
+  const Layouts = mods.layouts.exports;            // currentLayout(), enabledLayouts(), arrow keys
+  const Status = mods.vrStatus.exports.holder;     // .VRKeyboardStatus
+  const Manager = mods.keyboardManager.exports.VirtualKeyboardManager.prototype;
+  // For unpatch.js, which runs without the finder library.
+  window.__vrkbdRefs = { Manager, currentLayout: Layouts.currentLayout };
   let changed = false;
 
   // Replace obj[name] with make(original), once per VERSION.
@@ -48,7 +63,7 @@
   const same = (x) => [x, null, x];
   const MODS = [k('VKX_Escape', 'Esc'), k('Control', 'Ctrl'), k('Alt', 'Alt')];
   const ALTGR_ARROWS = [k('VKX_Home', 'Pos1'), k('VKX_Prior', 'Bild↑'), k('VKX_Next', 'Bild↓'), k('VKX_End', 'Ende')];
-  const ARROWS = [Layouts.Md, Layouts.GO, Layouts.xl, Layouts.B6]   // Steam's ArrowLeft/Up/Down/Right keys
+  const ARROWS = [Layouts.arrowLeft, Layouts.arrowUp, Layouts.arrowDown, Layouts.arrowRight]   // Steam's own keys
     .map((a, i) => [{ ...a, type: HALF }, null, ALTGR_ARROWS[i]]);
   const first = (x) => (Array.isArray(x) ? x.find((y) => y) : x);
   const isArrow = (x) => (Array.isArray(x) ? x : [x]).some((y) => y?.key?.startsWith?.('Arrow'));
@@ -64,7 +79,7 @@
     return out;
   };
   window.__vrkbdLayouts ??= new Set();             // for unpatch.js, incl. layouts disabled since
-  for (const l of [...(Layouts.G$() || []), Layouts.r_()]) {
+  for (const l of [...(Layouts.enabledLayouts() || []), Layouts.currentLayout()]) {
     if (typeof l?.rgLayout !== 'function') continue;
     window.__vrkbdLayouts.add(l);
     wrap(l, 'rgLayout', (orig) => (opts) => {
@@ -100,9 +115,9 @@
   // onEnterKeyPress returning "VKClose", so when the keyboard is then opened
   // for an app window, Enter shows "Suchen", runs the Steam search and hides
   // the keyboard instead of typing Return. While the keyboard serves
-  // something other than this Steam UI (Steam's own test, L() in module
-  // 5363), ignore those props and the dismiss-on-Enter flag.
-  const Manager = wr(5363).PE.prototype;
+  // something other than this Steam UI (the same test Steam uses for its
+  // text dispatch, in the VirtualKeyboardManager's module), ignore those
+  // props and the dismiss-on-Enter flag.
   const forOther = (m) => {
     const s = Status.VRKeyboardStatus, ui = m.m_Instance;
     return !!s?.bIsOpen && !(s.sOverlayKey && s.sOverlayKey === ui?.GetVROverlayKey?.()) &&
@@ -126,10 +141,9 @@
     .find((p) => p.window?.document.querySelector('[data-key]'));
   if (!kbPopup) return 'no keyboard popup yet';
   const doc = kbPopup.window.document;
-  const el = doc.querySelector('[data-key]');
-  let fiber = el[Object.keys(el).find((x) => x.startsWith('__reactFiber'))];
-  while (fiber && !fiber.stateNode?.TypeKeyInternal) fiber = fiber.return;
-  const inst = fiber?.stateNode;
+  // The keyboard component: nearest fiber above a key whose instance has TypeKeyInternal.
+  const inst = find.findFiberUp(doc.querySelector('[data-key]'),
+    (f) => typeof f.stateNode?.TypeKeyInternal === 'function', 200)?.stateNode;
   if (!inst) return 'no keyboard component';
   let proto = Object.getPrototypeOf(inst);
   while (!Object.prototype.hasOwnProperty.call(proto, 'TypeKeyInternal')) proto = Object.getPrototypeOf(proto);
@@ -206,8 +220,8 @@
   // Re-render with the new row (only when something changed or it's a new instance).
   if (changed || inst.__vrkbd !== VERSION) {
     inst.__vrkbd = VERSION;
-    inst.setState({ standardLayout: Layouts.r_() });
+    inst.setState({ standardLayout: Layouts.currentLayout() });
     inst.forceUpdate();
   }
   return 'patched';
-})()
+})

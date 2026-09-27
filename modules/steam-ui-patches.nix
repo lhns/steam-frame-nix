@@ -12,6 +12,12 @@
 # non-empty. It is restarted on every switch (changed patches are re-injected,
 # removed ones reverted by the old instance) and stopped once the list is
 # empty. The keyboard patch (steam-keyboard-patch.nix) has its own helper.
+#
+# Patches that need Steam's webpack modules should find them by signature
+# rather than by module id or minified export name, which change with Steam
+# updates: `steamFrame.uiPatches.lib.mkPatch` wraps a patch written as
+# `(find, sigs, opts) => …` with the finder library (lib/finders.js) and its
+# signatures; scripts/check-signatures.mjs checks signatures offline.
 { config, pkgs, lib, ... }:
 let
   cfg = config.steamFrame.uiPatches;
@@ -58,7 +64,8 @@ let
           Runtime.evaluate, awaited). Must be idempotent: it is re-evaluated
           after page reloads and every 15 s. Its result value is logged when it
           changes; return e.g. "patched", and "unchanged" (never logged) when
-          already applied.
+          already applied. To use the finder library, build it with
+          `config.steamFrame.uiPatches.lib.mkPatch`.
         '';
       };
       unpatch = mkOption {
@@ -87,6 +94,24 @@ let
   });
 in {
   imports = [ ./session.nix ];
+
+  options.steamFrame.uiPatches.lib = mkOption {
+    type = types.attrsOf types.raw;
+    readOnly = true;
+    default = import ./lib { inherit pkgs; };
+    defaultText = lib.literalMD "the helpers of `modules/lib`";
+    description = ''
+      Helpers for writing patches (see modules/lib/default.nix):
+      `mkPatch { name, src, signatures ? …, opts ? { } }` returns a patch
+      file that calls `src`, a JavaScript function expression
+      `(find, sigs, opts) => …`, with the finder library `find`
+      (modules/lib/finders.js: getWebpackRequire, resolveAll, findModule,
+      findExport, findFiberUp, findInReactTree, …), the module signatures
+      `sigs` (format: modules/lib/signatures.json; default: its entry
+      `name`, if any) and `opts`. `finders` is
+      the library's path, `signatures` the parsed signatures.json.
+    '';
+  };
 
   options.steamFrame.uiPatches.patches = mkOption {
     type = types.listOf patchType;

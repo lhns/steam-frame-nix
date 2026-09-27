@@ -13,10 +13,13 @@
 #   the menu stays open until the program's window appears, inviting double
 #   launches). Options are passed by calling the patch's function.
 # All are reverted when turned off (next switch).
-# Depends on Steam UI internals; tested with Steam client 1790377368.
+# Depends on Steam UI internals (React props, popup names), not on webpack
+# module ids; scripts/check-signatures.mjs checks them after a Steam update
+# (lib/signatures.json). Tested with Steam client 1790377368.
 { config, lib, pkgs, ... }:
 let
   cfg = config.steamFrame.launcherMenu;
+  inherit (import ./lib { inherit pkgs; }) mkPatch;
   sharedJSContext = { title = "SharedJSContext"; };
 in {
   imports = [ ./steam-ui-patches.nix ];
@@ -78,20 +81,24 @@ in {
     ++ lib.optional (cfg.pinDesktop != null) {
       name = "launcher-menu-pinned-desktop";
       target = sharedJSContext;
-      patch = pkgs.writeText "launcher-menu-pinned-desktop.js" ''
-        (${builtins.readFile ./launcher-menu/pinned-desktop/patch.js})(${builtins.toJSON { position = cfg.pinDesktop; }})
-      '';
+      patch = mkPatch {
+        name = "launcher-menu-pinned-desktop";
+        src = ./launcher-menu/pinned-desktop/patch.js;
+        opts.position = cfg.pinDesktop;
+      };
       unpatch = ./launcher-menu/pinned-desktop/unpatch.js;
     }
     ++ lib.optional (cfg.closeOnLaunch || cfg.launchDebounce > 0) {
       name = "launcher-menu-launch";
       target = sharedJSContext;
-      patch = pkgs.writeText "launcher-menu-launch.js" ''
-        (${builtins.readFile ./launcher-menu/launch/patch.js})(${builtins.toJSON {
+      patch = mkPatch {
+        name = "launcher-menu-launch";
+        src = ./launcher-menu/launch/patch.js;
+        opts = {
           inherit (cfg) closeOnLaunch;
           debounceSeconds = cfg.launchDebounce;
-        }})
-      '';
+        };
+      };
       unpatch = ./launcher-menu/launch/unpatch.js;
     };
 }

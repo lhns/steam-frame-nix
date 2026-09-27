@@ -1,4 +1,5 @@
-// helper.mjs: injects patch.js into Steam's UI via CEF DevTools and
+// helper.mjs: injects the patch (patch.js wrapped with the finder library by
+// lib/default.nix mkPatch) into Steam's UI via CEF DevTools and
 // performs the key requests of the patched VR keyboard with xdotool on :0.
 // On SIGTERM/SIGINT it reverts the patch (unpatch.js), so stopping the service
 // restores Steam's stock keyboard without restarting Steam.
@@ -72,10 +73,12 @@ async function session() {
   const call = (method, params = {}) => new Promise((res) => {
     const i = ++id; pending.set(i, res); ws.send(JSON.stringify({ id: i, method, params }));
   });
+  let last;                                       // logged when it changes (e.g. a signature error once, not every 15 s)
   const inject = async () => {
     const r = await call('Runtime.evaluate', { expression: PATCH, returnByValue: true });
     const v = r.result?.result?.value ?? r.result?.exceptionDetails?.exception?.description;
-    if (v !== 'patched' || process.env.VRKBD_VERBOSE) console.log('inject:', v);
+    if (v !== last || process.env.VRKBD_VERBOSE) console.log('inject:', v);
+    last = v;
   };
   // New JS contexts (UI reload, popups) come in bursts: inject once after them.
   let soon = null;

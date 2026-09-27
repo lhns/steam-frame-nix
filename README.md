@@ -177,6 +177,7 @@ menu list every desktop entry, including terminals such as Konsole.
 | `steamFrame.keyboardVariant` | null or str | `null` | XKB variant for the Steam session. |
 | `steamFrame.steamKeyboardPatch.enable` | bool | `false` | Runtime patch of Steam's on-screen keyboard: Esc/Ctrl/Alt, separate arrows, real Ctrl/Alt chords and hold, AltGr/non-ASCII characters. |
 | `steamFrame.uiPatches.patches` | list of submodules | `[ ]` | Runtime patches of Steam's web UIs over their local DevTools ports, see [UI patches](#ui-patches-uipatchespatches). |
+| `steamFrame.uiPatches.lib` | attrs, read-only | | Helpers for patches: `mkPatch` (wraps a patch with the finder library and its signatures), see [Finders and signatures](#finders-and-signatures). |
 | `steamFrame.launcherMenu.sort` | bool | `false` | Sort the VR "+" menu alphabetically. |
 | `steamFrame.launcherMenu.pinDesktop` | null or `"top"` / `"bottom"` | `null` | Pin "Desktop" above or below the "+" menu's scrolling list (always visible). `null`: a normal list entry. |
 | `steamFrame.launcherMenu.closeOnLaunch` | bool | `false` | Close the "+" menu as soon as a program in it is clicked. |
@@ -287,10 +288,15 @@ allowlist: Ctrl/Alt chords with a single key, the extra keys (Esc, Del, Home,
 End, Page Up/Down, arrows), hold/release of Ctrl/Alt, and single non-ASCII or AltGr
 characters. It cannot type plain ASCII text or press Enter on its own.
 
-**Caveat:** the patch depends on Steam UI internals, including internal
-webpack module ids (e.g. `40222` for layouts, `5363` for the keyboard
-manager). A Steam update can break it; the keys then just don't appear.
-Tested with Steam client 1790377368.
+**Caveat:** the patch depends on Steam UI internals: the keyboard layouts
+module, the VR keyboard status and the keyboard manager. They are found by
+signature (content and shape, see [Finders and signatures](#finders-and-signatures)),
+not by webpack module id or minified export name, so ordinary Steam updates
+don't break it. If a signature stops matching, the patch leaves Steam
+untouched (stock keyboard) and logs which one
+(`journalctl --user -u steam-keyboard-patch`); see
+[After a Steam update](#after-a-steam-update). Tested with Steam client
+1790377368 (UI build 11041156).
 
 **Remove when** Steam's VR keyboard gets these keys itself.
 
@@ -343,7 +349,106 @@ recommended; it is a system-level change, outside Home Manager (e.g. with
 `127.0.0.1`.
 
 **Caveat:** patches depend on Steam UI internals and can break with a Steam
-update.
+update. Find modules by signature rather than by id (below).
+
+### Finders and signatures
+
+Steam's UI is a webpack bundle: module ids (`40222`) and export names (`G$`,
+`r_`) are generated anew by every Steam UI build. The patches therefore
+never use them. `modules/lib/finders.js` (in the spirit of Decky Loader's
+`findModule`/`findModuleChild`/`findInReactTree` and Vencord's `find`)
+locates what they need by *signature*:
+
+- a **module** by strings (or regexes) in its factory's source, e.g. the
+  keyboard layouts module contains `name:"qwerty"`, `rgLayout:` and
+  `GetKeyboardLayoutSettings`;
+- an **export** of that module by its shape: type, source of a function
+  (`GetKeyboardLayoutSettings` + `currentLayout`, without `selectedLayouts`),
+  arity, data properties (`{ key: "ArrowLeft" }`), prototype methods
+  (`HandleVirtualKeyDown`, `SendClientPasteCommand`) or getters
+  (`VRKeyboardStatus`);
+- **React** fibers by props (`findFiberUp`, `findFiberDown`,
+  `findInReactTree`).
+
+Every signature must match exactly once, otherwise the patch changes nothing
+and reports the failing signature (e.g. `signature not found, Steam left
+unpatched: layouts.currentLayout (module 40222): ambiguous export, candidates
+r_, xy`). Results are cached per page, so re-injection every 15 s is cheap.
+
+The signatures are data, in `modules/lib/signatures.json`, shared by the
+patches and the offline checker. Besides `module`/`exports`, an entry can
+list `expects` (strings the patch relies on, e.g. internal property names,
+only checked offline) or be `checkOnly` (anchors a patch uses without the
+finder, e.g. the React prop names of the "+" menu, checked offline only).
+
+For your own patches, `steamFrame.uiPatches.lib.mkPatch` wraps a patch
+written as a function expression with the library, its signatures and
+options:
+
+```nix
+steamFrame.uiPatches.patches = [ {
+  name = "my-patch";
+  target.title = "SharedJSContext";
+  patch = config.steamFrame.uiPatches.lib.mkPatch {
+    name = "my-patch";
+    src = ./my-patch/patch.js;          # ((find, sigs, opts) => { … })
+    signatures.thing = {
+      module.includes = [ "SomeUniqueString" ];
+      exports.Thing = { type = "class"; protoMethods = [ "DoIt" ]; };
+    };
+    opts.factor = 2;
+  };
+  unpatch = ./my-patch/unpatch.js;
+} ];
+```
+
+```js
+((find, sigs, opts) => {
+  let mods;
+  try { mods = find.resolveAll(find.getWebpackRequire('webpackChunksteamui'), sigs); }
+  catch (e) { return `not patched: ${e.message}`; }
+  const Thing = mods.thing.exports.Thing;   // SteamVR dashboard: 'webpackChunkvrwebui'
+  …
+})
+```
+
+### After a Steam update
+
+The patches keep working as long as their signatures match. To check
+without touching the running UI (no browser, Steam need not run), run the
+offline checker from a checkout of this repository:
+
+```sh
+nix shell nixpkgs#nodejs -c node scripts/check-signatures.mjs
+```
+
+It reads the bundles Steam's UI page loads (`~/.local/share/Steam/steamui`:
+the scripts of `index.html` and every chunk its webpack runtime can load),
+extracts all webpack module factories and evaluates every signature of
+`modules/lib/signatures.json` against them with the same finder code the
+patches use (exports are checked by running the matched module in an inert
+sandbox). Per patch it prints `found` (with the current module id and export
+name), `ambiguous` (all candidates) or `missing`, and warnings for missing
+`expects`; exit status 1 if anything is missing or ambiguous:
+
+```
+bundle steamui: 2827 modules in /home/deck/.local/share/Steam/steamui (build 11041156)
+
+steam-keyboard-patch (steamui)
+  layouts                found      module 40222 (chunk~2dcc5aaf7.js)
+    .currentLayout        found      export r_
+    …
+OK: all signatures match exactly once
+```
+
+If something is missing, look at the module that used to match (the new
+bundle's module sources: `scripts/webpack-modules.mjs`) and adjust the
+signature in `signatures.json` (bump the patch's `VERSION` if its code
+changes). Options: `--signatures FILE` adds your own signatures (same
+format; the bundle `vrwebui-systemui` is SteamVR's dashboard),
+`--dir steamui=DIR` checks another copy, `--patch NAME`, `--strict` (fail on
+warnings), `--json`. Live, `journalctl --user -u steam-keyboard-patch -u
+steam-ui-patches` shows what each patch reported.
 
 ### Launcher menu (`launcherMenu.*`)
 
@@ -382,7 +487,9 @@ the program twice.
   re-injection, i.e. within 15 s). Consequence: a program that exits right
   away can only be started again once the time is up.
 
-All are reverted when the options are turned off (next switch).
+All are reverted when the options are turned off (next switch). These
+patches use Steam APIs (`SteamClient.Apps`) and React props rather than
+webpack modules; the offline checker verifies those anchors too.
 Tested with Steam client 1790377368.
 
 ### Hidden apps (`hiddenApps`)

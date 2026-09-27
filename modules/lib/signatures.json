@@ -1,0 +1,104 @@
+{
+  "bundles": {
+    "steamui": {
+      "description": "Steam client UI (SharedJSContext and its popups, e.g. the VR keyboard and dashboard bar)",
+      "chunkGlobal": "webpackChunksteamui",
+      "dir": "~/.local/share/Steam/steamui",
+      "html": "index.html",
+      "exclude": "^localization/"
+    },
+    "vrwebui-systemui": {
+      "description": "SteamVR dashboard (vrwebhelper page systemui)",
+      "chunkGlobal": "webpackChunkvrwebui",
+      "dir": "/opt/steamvr/resources/webinterface/dashboard",
+      "html": "systemui.html"
+    }
+  },
+  "patches": {
+    "steam-keyboard-patch": {
+      "bundle": "steamui",
+      "modules": {
+        "layouts": {
+          "module": { "includes": ["name:\"qwerty\"", "rgLayout:", "GetKeyboardLayoutSettings"] },
+          "exports": {
+            "currentLayout": {
+              "type": "function", "length": 0,
+              "includes": ["GetKeyboardLayoutSettings", "currentLayout"],
+              "excludes": ["selectedLayouts", "SetKeyboardLayout"]
+            },
+            "enabledLayouts": {
+              "type": "function", "length": 0,
+              "includes": ["GetKeyboardLayoutSettings", "selectedLayouts"],
+              "excludes": ["useState", "SetKeyboardLayout", "SetValidKeyboardLayouts"]
+            },
+            "arrowLeft": { "type": "object", "props": { "key": "ArrowLeft" } },
+            "arrowUp": { "type": "object", "props": { "key": "ArrowUp" } },
+            "arrowDown": { "type": "object", "props": { "key": "ArrowDown" } },
+            "arrowRight": { "type": "object", "props": { "key": "ArrowRight" } }
+          },
+          "expects": ["Half", "rgLayout:", "leftActionButton"]
+        },
+        "vrStatus": {
+          "module": { "includes": ["get VRKeyboardStatus()"] },
+          "exports": {
+            "holder": { "type": "object", "getters": ["VRKeyboardStatus"] }
+          },
+          "expects": ["bIsOpen:", "sOverlayKey", "unAppID"]
+        },
+        "keyboardManager": {
+          "module": { "includes": ["SendClientPasteCommand(){", "HandleVirtualKeyDown(", "GetEnterKeyLabel("] },
+          "exports": {
+            "VirtualKeyboardManager": {
+              "type": "class",
+              "protoMethods": ["HandleVirtualKeyDown", "GetEnterKeyLabel", "SendClientPasteCommand"]
+            }
+          },
+          "expects": ["m_ActiveElementProps", "m_bDismissOnEnter", "m_Instance", "GetVROverlayKey()",
+            "MainRunningAppID", "ControllerKeyboardSendText"]
+        },
+        "keyboardComponent": {
+          "checkOnly": true,
+          "module": { "includes": ["TypeKeyInternal(", "toggleStates", "standardLayout"] },
+          "expects": ["\"data-key\"", "\"data-key-row\"", "HandleVirtualKeyDown"]
+        },
+        "popupManager": {
+          "checkOnly": true,
+          "module": { "includes": ["g_PopupManager", "GetPopups()"] }
+        }
+      }
+    },
+    "launcher-menu-order": {
+      "bundle": "steamui",
+      "modules": {
+        "programList": {
+          "checkOnly": true,
+          "module": { "includes": ["ScanForInstalledNonSteamApps("] }
+        }
+      }
+    },
+    "launcher-menu-launch": {
+      "bundle": "steamui",
+      "modules": {
+        "dashboardBar": {
+          "checkOnly": true,
+          "module": { "includes": ["allowLaunchProgram", "refBarPopopHandle", "#VRDashboard_LaunchNonSteamApp"] },
+          "expects": ["LaunchNonSteamApp(", "\"VRDashboardBarSmallButton\"", "BPopupOpen()", "closePopup()"]
+        }
+      }
+    },
+    "launcher-menu-pinned-desktop": {
+      "bundle": "steamui",
+      "modules": {
+        "dashboardBar": {
+          "checkOnly": true,
+          "module": { "includes": ["allowLaunchProgram", "refBarPopopHandle", "#VRDashboard_LaunchNonSteamApp"] },
+          "expects": ["header:", "strExePath", "rctContents"]
+        },
+        "popupNames": {
+          "checkOnly": true,
+          "module": { "includes": ["\"valve.steam.gamepadui.barpopup\""] }
+        }
+      }
+    }
+  }
+}

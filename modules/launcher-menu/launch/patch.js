@@ -1,8 +1,10 @@
 // launch: what happens when a program of the VR dashboard's "+" menu
 // (#VRDashboard_LaunchNonSteamApp) is activated.
 //
-// This file is a function expression; launcher-menu.nix calls it with the
-// options: (<this file>)({ closeOnLaunch: true, debounceSeconds: 10 }).
+// This file is a function expression, called by the file lib/default.nix
+// (mkPatch) generates: (<this file>)(find, sigs, opts), with find the finder
+// library (lib/finders.js) and opts the options from launcher-menu.nix, e.g.
+// { closeOnLaunch: true, debounceSeconds: 10 }.
 //
 // Stock, an item's onActivate only calls
 // SteamClient.Apps.LaunchNonSteamApp(strCmdline) (plus the nav sound); the
@@ -15,15 +17,18 @@
 //   in the steam-ui-patches journal on the next re-injection);
 // - closeOnLaunch: after a launch (ignored or not), the "+" popup is closed
 //   through the bar button's own popup handle (closePopup(), what stock does
-//   after adding a desktop window). The handle is found in the dashboard bar
-//   document: the button's React fiber ancestors include the "+" component
-//   (prop allowLaunchProgram) and the bar button (prop refBarPopopHandle).
+//   after adding a desktop window). The handle is found through React props,
+//   not minified names: in any popup document (the dashboard bar's), a
+//   .VRDashboardBarSmallButton element whose fiber ancestors include the bar
+//   button (prop refBarPopopHandle) and, above it, the "+" component (prop
+//   allowLaunchProgram). scripts/check-signatures.mjs checks these names
+//   ("launcher-menu-launch" in lib/signatures.json).
 // Works for every activation path (pointer, controller, the pinned Desktop
 // copy, which clicks the stock item). The original is kept as __sfuiOrig
 // (unpatch.js restores it). Idempotent; bump VERSION when changing the
 // wrapper.
-((opts) => {
-  const VERSION = 1;
+((find, sigs, opts) => {
+  const VERSION = 2;
   const NAME = 'launcher-menu-launch';
   const CLOSE = opts.closeOnLaunch === true;
   const DEBOUNCE_MS = Math.max(0, Number(opts.debounceSeconds) || 0) * 1000;
@@ -39,22 +44,18 @@
   }
   const orig = cur.__sfuiPatch === NAME ? cur.__sfuiOrig : cur;
 
-  const fiberOf = (el) => { const k = Object.keys(el).find((k) => k.startsWith('__reactFiber$')); return k && el[k]; };
   // Popup handles of the "+" bar button(s) (normally one).
+  const hasProp = (f, k) => f.memoizedProps && typeof f.memoizedProps === 'object' && k in f.memoizedProps;
   const plusHandles = () => {
     const hs = [];
     for (const p of window.g_PopupManager?.GetPopups() ?? []) {
-      if (!/gamepadui\.bar\./.test(p.m_strName ?? '')) continue;
       let d;
       try { d = p.window?.document; } catch { continue; }
       for (const el of d?.querySelectorAll('.VRDashboardBarSmallButton') ?? []) {
-        let h = null;
-        for (let f = fiberOf(el), i = 0; f && i < 20; f = f.return, i++) {
-          const mp = f.memoizedProps;
-          if (!mp || typeof mp !== 'object') continue;
-          if ('refBarPopopHandle' in mp) h = mp.refBarPopopHandle?.current ?? null;
-          if ('allowLaunchProgram' in mp) { if (h && !hs.includes(h)) hs.push(h); break; }
-        }
+        const button = find.findFiberUp(el, (f) => hasProp(f, 'refBarPopopHandle'), 20);
+        if (!button || !find.findFiberUp(button, (f) => hasProp(f, 'allowLaunchProgram'), 20)) continue;
+        const h = button.memoizedProps.refBarPopopHandle?.current ?? null;
+        if (h && !hs.includes(h)) hs.push(h);
       }
     }
     return hs;

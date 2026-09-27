@@ -11,8 +11,17 @@
 #   performs those requests with xdotool on :0 (X focus follows the window
 #   selected in VR) and reverts the patch when stopped (unpatch.js). Its
 #   allowlist can't type ASCII text or press Enter.
-# Depends on Steam UI internals; tested with Steam client 1790377368.
-{ config, pkgs, lib, ... }: {
+# Depends on Steam UI internals, found by signature (lib/finders.js, entry
+# "steam-keyboard-patch" in lib/signatures.json) rather than webpack module
+# ids; after a Steam update, scripts/check-signatures.mjs tells whether they
+# still match. Tested with Steam client 1790377368 (UI build 11041156).
+{ config, pkgs, lib, ... }:
+let
+  patch = (import ./lib { inherit pkgs; }).mkPatch {
+    name = "steam-keyboard-patch";
+    src = ./steam-keyboard-patch/patch.js;
+  };
+in {
   imports = [ ./session.nix ];
 
   options.steamFrame.steamKeyboardPatch.enable = lib.mkEnableOption ''
@@ -31,7 +40,7 @@
         ExecStart = lib.escapeShellArgs [
           "${pkgs.nodejs}/bin/node"
           "${./steam-keyboard-patch/helper.mjs}"
-          "${./steam-keyboard-patch/patch.js}"
+          "${patch}"
           "${./steam-keyboard-patch/unpatch.js}"
           "${pkgs.xdotool}/bin/xdotool"
         ];
