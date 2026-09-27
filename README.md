@@ -136,6 +136,7 @@ the two files below).
       pinDesktop = "bottom";
       closeOnLaunch = true;
       launchDebounce = 10;
+      grid = { enable = true; columns = 4; maxRows = 4; };
     };
     dashboard = {
       windowMaxScale = 4.0;
@@ -190,6 +191,10 @@ menu list every desktop entry, including terminals such as Konsole.
 | `steamFrame.launcherMenu.pinDesktop` | null or `"top"` / `"bottom"` | `null` | Pin "Desktop" above or below the "+" menu's scrolling list (always visible). `null`: a normal list entry. |
 | `steamFrame.launcherMenu.closeOnLaunch` | bool | `false` | Close the "+" menu as soon as a program in it is clicked. |
 | `steamFrame.launcherMenu.launchDebounce` | unsigned int (seconds) | `0` | Ignore repeated launches of the same program from the "+" menu within this time. `0`: off. |
+| `steamFrame.launcherMenu.grid.enable` | bool | `false` | Show the "+" menu's programs as a grid of tiles (large icon, name below) instead of a list. |
+| `steamFrame.launcherMenu.grid.columns` | int, 1-8 | `4` | Tiles per row (popup is 300 px wide: 3 ≈ 92 px, 4 ≈ 68 px, 5 ≈ 53 px tiles). |
+| `steamFrame.launcherMenu.grid.maxRows` | null or positive int | `null` | Rows visible at once, the rest scrolls. `null`: fill up to the menu's max height (600 px). |
+| `steamFrame.launcherMenu.iconFallbacks` | list of str | `[ "utilities-terminal" "preferences-system" ]` | Icon names installed as hicolor copies of Breeze app icons, so the "+" menu shows them (Konsole, KDE System Settings). `[ ]`: none. Takes effect after a Steam restart. |
 | `steamFrame.dashboard.windowMaxScale` | null or number | `null` | Largest resize-handle scale of SteamVR dashboard windows, relative to their default size. `null`: stock (2). See [Dashboard windows](#dashboard-windows-dashboard). |
 | `steamFrame.dashboard.windowDistance.{world,theater,dashboard}.{min,max}` | null or number (m) | `null` | How close / far grabbed windows can be pulled in / pushed back. `null`: stock (world 0.25-5, theater 1-6, dashboard 0.3-4 m). |
 | `steamFrame.steamvrDebugger.enable` | bool | `true` if a UI patch uses port 8087, else `false` | SteamVR dashboard DevTools on `127.0.0.1:8087` (`VRWebHelper/DebuggerEnabled`), needed by dashboard patches. See [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable). |
@@ -390,7 +395,10 @@ The signatures are data, in `modules/lib/signatures.json`, shared by the
 patches and the offline checker. Besides `module`/`exports`, an entry can
 list `expects` (strings the patch relies on, e.g. internal property names,
 only checked offline) or be `checkOnly` (anchors a patch uses without the
-finder, e.g. the React prop names of the "+" menu, checked offline only).
+finder, e.g. the React prop names of the "+" menu, checked offline only). A
+`checkOnly` entry with `stylesheet` instead of `module` is matched against
+the bundle's CSS files (`styles` directory of the bundle), e.g. the scroll
+fade's gradient the grid relies on.
 
 For your own patches, `steamFrame.uiPatches.lib.mkPatch` wraps a patch
 written as a function expression with the library, its signatures and
@@ -499,11 +507,61 @@ the program twice.
   ignored and logged (`journalctl --user -u steam-ui-patches`, on the next
   re-injection, i.e. within 15 s). Consequence: a program that exits right
   away can only be started again once the time is up.
+- `grid.enable = true`: the programs section ("Launch Program") becomes a
+  grid of tiles: large icon, name centred below (up to two lines). The
+  "Add desktop window" section stays a list. This only restyles Steam's own
+  items (found through React: the section keyed `programs`), so launching,
+  sounds and the other options above work unchanged; Desktop is a normal
+  tile, or with `pinDesktop` a slim, centred full-width row.
+
+  The popup window is a fixed 300 px wide, so `columns` sets the tile size:
+
+  | `columns` | tile width |
+  |---|---|
+  | 3 | ≈ 92 px |
+  | 4 (default) | ≈ 68 px |
+  | 5 | ≈ 53 px |
+
+  Icons scale with the tile (up to 64 px). `maxRows = n` limits the menu to
+  n rows of tiles (measured, since names take one or two lines); the rest
+  scrolls inside the menu. `null` (default) lets the grid grow up to the
+  menu's stock maximum height (600 px). Steam's scroll fade (the gradient at
+  the top/bottom edge) is shown only where there is more to scroll: Steam
+  computes it only when React re-renders or the list scrolls, so the patch
+  recomputes it after the grid changes the layout.
+
+  Controller navigation keeps working: Steam derives thumbstick / D-pad
+  directions from the panel's CSS grid, so up/down/left/right move between
+  tiles.
 
 All are reverted when the options are turned off (next switch). These
-patches use Steam APIs (`SteamClient.Apps`) and React props rather than
-webpack modules; the offline checker verifies those anchors too.
+patches use Steam APIs (`SteamClient.Apps`), React props and CSS rather
+than webpack modules; the offline checker verifies those anchors too
+(including the scroll fade's class names and stylesheet, checked as a
+`stylesheet` signature against Steam's CSS files).
 Tested with Steam client 1790377368.
+
+#### Icon fallbacks (`launcherMenu.iconFallbacks`)
+
+**Problem:** Steam's scan of host programs resolves a desktop entry's
+`Icon=` name only in the hicolor icon theme (and `pixmaps`), not in the
+desktop's icon theme. Konsole (`Icon=utilities-terminal`) and KDE System
+Settings (`Icon=preferences-system`), which SteamOS ships, have their icons
+only in Breeze, so they show up without an icon in the "+" menu.
+
+**Fix:** for each name in `iconFallbacks` (default: those two), the largest
+Breeze app icon from nixpkgs' `kdePackages.breeze-icons` is installed as
+`~/.nix-profile/share/icons/hicolor/scalable/apps/<name>.svg`
+(`~/.nix-profile/share` is on Steam's `XDG_DATA_DIRS`); desktop entries are
+left alone. Add names for other programs that lack an icon (the `Icon=`
+value of their desktop entry), e.g.
+`iconFallbacks = [ "utilities-terminal" "preferences-system" "system-file-manager" ];`;
+`[ ]` installs nothing. A name Breeze has no app icon for fails the build
+with an error naming it.
+
+**Caveat:** Steam caches the icon lookup (GTK icon cache) for its lifetime,
+and files in the Nix store all have the same 1970 mtime, so new icons show
+up only after Steam is restarted (e.g. a reboot), not on the next switch.
 
 ### Dashboard windows (`dashboard.*`)
 

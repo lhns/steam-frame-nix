@@ -5,7 +5,8 @@
       "chunkGlobal": "webpackChunksteamui",
       "dir": "~/.local/share/Steam/steamui",
       "html": "index.html",
-      "exclude": "^localization/"
+      "exclude": "^localization/",
+      "styles": "css"
     },
     "vrwebui-systemui": {
       "description": "SteamVR dashboard (vrwebhelper page systemui)",
@@ -97,6 +98,36 @@
         "popupNames": {
           "checkOnly": true,
           "module": { "includes": ["\"valve.steam.gamepadui.barpopup\""] }
+        }
+      }
+    },
+    "launcher-menu-grid": {
+      "bundle": "steamui",
+      "modules": {
+        "dashboardBar": {
+          "checkOnly": true,
+          "module": { "includes": ["allowLaunchProgram", "refBarPopopHandle", "#VRDashboard_LaunchNonSteamApp"] },
+          "expects": ["key:\"programs\"", "key:\"windows\"", "header:"]
+        },
+        "popupNames": {
+          "checkOnly": true,
+          "module": { "includes": ["\"valve.steam.gamepadui.barpopup\""] }
+        },
+        "scrollFade": {
+          "checkOnly": true,
+          "module": { "includes": ["ScrollFade", "ScrolledToTop", "ScrolledToBottom", "strClassNamesForScrollable"] },
+          "expects": ["scrollTop<=1", "clientHeight+1"]
+        },
+        "scrollFadeClasses": {
+          "checkOnly": true,
+          "module": { "includes": ["ScrollFade:\"", "ScrolledToTop:\"", "ScrolledToBottom:\""] }
+        },
+        "scrollFadeStyle": {
+          "checkOnly": true,
+          "stylesheet": { "includes": [
+            "mask-image:linear-gradient(to bottom, transparent 0%, black var(--scroll-fade-size), black calc(100% - var(--scroll-fade-size)), transparent 100%)",
+            "--scroll-fade-size:"
+          ] }
         }
       }
     },

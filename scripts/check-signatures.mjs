@@ -4,7 +4,9 @@
 // signatures.json) still matches the installed Steam / SteamVR web UI
 // bundles: each module signature must match exactly one webpack module, each
 // export signature exactly one export of it, and the strings a patch relies
-// on ("expects") should still be there. Run it after a Steam update:
+// on ("expects") should still be there; a "stylesheet" signature (CSS a patch
+// relies on, e.g. a variable) must match exactly one stylesheet of the
+// bundle's "styles" directory. Run it after a Steam update:
 //
 //   nix shell nixpkgs#nodejs -c node scripts/check-signatures.mjs
 //
@@ -24,7 +26,7 @@
 // in which every import and unknown global is an inert stub, so top-level
 // definitions (objects, functions, classes, singletons) exist and are
 // matched with the same code the patches use (modules/lib/finders.js).
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -142,6 +144,12 @@ function bundle(name) {
   const files = b.html ? pageFiles(dir, b.html) : undefined;
   const mods = loadBundles(dir, { files, exclude: b.exclude && new RegExp(b.exclude) });
   const req = { m: Object.fromEntries([...mods].map(([id, m]) => [id, m.factory])) };
+  // Stylesheets: [{ file (relative to dir), source }].
+  const stylesDir = b.styles && join(dir, b.styles);
+  const styles = stylesDir && existsSync(stylesDir)
+    ? readdirSync(stylesDir, { recursive: true }).filter((f) => f.endsWith('.css'))
+      .map((f) => ({ file: join(b.styles, f), source: readFileSync(join(stylesDir, f), 'utf8') }))
+    : [];
   let version = null;
   for (const f of ['changelist.txt']) if (existsSync(join(dir, f))) version = readFileSync(join(dir, f), 'utf8').trim();
   for (const f of files ?? []) {
@@ -154,7 +162,7 @@ function bundle(name) {
       if (v) { version = v[1]; break; }
     }
   }
-  return (loaded[name] = { dir, mods, req, version });
+  return (loaded[name] = { dir, mods, req, styles, version });
 }
 
 const report = { ok: true, warnings: 0, patches: {} };
@@ -164,6 +172,13 @@ for (const [pname, p] of Object.entries(patches)) {
   const pr = report.patches[pname] = { bundle: p.bundle, modules: {} };
   if (b.error) { pr.skipped = b.error; continue; }
   for (const [mname, sig] of Object.entries(p.modules ?? {})) {
+    if (sig.stylesheet) {
+      const files = b.styles.filter((f) => find.matchText(f.source, sig.stylesheet)).map((f) => f.file);
+      const status = files.length === 1 ? 'found' : files.length ? 'ambiguous' : 'missing';
+      pr.modules[mname] = { checkOnly: true, stylesheet: true, signature: sig.stylesheet, ids: [], files, status };
+      if (status !== 'found') report.ok = false;
+      continue;
+    }
     const r = pr.modules[mname] = { checkOnly: !!sig.checkOnly, signature: sig.module };
     const ids = find.findAllModules(b.req, sig.module);
     r.ids = ids;
@@ -199,8 +214,9 @@ if (asJson) {
   for (const [pname, pr] of Object.entries(report.patches)) {
     console.log(`\n${pname} (${pr.bundle})${pr.skipped ? `: skipped, ${pr.skipped}` : ''}`);
     for (const [mname, r] of Object.entries(pr.modules)) {
-      const where = r.ids.map((id, i) => `${id} (${r.files[i]})`).join(', ');
-      console.log(`  ${mname.padEnd(22)} ${r.status.padEnd(10)} ${r.status === 'missing' ? 'no module matches ' + JSON.stringify(r.signature) : 'module ' + where}${r.checkOnly ? '  [check only]' : ''}`);
+      const kind = r.stylesheet ? 'stylesheet' : 'module';
+      const where = r.stylesheet ? r.files.join(', ') : r.ids.map((id, i) => `${id} (${r.files[i]})`).join(', ');
+      console.log(`  ${mname.padEnd(22)} ${r.status.padEnd(10)} ${r.status === 'missing' ? `no ${kind} matches ` + JSON.stringify(r.signature) : `${kind} ` + where}${r.checkOnly ? '  [check only]' : ''}`);
       for (const [ename, e] of Object.entries(r.exports ?? {}))
         console.log(`    .${ename.padEnd(20)} ${e.status.padEnd(10)} ${e.keys.length ? 'export ' + e.keys.map((k) => k || '(module.exports)').join(', ') : 'no export matches ' + JSON.stringify(e.signature)}`);
       if (r.runError) console.log(`    note: module factory threw offline (${r.runError}); unresolved exports are "unverified"`);
