@@ -128,6 +128,12 @@
             "mask-image:linear-gradient(to bottom, transparent 0%, black var(--scroll-fade-size), black calc(100% - var(--scroll-fade-size)), transparent 100%)",
             "--scroll-fade-size:"
           ] }
+        },
+        "scrollShadowStyle": {
+          "checkOnly": true,
+          "stylesheet": { "includes": [
+            "z-index:9001;height:0;box-shadow:0 0 40px 40px #0e141b;transition:opacity .15s ease-out;pointer-events:none"
+          ] }
         }
       }
     },

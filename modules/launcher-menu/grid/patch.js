@@ -35,6 +35,11 @@
 //             recomputed (same thresholds) on scroll, resize and mutation and
 //             put in data-sfui-fade (none/top/bottom/both), which selects the
 //             same gradients as Steam's stylesheet (var(--scroll-fade-size)).
+// - shadow:   the other stock indicator: the scroller's ::before/::after
+//             shadows (box-shadow in the background colour at the top and
+//             bottom edge), shown by Steam's can-scroll-up/-down classes, which
+//             go stale the same way. The same state goes in data-sfui-shadow
+//             on the scroller and sets the pseudo-elements' opacity.
 // Steam's gamepad navigation derives a panel's layout from its computed
 // style (display: grid), so up/down/left/right move between tiles.
 // With the pinned-desktop patch, its pinned row (.sfui-pinned-desktop,
@@ -46,7 +51,7 @@
 // which removes markers, stylesheets, observers and the timer.
 ((find, sigs, opts) => {
   const NAME = 'launcher-menu-grid';
-  const VERSION = 4;
+  const VERSION = 5;
   const COLS = opts.columns;
   const ROWS = opts.maxRows ?? null;
   if (!(Number.isInteger(COLS) && COLS >= 1) || !(ROWS === null || (Number.isInteger(ROWS) && ROWS >= 1)))
@@ -55,6 +60,7 @@
   const SECTION_KEY = 'programs';
   const ATTR = 'data-sfui-grid';
   const FADE = 'data-sfui-fade';
+  const SHADOW = 'data-sfui-shadow';
   const MAXH = '--sfui-grid-max-height';
   const STYLE_ID = 'sfui-launcher-grid-style';
   const PIN = 'sfui-pinned-desktop';              // pinned-desktop patch's block
@@ -78,6 +84,10 @@
 [${FADE}=top] { mask-image: ${gradient('transparent 0%, black var(--scroll-fade-size), black 100%')}; }
 [${FADE}=bottom] { mask-image: ${gradient('black 0%, black calc(100% - var(--scroll-fade-size)), transparent 100%')}; }
 [${FADE}=both] { mask-image: ${gradient('transparent 0%, black var(--scroll-fade-size), black calc(100% - var(--scroll-fade-size)), transparent 100%')}; }
+[${SHADOW}=none]::before, [${SHADOW}=none]::after,
+[${SHADOW}=top]::after, [${SHADOW}=bottom]::before { opacity: 0 !important; }
+[${SHADOW}=top]::before, [${SHADOW}=bottom]::after,
+[${SHADOW}=both]::before, [${SHADOW}=both]::after { opacity: 1 !important; }
 ${TILE} {
   margin: 0 !important;
   padding: 8px 4px 6px !important;
@@ -179,14 +189,16 @@ ${PINNED} > [role=button] * { flex-grow: 0 !important; text-align: center !impor
     for (let w = label.parentElement; w && w !== item; w = w.parentElement) mark(w, 'wrap');
   };
 
-  // Fade state from the actual scroll position (Steam's thresholds).
+  // Scroll indicator state from the actual scroll position (Steam's
+  // thresholds), for both the mask fade and the edge shadows.
   const fade = (sc) => {
     const r = regions.get(sc);
-    if (!r?.fade) return;
+    if (!r) return;
     const top = sc.scrollTop > 1;
     const bottom = sc.scrollHeight - sc.scrollTop > sc.clientHeight + 1;
     const v = top && bottom ? 'both' : top ? 'top' : bottom ? 'bottom' : 'none';
-    if (r.fade.getAttribute(FADE) !== v) r.fade.setAttribute(FADE, v);
+    if (sc.getAttribute(SHADOW) !== v) sc.setAttribute(SHADOW, v);
+    if (r.fade && r.fade.getAttribute(FADE) !== v) r.fade.setAttribute(FADE, v);
   };
 
   // maxRows: scroller max-height from its border-box top to the bottom of row
@@ -241,6 +253,7 @@ ${PINNED} > [role=button] * { flex-grow: 0 !important; text-align: center !impor
     ro?.unobserve(sc);
     ro?.unobserve(r.panel);
     sc.style.removeProperty(MAXH);
+    sc.removeAttribute(SHADOW);
     r.fade?.removeAttribute(FADE);
   };
 
@@ -300,7 +313,7 @@ ${PINNED} > [role=button] * { flex-grow: 0 !important; text-align: center !impor
     for (const [d, o] of docs) {
       detach(d, o);
       try {
-        for (const el of d.querySelectorAll(`[${ATTR}], [${FADE}]`)) { el.removeAttribute(ATTR); el.removeAttribute(FADE); }
+        for (const el of d.querySelectorAll(`[${ATTR}], [${FADE}], [${SHADOW}]`)) { el.removeAttribute(ATTR); el.removeAttribute(FADE); el.removeAttribute(SHADOW); }
         d.getElementById(STYLE_ID)?.remove();
       } catch {}
     }
