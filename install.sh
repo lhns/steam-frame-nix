@@ -54,8 +54,8 @@ Commands:
         neither exists       a new config in ~/nix-config from the
                              steam-frame-nix template, linked to
                              ~/.config/home-manager
-      Existing dotfiles that conflict are renamed to *.backup. Re-running
-      just switches again.
+      Existing dotfiles that conflict are renamed to *.hm-backup-<time>.
+      Re-running just switches again.
 
   uninstall [--yes] [--keep-nix]
       Stop Home Manager's user services, uninstall Home Manager, uninstall
@@ -63,7 +63,7 @@ Commands:
       configuration directory is never deleted.
 
   status
-      Show Nix, Home Manager and steam-frame-nix service state.
+      Show Nix, Home Manager and user service state.
 
 Options:
   --yes, -y      Don't ask; answer yes to every question.
@@ -135,9 +135,6 @@ load_nix() {
     . "$NIX_PROFILE_SCRIPT"
     set -u
   fi
-  if ! command -v nix >/dev/null 2>&1 && [[ -x /nix/var/nix/profiles/default/bin/nix ]]; then
-    PATH="$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"
-  fi
   if [[ ${NIX_CONFIG:-} != *"nix-command flakes"* ]]; then
     NIX_CONFIG="${NIX_CONFIG:+$NIX_CONFIG$'\n'}extra-experimental-features = nix-command flakes"
     export NIX_CONFIG
@@ -146,23 +143,15 @@ load_nix() {
 
 nix_works() {
   command -v nix >/dev/null 2>&1 && nix --version >/dev/null 2>&1 || return 1
-  nix store info >/dev/null 2>&1 || nix store ping >/dev/null 2>&1
+  nix store info >/dev/null 2>&1
 }
 
 # experimental-features as configured (without our NIX_CONFIG)
 nix_features() {
-  env -u NIX_CONFIG nix config show experimental-features 2>/dev/null \
-    || env -u NIX_CONFIG nix show-config 2>/dev/null | sed -n 's/^experimental-features = //p'
+  env -u NIX_CONFIG nix config show experimental-features 2>/dev/null
 }
 
-receipt_planner() {
-  [[ -r $NIX_RECEIPT ]] || return 1
-  if command -v jq >/dev/null 2>&1; then
-    jq -r '.planner.planner // empty' "$NIX_RECEIPT"
-  else
-    grep -o '"planner"[[:space:]]*:[[:space:]]*"[^"]*"' "$NIX_RECEIPT" | head -n1 | sed 's/.*"\([^"]*\)"$/\1/'
-  fi
-}
+receipt_planner() { jq -r '.planner.planner // empty' "$NIX_RECEIPT" 2>/dev/null; }
 
 # systemctl --user of the outer (Steam/VR) session; the nested desktop
 # can't reach the user manager with its own environment.
@@ -174,14 +163,8 @@ outer_systemctl() {
 
 outer_bus_ok() { [[ -S $OUTER_RUNTIME_DIR/bus && -x /usr/bin/systemctl ]]; }
 
-hm_profile() {
-  local p
-  for p in "${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/home-manager" \
-           "/nix/var/nix/profiles/per-user/$USER_NAME/home-manager"; do
-    [[ -e $p || -L $p ]] && { printf '%s\n' "$p"; return 0; }
-  done
-  return 1
-}
+HM_PROFILE="${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/home-manager"
+hm_installed() { [[ -e $HM_PROFILE || -L $HM_PROFILE ]]; }
 
 # The home-manager command: the installed one (matches the config), else master.
 hm() {
@@ -298,7 +281,6 @@ cmd_install() {
   while (( $# )); do
     case $1 in
       --flake) [[ $# -ge 2 ]] || die "--flake needs an argument"; flake=$2; shift 2 ;;
-      --flake=*) flake=${1#--flake=}; shift ;;
       -y|--yes) ASSUME_YES=1; shift ;;
       -h|--help) usage; exit 0 ;;
       *) die "install: unknown option '$1' (see --help)" ;;
@@ -343,8 +325,11 @@ cmd_install() {
     [[ -z $untracked ]] || warn "untracked files are invisible to the flake (git add them): $(echo "$untracked" | tr '\n' ' ')"
   fi
 
-  step "Activating Home Manager (conflicting files are renamed to *.backup)"
-  hm switch --flake "$ref" -b backup
+  # Unique per run: Home Manager aborts if a backup from an earlier run exists.
+  local backup
+  backup="hm-backup-$(date +%Y%m%d-%H%M%S)"
+  step "Activating Home Manager (conflicting files are renamed to *.$backup)"
+  hm switch --flake "$ref" -b "$backup"
 
   local switch_cmd="home-manager switch --flake $ref" edit="your configuration"
   if [[ -n $dir ]]; then
@@ -404,7 +389,7 @@ stop_hm_services() {
 
 remove_hm() {
   step "Uninstalling Home Manager"
-  if ! hm_profile >/dev/null; then info "no Home Manager profile found"; return 0; fi
+  if ! hm_installed; then info "no Home Manager profile found"; return 0; fi
   if ! nix_works; then warn "Nix doesn't work; skipping 'home-manager uninstall'"; return 0; fi
 
   # `home-manager uninstall` builds an empty config with <nixpkgs>; take the
@@ -447,7 +432,9 @@ stop_nix_processes() {
   if confirm "Stop them (Nix can't be unmounted while they run)?"; then
     kill -TERM "${pids[@]}" 2>/dev/null || true
     sleep 2
-    for pid in "${pids[@]}"; do kill -KILL "$pid" 2>/dev/null || true; done
+    for pid in "${pids[@]}"; do    # only if it's still the same /nix process
+      [[ $(readlink "/proc/$pid/exe" 2>/dev/null || true) == /nix/store/* ]] && kill -KILL "$pid" 2>/dev/null || true
+    done
   else
     warn "left running; the Nix uninstall may fail to unmount /nix"
   fi
@@ -540,7 +527,7 @@ cmd_uninstall() {
 
 Intentionally left in place:
   - your configuration (e.g. $DEFAULT_CONFIG_DIR)
-  - files Home Manager renamed to *.backup
+  - files Home Manager renamed to *.hm-backup-<time>
   - app data, e.g. ~/.local/share/docker, and Flatpak apps
 Log out or reboot so running sessions drop the removed tweaks.
 EOF
@@ -549,7 +536,7 @@ EOF
 # --- status -----------------------------------------------------------------
 
 cmd_status() {
-  local p gen target features ro unit
+  local gen target features ro unit units=()
   load_nix
 
   step "Nix"
@@ -574,11 +561,11 @@ cmd_status() {
   fi
 
   step "Home Manager"
-  if p="$(hm_profile)"; then
-    target="$(readlink -f "$p")"
-    gen="$(readlink "$p")"; gen="${gen##*/}"; gen="${gen#home-manager-}"; gen="${gen%-link}"
+  if hm_installed; then
+    target="$(readlink -f "$HM_PROFILE")"
+    gen="$(readlink "$HM_PROFILE")"; gen="${gen##*/}"; gen="${gen#home-manager-}"; gen="${gen%-link}"
     info "generation: $gen ($target)"
-    info "activated:  $(stat -c %y "$p" | cut -d. -f1)"
+    info "activated:  $(stat -c %y "$HM_PROFILE" | cut -d. -f1)"
   else
     info "not installed"
   fi
@@ -590,10 +577,12 @@ cmd_status() {
     info "config:     none at $HM_CONFIG_LINK"
   fi
 
-  step "steam-frame-nix services"
-  if outer_bus_ok; then
-    for unit in steam-keyboard-patch.service docker.service; do
-      if [[ $unit == docker.service && ! -e $USER_UNIT_DIR/$unit ]]; then continue; fi
+  step "User services from Home Manager"
+  mapfile -t units < <(hm_user_units)
+  if (( ${#units[@]} == 0 )); then
+    info "none"
+  elif outer_bus_ok; then
+    for unit in "${units[@]}"; do
       info "$(printf '%-30s %s' "$unit" "$(outer_systemctl is-active "$unit" 2>/dev/null || true)")"
     done
   else

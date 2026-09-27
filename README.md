@@ -32,7 +32,7 @@ What it does:
    `~/nix-config` from this repo's template (a git repo, linked to
    `~/.config/home-manager`) with your user name filled in.
 3. Activates it (`home-manager switch`); existing dotfiles that conflict are
-   renamed to `*.backup`.
+   renamed to `*.hm-backup-<time>`.
 
 Re-running it just switches again. Afterwards, edit `~/nix-config/home.nix`
 and apply it with `home-manager switch` from a terminal in the nested
@@ -48,7 +48,7 @@ curl -fsSL https://raw.githubusercontent.com/lhns/steam-frame-nix/main/install.s
 
 The uninstaller first stops the user services Home Manager installed (which
 also reverts the Steam keyboard patch), runs `home-manager uninstall`, then
-removes Nix and per-user Nix state. Your configuration directory, `*.backup`
+removes Nix and per-user Nix state. Your configuration directory, `*.hm-backup-<time>`
 files, app data (e.g. `~/.local/share/docker`) and Flatpak apps are left
 alone.
 
