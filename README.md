@@ -1,0 +1,263 @@
+# steam-frame-nix
+
+[Home Manager](https://github.com/nix-community/home-manager) modules for the
+Valve Steam Frame: SteamOS on `aarch64-linux`, standalone home-manager on a
+non-NixOS system. They work around quirks of the Frame's two graphical
+sessions (portal config, keyboard layout, VR keyboard, clipboard, Firefox)
+declaratively, so every change can be reverted by activating an older
+home-manager generation.
+
+All options live under `steamFrame.*`. Everything except the portal fix is
+off by default.
+
+## Two sessions
+
+The Frame runs two graphical sessions at once, and most of the workarounds
+below exist because of the difference between them:
+
+| | Steam / VR session | Nested Plasma desktop |
+|---|---|---|
+| Compositor | gamescope | KWin (nested, shown as a VR window) |
+| Displays | X display `:0` (apps show as floating VR windows) | own Wayland + Xwayland `:2` |
+| D-Bus | the outer session bus, `/run/user/1000/bus` | a private bus |
+| `XDG_RUNTIME_DIR` | `/run/user/1000` | its own |
+| systemd user manager | yes | not reachable |
+
+Consequences:
+
+- **Wallet:** there should be exactly one `kwalletd6`, on the outer bus. Apps
+  started from the desktop would otherwise start a second wallet on the
+  private bus, and secrets saved there are invisible in VR. Launchers can
+  prefix their `Exec=` line with `steamFrame.outerBusEnv`
+  (`env DBUS_SESSION_BUS_ADDRESS=<outer bus>`).
+- **User services:** home-manager's own `reloadSystemd` step is skipped when
+  switching from the desktop terminal (wrong `XDG_RUNTIME_DIR`), so
+  `steamFrame.userServices` talks to the outer user manager directly.
+- **Launchers:** the Steam session's "+" menu only sees
+  `~/.local/share/applications` (not `~/.nix-profile/share`), so app entries
+  are written there, shadowing Flatpak/package entries under the same ID.
+
+## Usage
+
+Requirements: Nix with flakes enabled and standalone home-manager.
+
+```nix
+# flake.nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    home-manager = {
+      url = "github:nix-community/home-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    steam-frame-nix = {
+      url = "github:lhns/steam-frame-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+
+  outputs = { nixpkgs, home-manager, steam-frame-nix, ... }: {
+    homeConfigurations.steamos = home-manager.lib.homeManagerConfiguration {
+      pkgs = nixpkgs.legacyPackages.aarch64-linux;
+      modules = [ steam-frame-nix.homeManagerModules.default ./home.nix ];
+    };
+  };
+}
+```
+
+```nix
+# home.nix
+{ config, ... }: {
+  home.username = "steamos";
+  home.homeDirectory = "/home/steamos";
+  home.stateVersion = "25.11";
+  targets.genericLinux.enable = true;
+
+  steamFrame = {
+    keyboardLayout = "de";
+    vrKeyboard.enable = true;
+    clipboardSync.enable = true;
+    firefox.enable = true;
+    # Only relevant with Steam Developer Mode on (see hidden-apps below).
+    hiddenApps = [ "lxterminal" "cmake-gui" "firewall-config" "renderdoc" ];
+  };
+
+  # Example: an app that must use the single wallet on the outer bus.
+  # xdg.dataFile."applications/org.example.App.desktop".text = ''
+  #   [Desktop Entry]
+  #   Type=Application
+  #   Name=Example
+  #   Exec=${config.steamFrame.outerBusEnv} flatpak run org.example.App %U
+  # '';
+}
+```
+
+Switch from a terminal **in the nested desktop** (clipboard-sync is restarted
+with the desktop's environment):
+
+```sh
+home-manager switch --flake .#steamos
+```
+
+Individual modules are available as
+`homeManagerModules.{session,portal,keyboard-layout,vr-keyboard,hidden-apps,clipboard-sync,firefox}`;
+`default` imports all of them.
+
+**Steam Developer Mode** (a Steam setting, not managed here) makes the "+"
+menu list every desktop entry, including terminals such as Konsole.
+
+## Options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `steamFrame.runtimeDir` | str | `"/run/user/1000"` | `XDG_RUNTIME_DIR` of the outer (Steam/VR) session. |
+| `steamFrame.userBus` | str | `"unix:path=${runtimeDir}/bus"` | Outer session D-Bus (user manager, the one `kwalletd6`). |
+| `steamFrame.outerBusEnv` | str, read-only | `"env DBUS_SESSION_BUS_ADDRESS=${userBus}"` | Prefix for launchers that must use the outer bus. |
+| `steamFrame.userServices.start` | list of str | `[ ]` | User units started on switch if not running (outer user manager). |
+| `steamFrame.userServices.restart` | list of str | `[ ]` | User units restarted on every switch (outer user manager). |
+| `steamFrame.portalFix.enable` | bool | `true` | Working portal config for the Steam session (OpenURI). |
+| `steamFrame.keyboardLayout` | null or str | `null` | XKB layout for the Steam session, e.g. `"de"`. `null` = no drop-in (US). |
+| `steamFrame.keyboardVariant` | null or str | `null` | XKB variant for the Steam session. |
+| `steamFrame.vrKeyboard.enable` | bool | `false` | Esc/Ctrl/Alt/AltGr and arrow keys on Steam's VR keyboard. |
+| `steamFrame.hiddenApps` | list of str | `[ ]` | Desktop entry ids (without `.desktop`) to hide from the "+" and KDE menus. |
+| `steamFrame.clipboardSync.enable` | bool | `false` | Clipboard bridge between the Steam session and the nested desktop. |
+| `steamFrame.clipboardSync.package` | package | built from `dnut/clipboard-sync` | The clipboard-sync package. |
+| `steamFrame.firefox.enable` | bool | `false` | Launcher for the Flathub Firefox Flatpak (`org.mozilla.firefox`) with the fixes below. |
+| `steamFrame.firefox.vrFullscreenFix` | bool | `true` | Link a `user.js` with `full-screen-api.ignore-widgets` into existing profiles. |
+| `steamFrame.firefox.desktopProfile` | null or str | `"desktop"` | Separate profile used in the nested desktop; `null` disables it. |
+
+## Fixes in detail
+
+### User services (`session.nix`)
+
+**Problem:** `home-manager switch` is usually run from the nested desktop,
+whose `XDG_RUNTIME_DIR` and D-Bus can't reach the systemd user manager, so
+home-manager skips its `reloadSystemd` step ("User systemd daemon not
+running"): new or changed user units are neither reloaded nor started.
+
+**Fix:** the activation entry `steamFrameUserServices` exports the outer
+session's `XDG_RUNTIME_DIR`/`DBUS_SESSION_BUS_ADDRESS` and runs
+`/usr/bin/systemctl --user daemon-reload`, then `start` for
+`userServices.start` and `restart` for `userServices.restart`. The entry
+always runs (also with both lists empty), so unit files you define yourself
+are at least reloaded.
+
+### Portal (`portalFix`)
+
+**Problem:** the Steam Frame image (SteamOS 0.3.0, build 20260922) points the
+Steam session's `xdg-desktop-portal` at
+`/usr/share/xdg-desktop-portal/gamescope-portals`, which has the holo and
+gamescope backends but no `gamescope-portals.conf`. With
+`XDG_DESKTOP_PORTAL_DIR` set, the portal reads config only from there, selects
+no backend and offers no OpenURI: no app in the Steam session can open links.
+
+**Fix:** an own portal dir in `~/.local/share` with links to Valve's
+`.portal` files plus a config (`default=holo;gamescope`), and a drop-in on
+`xdg-desktop-portal.service` pointing at it. Only the systemd-managed (outer)
+portal is affected; the desktop's portal keeps `kde-portals.conf`.
+
+**Remove when** SteamOS ships a `gamescope-portals.conf`
+(`steamFrame.portalFix.enable = false`).
+
+### Keyboard layout (`keyboardLayout`, `keyboardVariant`)
+
+**Problem:** gamescope and its Xwayland displays use xkbcommon defaults (US)
+unless `XKB_DEFAULT_*` is set; KDE's layout setting only affects the nested
+desktop. `~/.config/environment.d` isn't read by the user manager on the
+Frame.
+
+**Fix:** a drop-in on `gamescope-session.service` setting
+`XKB_DEFAULT_LAYOUT` (and `XKB_DEFAULT_VARIANT`). Takes effect the next time
+the Steam session starts.
+
+**Remove when** SteamOS applies a layout setting to gamescope.
+
+### VR keyboard (`vrKeyboard.enable`)
+
+**Problem:** Steam's VR keyboard has hardcoded layouts without Ctrl, Alt or
+Esc. In VR, Steam can't press real keys
+(`SteamClient.Input.ControllerKeyboardSetKeyState` throws "Unknown method"),
+and its text emulation (`ControllerKeyboardSendText`) only maps plain ASCII:
+non-ASCII characters and anything needing AltGr or a dead key on the German
+keymap (`| @ { [ ] } \ ~ ^`, backtick, `ä ö ü €`) come out as `1`.
+
+**Fix:** the `vr-keyboard` user service (`vrkbd-helper.mjs`, Node) injects
+`vrkbd-patch.js` into Steam's UI at runtime through Steam's CEF DevTools port
+(`127.0.0.1:8080`; SteamOS starts Steam with `-cef-enable-debugging`) and
+re-injects it after Steam restarts or the keyboard popup is recreated.
+Steam's files are never modified; without the service, a restart of Steam
+gives the stock keyboard. The service is restarted on every switch (via
+`userServices.restart`) so a changed patch is re-injected.
+
+- Bottom row becomes `Esc Ctrl Alt [Space] AltGr ← ↑ ↓ → Close`.
+- Ctrl/Alt chords and Esc are pressed with `xdotool key` on `:0`, where X
+  focus follows the window selected in VR.
+- While Ctrl/Alt is toggled and the keyboard is open, the real modifier is
+  held down (e.g. Ctrl+scroll to zoom).
+- Problem characters are typed with `xdotool type`; everything else still
+  goes through Steam.
+
+**Layouts:** the extra-character handling (which characters are routed to
+xdotool, and the keysym names used for umlauts in chords) targets the German
+(`de`) keymap. On other layouts it is harmless: those characters are simply
+typed by xdotool instead of Steam, and Esc/Ctrl/Alt/arrows work regardless.
+
+**Security:** requests come from Steam's UI JS, so the helper uses an
+allowlist: Ctrl/Alt chords with a single key, the extra keys (Esc, Del, Home,
+End, arrows), hold/release of Ctrl/Alt, and single non-ASCII or AltGr
+characters. It cannot type plain ASCII text or press Enter on its own.
+
+**Caveat:** the patch depends on Steam UI internals, including internal
+webpack module ids (e.g. `40222` for layouts, `5363` for the keyboard
+manager). A Steam update can break it; the keys then just don't appear.
+Tested with Steam client 1790377368.
+
+**Remove when** Steam's VR keyboard gets these keys itself.
+
+### Hidden apps (`hiddenApps`)
+
+**Problem:** with Steam Developer Mode on, the "+" menu lists every desktop
+entry GLib would show, including system tools you never want in VR.
+
+**Fix:** a user entry with `Hidden=true` in `~/.local/share/applications`
+masks the system one (also in the KDE menu).
+
+The "+" menu itself always hides executables named `steam` or
+`vrurlhandler`, and unless Developer Mode is on also terminals and similar
+tools such as `konsole`, `dolphin`, `vlc`, `sh` and `lxterminal` (filter in
+Steam's UI JS). Enable Developer Mode to get Konsole in VR.
+
+### Clipboard sync (`clipboardSync.enable`)
+
+**Problem:** the Steam session's X displays and the nested desktop have
+separate clipboards.
+
+**Fix:** [clipboard-sync](https://github.com/dnut/clipboard-sync), built from
+source with your `pkgs` (its own flake outputs are x86-only). Started via KDE
+autostart (phase 2), not systemd: the desktop can't reach the user manager
+and `:2` must exist first. Each switch restarts it if the running binary
+isn't the current build, so run `home-manager switch` from a desktop
+terminal.
+
+### Firefox (`firefox.*`)
+
+Assumes the Flathub Firefox Flatpak (`org.mozilla.firefox`, stable branch).
+The launcher's desktop entry shadows the Flatpak's own (same ID), so
+default-browser associations for `org.mozilla.firefox.desktop` keep working.
+
+- **`vrFullscreenFix`:** real fullscreen is broken in the Steam session:
+  gamescope focuses the fullscreen window but never shows it, so Firefox looks
+  frozen. A `user.js` with `full-screen-api.ignore-widgets` makes fullscreen
+  fill only the Firefox window, which in VR can be as large as you like. It is
+  linked into every existing profile on each switch (existing non-symlink
+  `user.js` files are left alone). **Remove when** gamescope shows fullscreen
+  X11 windows in VR.
+- **`desktopProfile`:** the two sessions can't see each other's running
+  Firefox, so a second instance stops at the locked profile. In the nested
+  desktop (`XDG_CURRENT_DESKTOP=KDE`) the launcher uses a separate profile
+  (without the `user.js`; fullscreen works there).
+
+## Rollback
+
+`home-manager generations` lists previous generations; run the `activate`
+script of the one you want (`<store path>/activate`).
