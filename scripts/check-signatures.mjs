@@ -150,8 +150,8 @@ function bundle(name) {
     ? readdirSync(stylesDir, { recursive: true }).filter((f) => f.endsWith('.css'))
       .map((f) => ({ file: join(b.styles, f), source: readFileSync(join(stylesDir, f), 'utf8') }))
     : [];
-  let version = null;
-  for (const f of ['changelist.txt']) if (existsSync(join(dir, f))) version = readFileSync(join(dir, f), 'utf8').trim();
+  const changelist = join(dir, 'changelist.txt');
+  let version = existsSync(changelist) ? readFileSync(changelist, 'utf8').trim() || null : null;
   for (const f of files ?? []) {
     if (version) break;
     try { version = /\bCLSTAMP="(\d+)"/.exec(readFileSync(join(dir, f), 'utf8'))?.[1] ?? null; } catch { /* missing file */ }

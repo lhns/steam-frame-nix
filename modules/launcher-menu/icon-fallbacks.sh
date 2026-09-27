@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Hicolor fallbacks for desktop entry icons that only Breeze has.
 #
 # Usage: steam-frame-icon-fallbacks [EXTRA_NAME...]
