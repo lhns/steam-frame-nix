@@ -7,8 +7,8 @@ sessions (portal config, keyboard layout, VR keyboard, clipboard, Firefox)
 declaratively, so every change can be reverted by activating an older
 home-manager generation.
 
-All options live under `steamFrame.*`. Everything except the portal fix is
-off by default.
+All options live under `steamFrame.*`. The portal fix and clipboard sync are
+on by default; everything else is opt-in.
 
 ## Install
 
@@ -178,20 +178,26 @@ menu list every desktop entry, including terminals such as Konsole.
 
 ## Fixes in detail
 
-### User services (`session.nix`)
+### Session settings and background services (`session.nix`)
 
-**Problem:** `home-manager switch` is usually run from the nested desktop,
-whose `XDG_RUNTIME_DIR` and D-Bus can't reach the systemd user manager, so
-home-manager skips its `reloadSystemd` step ("User systemd daemon not
-running"): new or changed user units are neither reloaded nor started.
+This module is used by the others; you normally don't set anything here.
 
-**Fix:** the activation entry `steamFrameUserServices` exports the outer
-session's `XDG_RUNTIME_DIR`/`DBUS_SESSION_BUS_ADDRESS` and runs
-`/usr/bin/systemctl --user daemon-reload`, then `start` for
-`userServices.start`, `stop` for `userServices.stop` and `restart` for
-`userServices.restart`. The entry
-always runs (also with both lists empty), so unit files you define yourself
-are at least reloaded.
+**Where things live.** Background services (systemd user services) and the
+KDE wallet belong to the Steam session. The nested desktop runs separately
+and can't see them. `runtimeDir` and `userBus` point at the Steam session's
+runtime directory and message bus, and `outerBusEnv` is a ready-made prefix
+for launchers that must reach them, e.g.
+`Exec=${config.steamFrame.outerBusEnv} flatpak run …`.
+
+**Starting services on switch.** When you run `home-manager switch` from a
+terminal in the nested desktop, Home Manager can't reach the service
+manager, prints "User systemd daemon not running" and skips starting or
+restarting services. So after every switch this module talks to the Steam
+session's service manager directly: it reloads the service files, then
+starts the services listed in `userServices.start`, stops the ones in
+`userServices.stop` and restarts the ones in `userServices.restart`. Other
+modules fill these lists (e.g. the keyboard patch restarts its helper so a
+new version takes effect).
 
 ### Portal (`portalFix`)
 
@@ -243,7 +249,12 @@ stops (service stopped, or the option disabled, which stops it via
 (`unpatch.js`). The service is restarted on every switch (via
 `userServices.restart`) so a changed patch is re-injected.
 
-- Bottom row becomes `Esc Ctrl Alt [Space] AltGr ← ↑ ↓ → Close`.
+- Bottom row becomes `Esc Ctrl Alt [Space] AltGr ← ↑ ↓ → Close`. It stays
+  stable with Shift or AltGr active (Steam's stock bottom row moves the
+  close icon with Shift and breaks apart with AltGr).
+- AltGr + arrows: `←` Pos1 (Home), `→` Ende (End), `↑` Bild↑ (Page Up),
+  `↓` Bild↓ (Page Down), shown as small hints on the arrow keys. Shift +
+  arrows send real Shift+arrow, for selecting text.
 - Ctrl/Alt chords and Esc are pressed with `xdotool key` on `:0`, where X
   focus follows the window selected in VR.
 - While Ctrl/Alt is toggled and the keyboard is open, the real modifier is
@@ -258,7 +269,7 @@ typed by xdotool instead of Steam, and Esc/Ctrl/Alt/arrows work regardless.
 
 **Security:** requests come from Steam's UI JS, so the helper uses an
 allowlist: Ctrl/Alt chords with a single key, the extra keys (Esc, Del, Home,
-End, arrows), hold/release of Ctrl/Alt, and single non-ASCII or AltGr
+End, Page Up/Down, arrows), hold/release of Ctrl/Alt, and single non-ASCII or AltGr
 characters. It cannot type plain ASCII text or press Enter on its own.
 
 **Caveat:** the patch depends on Steam UI internals, including internal
