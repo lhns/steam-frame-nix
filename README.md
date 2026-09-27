@@ -20,6 +20,10 @@ mode / nested desktop) and run:
 curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- install
 ```
 
+`https://steam-frame-nix.lhns.de` redirects to
+[`install.sh`](https://raw.githubusercontent.com/lhns/steam-frame-nix/main/install.sh)
+on the `main` branch; use that URL directly if the short link is unreachable.
+
 `sudo` needs a password: if you never set one, run `passwd` first.
 
 What it does:
