@@ -193,7 +193,7 @@ without it.
 | `steamFrame.userServices.stop` | list of str | `[ ]` | User units stopped on switch if running (e.g. of a disabled feature). |
 | `steamFrame.portalFix.enable` | bool | `true` | Working portal config (OpenURI) for the Steam session. |
 | `steamFrame.keyboardLayout` | null or str | `null` | XKB layout for the Steam session, e.g. `"de"`; `null`: US. |
-| `steamFrame.keyboardVariant` | null or str | `null` | XKB variant for the Steam session. |
+| `steamFrame.keyboardVariant` | null or str | `null` | XKB variant for the Steam session, e.g. `"nodeadkeys"`; see [Keyboard layout](#keyboard-layout-keyboardlayout-keyboardvariant). |
 | `steamFrame.steamKeyboardPatch.enable` | bool | `false` | VR keyboard with Esc/Ctrl/Alt, arrows, real chords, AltGr/non-ASCII. |
 | `steamFrame.uiPatches.patches` | list of submodules | `[ ]` | Runtime patches of Steam's web UIs, see [UI patches](#ui-patches-uipatchespatches). |
 | `steamFrame.uiPatches.lib` | attrs, read-only | | Patch helpers (`mkPatch`), see [Finders and signatures](#finders-and-signatures). |
@@ -418,6 +418,12 @@ a config (`default=holo;gamescope`), and a drop-in on
 
 **Fix:** a drop-in on `gamescope-session.service` setting
 `XKB_DEFAULT_LAYOUT`/`VARIANT`; applies at the next Steam session start.
+
+`keyboardVariant` picks a variant of the layout, e.g. for `de`: `null`
+(standard, with dead keys: `^`, `` ` ``, `´` wait for the next key),
+`"nodeadkeys"` (those are typed immediately), `"mac"`, `"neo"`, `"e1"`, `"us"`
+(German letters on a US layout). List them with
+`localectl list-x11-keymap-variants <layout>`.
 
 **Remove when** SteamOS applies a layout setting to gamescope.
 
