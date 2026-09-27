@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Install or uninstall Nix + Home Manager on SteamOS (Steam Frame, Steam Deck).
 #
-#   curl -fsSL https://raw.githubusercontent.com/lhns/steam-frame-nix/main/install.sh | bash -s -- install
-#   curl -fsSL https://raw.githubusercontent.com/lhns/steam-frame-nix/main/install.sh | bash -s -- uninstall
+#   curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- install
+#   curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- uninstall
 #
 # Run `install.sh --help` for details. Works from a file or piped into bash
 # (prompts read from /dev/tty).
@@ -70,7 +70,7 @@ Options:
   --help, -h     Show this help.
 
 Piped:
-  curl -fsSL https://raw.githubusercontent.com/lhns/steam-frame-nix/main/install.sh | bash -s -- install
+  curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- install
 EOF
 }
 
@@ -494,7 +494,7 @@ cmd_uninstall() {
     if [[ -f ${BASH_SOURCE[0]:-} && -x /usr/bin/bash ]]; then
       exec /usr/bin/bash "${BASH_SOURCE[0]}" uninstall "${orig_args[@]}"
     fi
-    die "this shell's bash is from Nix; run: curl -fsSL https://raw.githubusercontent.com/lhns/steam-frame-nix/main/install.sh | /usr/bin/bash -s -- uninstall"
+    die "this shell's bash is from Nix; run: curl -fsSL https://steam-frame-nix.lhns.de | /usr/bin/bash -s -- uninstall"
   fi
 
   if (( keep_nix )); then

@@ -17,7 +17,7 @@ On the Frame (or a Steam Deck), open a terminal (Konsole in the desktop
 mode / nested desktop) and run:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/lhns/steam-frame-nix/main/install.sh | bash -s -- install
+curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- install
 ```
 
 `sudo` needs a password: if you never set one, run `passwd` first.
@@ -41,10 +41,10 @@ desktop.
 
 ```sh
 # status: Nix, Home Manager generation, steam-frame-nix services
-curl -fsSL https://raw.githubusercontent.com/lhns/steam-frame-nix/main/install.sh | bash -s -- status
+curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- status
 
 # uninstall Home Manager and Nix (--keep-nix keeps Nix)
-curl -fsSL https://raw.githubusercontent.com/lhns/steam-frame-nix/main/install.sh | bash -s -- uninstall
+curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- uninstall
 ```
 
 The uninstaller first stops the user services Home Manager installed (which
