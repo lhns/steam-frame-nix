@@ -106,7 +106,7 @@
         "mailbox": {
           "module": { "includes": ["\"mailbox_send \"", "WebSocketSend(", "\"vrcompositor_systemlayer\""] },
           "exports": {
-            "Mailbox": { "type": "class", "protoMethods": ["SendMessage", "WebSocketSend"] }
+            "Mailbox": { "type": "class", "protoMethods": ["SendMessage", "SendMessageAndWaitForResponse", "RegisterHandler"] }
           }
         },
         "sceneGraph": {

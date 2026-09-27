@@ -27,7 +27,10 @@
 //       "props": { "k": value }     data properties (own or inherited) equal to
 //                                   the given JSON primitives; getters never run,
 //       "has": ["k", ...]           properties present (`in`, incl. getters),
-//       "protoMethods": ["m", ...]  (class) methods on its prototype chain,
+//       "protoMethods": ["m", ...]  (class) methods on its prototype chain
+//                                   (plain methods only: decorated ones, e.g.
+//                                   MobX @action.bound, are getters in the
+//                                   page, though methods offline),
 //       "methods": ["m", ...]       (instance) methods on its prototype chain,
 //       "getters": ["g", ...]       getters on its prototype chain }
 //   Fields that only scripts/check-signatures.mjs uses: "expects" (strings the
