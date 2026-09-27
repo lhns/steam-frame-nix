@@ -142,6 +142,7 @@ the two files below).
       windowMaxScale = 4.0;
       windowDistance.world.max = 10.0;
       steamCloseButton.enable = true;
+      windowCurvature.enable = true;
     };
     firefox.enable = true;
     # Only relevant with Steam Developer Mode on (see hidden-apps below).
@@ -166,7 +167,7 @@ home-manager switch --flake .#steamos
 ```
 
 Individual modules are available as
-`homeManagerModules.{session,portal,keyboard-layout,steam-keyboard-patch,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,dashboard-windows,steam-close-button,clipboard-sync,firefox}`;
+`homeManagerModules.{session,portal,keyboard-layout,steam-keyboard-patch,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,dashboard-windows,steam-close-button,window-curvature,clipboard-sync,firefox}`;
 `default` imports all of them.
 
 **Steam Developer Mode** (a Steam setting, not managed here) makes the "+"
@@ -200,6 +201,14 @@ menu list every desktop entry, including terminals such as Konsole.
 | `steamFrame.dashboard.windowMaxScale` | null or number | `null` | Largest resize-handle scale of SteamVR dashboard windows, relative to their default size. `null`: stock (2). See [Dashboard windows](#dashboard-windows-dashboard). |
 | `steamFrame.dashboard.windowDistance.{world,theater,dashboard}.{min,max}` | null or number (m) | `null` | How close / far grabbed windows can be pulled in / pushed back. `null`: stock (world 0.25-5, theater 1-6, dashboard 0.3-4 m). |
 | `steamFrame.dashboard.steamCloseButton.enable` | bool | `false` | Close (X) button on the dashboard's Steam window: switches to the previous window, or leaves just the dashboard bar. See [Steam close button](#steam-close-button-dashboardsteamclosebuttonenable). |
+| `steamFrame.dashboard.windowCurvature.enable` | bool | `false` | Adjustable curvature per dashboard window: the "Toggle Curvature" row of a window's More Options menu becomes a control (click: toggle, drag up/down: curvature). See [Window curvature](#window-curvature-dashboardwindowcurvature). |
+| `steamFrame.dashboard.windowCurvature.default` | number | `1.0` | Curvature of world/hand windows without a value of their own, once curved (relative to SteamVR's stock curve: 1 = stock, 2 = twice as curved, 0 = flat). Dashboard/theater windows start at 1. |
+| `steamFrame.dashboard.windowCurvature.max` | number | `3.0` | Largest curvature the control goes to. |
+| `steamFrame.dashboard.windowCurvature.step` | number | `0.05` | Step the value is rounded to while dragging. |
+| `steamFrame.dashboard.windowCurvature.snap` | number | `0.15` | While dragging, values within ± this of a snap point snap to it. `0`: no snapping. |
+| `steamFrame.dashboard.windowCurvature.snapPoints` | list of numbers | `[ 0 1.0 ]` | Snap points (flat, stock). |
+| `steamFrame.dashboard.windowCurvature.dragThreshold` | unsigned int (px) | `8` | Vertical laser travel before a press becomes a drag instead of a click. |
+| `steamFrame.dashboard.windowCurvature.dragPixelsPerUnit` | number (px) | `60` | Drag distance per 1.0 of curvature (the laser stops at the menu's edge, ~190 px above the row). |
 | `steamFrame.steamvrDebugger.enable` | bool | `true` if a UI patch uses port 8087, else `false` | SteamVR dashboard DevTools on `127.0.0.1:8087` (`VRWebHelper/DebuggerEnabled`), needed by dashboard patches. See [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable). |
 | `steamFrame.hiddenApps` | list of str | `[ ]` | Desktop entry ids (without `.desktop`) to hide from the "+" and KDE menus. |
 | `steamFrame.clipboardSync.enable` | bool | `true` | Clipboard bridge between the Steam session and the nested desktop. |
@@ -404,8 +413,8 @@ the bundle's CSS files (`styles` directory of the bundle), e.g. the scroll
 fade's gradient the grid relies on.
 
 For your own patches, `steamFrame.uiPatches.lib.mkPatch` wraps a patch
-written as a function expression with the library, its signatures and
-options:
+written as a function expression with the library, its signatures, options
+and the shared method hooks (below):
 
 ```nix
 steamFrame.uiPatches.patches = [ {
@@ -413,7 +422,7 @@ steamFrame.uiPatches.patches = [ {
   target.title = "SharedJSContext";
   patch = config.steamFrame.uiPatches.lib.mkPatch {
     name = "my-patch";
-    src = ./my-patch/patch.js;          # ((find, sigs, opts) => { … })
+    src = ./my-patch/patch.js;          # ((find, sigs, opts, hooks) => { … })
     signatures.thing = {
       module.includes = [ "SomeUniqueString" ];
       exports.Thing = { type = "class"; protoMethods = [ "DoIt" ]; };
@@ -425,13 +434,30 @@ steamFrame.uiPatches.patches = [ {
 ```
 
 ```js
-((find, sigs, opts) => {
+((find, sigs, opts, hooks) => {
   let mods;
   try { mods = find.resolveAll(find.getWebpackRequire('webpackChunksteamui'), sigs); }
   catch (e) { return `not patched: ${e.message}`; }
   const Thing = mods.thing.exports.Thing;   // SteamVR dashboard: 'webpackChunkvrwebui'
   …
 })
+```
+
+**Shared method hooks** (`modules/lib/hooks.js`, 4th argument `hooks`,
+also `window.__sfuiHooks`): patches that intercept the same method, e.g.
+the SteamVR dashboard mailbox's `SendMessage` ([Dashboard
+windows](#dashboard-windows-dashboard) and [Window
+curvature](#window-curvature-dashboardwindowcurvature) both rewrite outgoing
+scene graphs), register a named hook instead of each wrapping the method:
+one wrapper per method runs all hooks (in registration order), so patches
+can be injected, upgraded and reverted in any order without piling up
+wrappers or running one twice.
+
+```js
+hooks.before(Mailbox.prototype, 'SendMessage', 'my-patch', (args) => {
+  if (args[1]?.type === 'update_scene_graph') rewrite(args[1].scene_graph);
+});
+hooks.remove(Mailbox.prototype, 'SendMessage', 'my-patch');   // in unpatch
 ```
 
 ### After a Steam update
@@ -446,7 +472,8 @@ nix shell nixpkgs#nodejs -c node scripts/check-signatures.mjs
 
 It reads the bundles Steam's UI page loads (`~/.local/share/Steam/steamui`:
 the scripts of `index.html` and every chunk its webpack runtime can load; for
-[Dashboard windows](#dashboard-windows-dashboard) also SteamVR's dashboard,
+[Dashboard windows](#dashboard-windows-dashboard) and the other dashboard
+patches also SteamVR's dashboard,
 `/opt/steamvr/resources/webinterface/dashboard/systemui.html`),
 extracts all webpack module factories and evaluates every signature of
 `modules/lib/signatures.json` against them with the same finder code the
@@ -590,8 +617,9 @@ close for a big virtual screen.
 describes its windows to `vrcompositor` as a scene graph
 (`update_scene_graph` messages over its mailbox WebSocket), and the
 compositor enforces the limits it finds there. They are constants in the
-dashboard's JS, so the patch wraps the mailbox's `SendMessage` and rewrites
-them in every outgoing scene graph:
+dashboard's JS, so the patch hooks the mailbox's `SendMessage` (through the
+[shared method hooks](#finders-and-signatures)) and rewrites them in every
+outgoing scene graph:
 
 | Option | Scene-graph property | Stock |
 |---|---|---|
@@ -692,6 +720,79 @@ patch relies on (`DashboardStore._setActiveFrame`, `mainSteamFrame`,
 `scripts/check-signatures.mjs`); if a lookup fails, the patch reports it and
 leaves the dashboard stock. Tested with SteamVR build 11008059.
 
+### Window curvature (`dashboard.windowCurvature.*`)
+
+**Problem:** SteamVR's dashboard windows are either curved (fixed radius) or
+flat: the "Toggle Curvature" entry of a window's More Options (three-dot)
+menu only switches between the two, and windows placed in the world start
+flat.
+
+**Fix:** a UI patch (see above) of SteamVR's dashboard page (`vrwebhelper`,
+`127.0.0.1:8087`, title `systemui`; it turns on the
+[SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable)) makes the whole
+"Toggle Curvature" row a control, with the window's value on its right and
+small arrows above/below it:
+
+- **click**: curved → flat, flat → stock curve (1);
+- **press and drag up/down** with the laser (after `dragThreshold` px): the
+  curvature follows live, `dragPixelsPerUnit` px per 1.0, rounded to `step`,
+  from 0 (flat) to `max`. Near a snap point (`snapPoints`, by default 0 and
+  1, within ± `snap`) it snaps to it exactly; dragging on moves past.
+
+```nix
+steamFrame.dashboard.windowCurvature = {
+  enable = true;
+  # default = 1.0;  max = 3.0;  step = 0.05;
+  # snap = 0.15;  snapPoints = [ 0 1.0 ];
+  # dragThreshold = 8;  dragPixelsPerUnit = 60;
+};
+```
+
+How curvature works in SteamVR: each window frame has a *curvature origin*,
+a scene-graph transform node (`frame:<id>:curvature-origin`) at a distance
+in front of it, which all of the window's panels reference
+(`curvature-origin-id`); `vrcompositor` bends the panels onto a cylinder
+around that point. The stock distance is the dashboard's curvature distance
+(`DashboardStore.curvatureDistance`: dashboard distance + 1.8, e.g. 2.95, in
+the dashboard's scaled units; a radius of roughly 1.1 m, the same for all
+docked windows, so they are concentric with the dashboard bar), and "flat"
+is just an origin 1000 units away. The curvature is 1 / radius,
+so the value here is the curvature relative to stock: the patch hooks the
+mailbox's `SendMessage` (like [Dashboard windows](#dashboard-windows-dashboard),
+through the [shared method hooks](#finders-and-signatures)) and puts the
+origin at *stock distance / value* in outgoing scene graphs (2 = half the
+radius). On/off stays SteamVR's own toggle (`ToggleCurvature`), so the value
+0 and the stock state always agree; SteamVR resets that toggle when a window
+is docked somewhere else.
+
+A window without a value of its own is shown at `default` once curved in the
+world or on a hand, at 1 (stock) in the dashboard or theater. Values are
+kept per window (its overlay key) in the `systemui` page
+(`window.__sfuiWindowCurvatureState`): across restarts of the patch service
+(`home-manager switch`), but not across a SteamVR restart (or a reload of the
+dashboard page). `window.__sfuiWindowCurvature.dump()` lists every window's
+state, `.log` recent events.
+
+**Limitations:**
+
+- Only the laser adjusts the value: with controller (gamepad) navigation of
+  the menu, the row is the stock toggle.
+- The thumbstick doesn't scroll there (SteamVR delivers no wheel events to
+  the menu), so there are no steps by scrolling.
+- The laser's position stops at the menu's edge: the whole range has to fit
+  into the room above/below the row (`dragPixelsPerUnit` × `max` ≲ 190 px
+  upwards), otherwise the top end can't be reached in one drag.
+
+**Caveats:** depends on SteamVR UI internals: MobX, the dock-location enum,
+the mailbox, the scene-graph scheduler, the `curvature` frame component,
+the action store and the menu's CSS class names are found by signature, and
+the names and strings the patch relies on (`curvature-origin`,
+`curvature-origin-id`, `ToggleCurvature`, `m_bCurveOverride`, the
+curvature action's icons, `isControlAdditionalOptionsOpen`, …) are checked
+offline (`window-curvature` in `modules/lib/signatures.json`,
+`scripts/check-signatures.mjs`); if a lookup fails, the patch reports it and
+leaves the dashboard stock. Tested with SteamVR build 11008059.
+
 ### SteamVR debugger (`steamvrDebugger.enable`)
 
 Patches of the SteamVR dashboard need its DevTools port, which SteamVR only
@@ -699,7 +800,8 @@ opens with the setting `VRWebHelper/DebuggerEnabled` (port
 `VRWebHelper/DebuggerPort`, default 8087). It is enabled automatically
 (`mkDefault`) as soon as a patch in `steamFrame.uiPatches.patches` uses port
 8087 (e.g. [Dashboard windows](#dashboard-windows-dashboard),
-[Steam close button](#steam-close-button-dashboardsteamclosebuttonenable)).
+[Steam close button](#steam-close-button-dashboardsteamclosebuttonenable),
+[Window curvature](#window-curvature-dashboardwindowcurvature)).
 
 SteamVR rewrites `~/.config/openvr/config/steamvr.vrsettings` while it runs
 and on exit, so the file can't be managed by Home Manager, and edits while it

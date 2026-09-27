@@ -16,8 +16,9 @@
 # Patches that need Steam's webpack modules should find them by signature
 # rather than by module id or minified export name, which change with Steam
 # updates: `steamFrame.uiPatches.lib.mkPatch` wraps a patch written as
-# `(find, sigs, opts) => …` with the finder library (lib/finders.js) and its
-# signatures; scripts/check-signatures.mjs checks signatures offline.
+# `(find, sigs, opts, hooks) => …` with the finder library (lib/finders.js),
+# its signatures and the shared method hooks (lib/hooks.js);
+# scripts/check-signatures.mjs checks signatures offline.
 { config, pkgs, lib, ... }:
 let
   cfg = config.steamFrame.uiPatches;
@@ -104,12 +105,13 @@ in {
       Helpers for writing patches (see modules/lib/default.nix):
       `mkPatch { name, src, signatures ? …, opts ? { } }` returns a patch
       file that calls `src`, a JavaScript function expression
-      `(find, sigs, opts) => …`, with the finder library `find`
+      `(find, sigs, opts, hooks) => …`, with the finder library `find`
       (modules/lib/finders.js: getWebpackRequire, resolveAll, findModule,
       findExport, findFiberUp, findInReactTree, …), the module signatures
       `sigs` (format: modules/lib/signatures.json; default: its entry
-      `name`, if any) and `opts`. `finders` is
-      the library's path, `signatures` the parsed signatures.json.
+      `name`, if any), `opts` and the shared method hooks `hooks`
+      (modules/lib/hooks.js: before, remove, has). `finders` and `hooks`
+      are the libraries' paths, `signatures` the parsed signatures.json.
     '';
   };
 

@@ -39,6 +39,9 @@
   #     # X button on the Steam window: back to the previous window, or
   #     # just the dashboard bar:
   #     steamCloseButton.enable = true;
+  #     # Curvature per window: click the "Toggle Curvature" row of a
+  #     # window's More Options menu to toggle, drag up/down to adjust:
+  #     windowCurvature.enable = true;
   #   };
   #   firefox.enable = true;             # launcher for the Firefox Flatpak
   #   # Hidden from the "+" menu (with Steam Developer Mode on):

@@ -222,6 +222,96 @@
           "module": { "includes": ["\"valve.steam.gamepadui.main\"", "\"valve.steam.gamepadui.appoverlay\""] }
         }
       }
+    },
+    "window-curvature": {
+      "bundle": "vrwebui-systemui",
+      "modules": {
+        "mobx": {
+          "module": { "includes": ["runInAction:()=>", "makeObservable:()=>", "reaction:()=>"] }
+        },
+        "dock": {
+          "module": { "includes": ["e[e.Dashboard=1]=\"Dashboard\",e[e.LeftHand=2]=\"LeftHand\""] },
+          "exports": {
+            "EDockLocation": { "type": "object", "props": { "Dashboard": 1, "LeftHand": 2, "RightHand": 3, "World": 4, "Theater": 5 } }
+          }
+        },
+        "mailbox": {
+          "module": { "includes": ["\"mailbox_send \"", "WebSocketSend(", "\"vrcompositor_systemlayer\""] },
+          "exports": {
+            "Mailbox": { "type": "class", "protoMethods": ["SendMessage", "SendMessageAndWaitForResponse", "RegisterHandler"] }
+          }
+        },
+        "sceneGraph": {
+          "module": { "includes": ["\"update_scene_graph\"", "NextSGID()", "scene_graph:"] },
+          "exports": {
+            "resend": { "type": "function", "length": 0, "includes": ["NextSGID()", "setTimeout"] }
+          },
+          "expects": ["\"vrcompositor_systemlayer\"", ".SendMessage("]
+        },
+        "curvature": {
+          "module": { "includes": ["this.componentName=\"curvature\"", "ToggleCurvature(){"] },
+          "exports": {
+            "Curvature": { "type": "class", "includes": ["componentName=\"curvature\"", "m_bCurveOverride"] }
+          },
+          "expects": ["get curvatureTransformOriginID(){return`frame:${this.frame.frameID}:curvature-origin`}",
+            "ToggleCurvature(){this.m_bCurveOverride=!this.shouldCurve}", "get shouldCurve()",
+            "get curvatureOriginDistance(){return this.shouldCurve?", ".curvatureDistance:1e3}", "translation:{z:"]
+        },
+        "actions": {
+          "module": { "includes": ["window.dashboardActionStore="] },
+          "exports": {
+            "store": { "type": "object", "methods": ["GetAction", "BIsVRLinkRemoteAction"] }
+          },
+          "expects": ["get partialParams()", "get protoForSteam()", "m_PartialParams"]
+        },
+        "frameControlsClasses": {
+          "module": { "includes": ["FrameControlsContainer:\"", "AdditionalOptionsRow:\"", "AdditionalOptionsLabel:\""] },
+          "exports": {
+            "row": { "type": "string", "regex": ["_AdditionalOptionsRow_"] },
+            "label": { "type": "string", "regex": ["_AdditionalOptionsLabel_"] }
+          }
+        },
+        "frameControls": {
+          "checkOnly": true,
+          "module": { "includes": ["legacy-frame-controls-additional-options-", "controlAdditionalOptionsItems.filter("] },
+          "expects": ["id:`legacy-frame-controls-additional-options-${", "isControlAdditionalOptionsOpen",
+            ".AdditionalOptionsRow,", ".AdditionalOptionsLabel},", "display_name", "invocation", "onClick:()=>{", "onMouseDown:"]
+        },
+        "curvatureAction": {
+          "checkOnly": true,
+          "module": { "includes": ["\"#ToggleCurvatureTooltip\""] },
+          "expects": ["icon:{enum:40},icon_active:{enum:39},invocation:2", ".curvature.ToggleCurvature()"]
+        },
+        "frame": {
+          "checkOnly": true,
+          "module": { "includes": ["e[e.Alive=2]=\"Alive\""] },
+          "expects": ["this.curvature=", "this.docking=", "get isControlAdditionalOptionsOpen()",
+            "get controlAdditionalOptionsItems()", "get associatedSummonOverlayKeys()"]
+        },
+        "docking": {
+          "checkOnly": true,
+          "module": { "includes": ["get dockLocation()", "SetDockLocation(e"], "excludes": ["get associatedSummonOverlayKeys()"] },
+          "expects": ["get visualDockLocation()"]
+        },
+        "frameStore": {
+          "checkOnly": true,
+          "module": { "includes": ["window.FrameStore="] },
+          "expects": ["GetFrame(e){", "get frames()"]
+        },
+        "dashboardStore": {
+          "checkOnly": true,
+          "module": { "includes": ["window.DashboardStore="] },
+          "expects": ["get curvatureDistance()"]
+        },
+        "panel": {
+          "checkOnly": true,
+          "module": { "includes": ["properties[\"curvature-origin-id\"]"] }
+        },
+        "sceneGraphNodes": {
+          "checkOnly": true,
+          "module": { "includes": ["case\"VSG-TRANSFORM\":", ".properties.translation="] }
+        }
+      }
     }
   }
 }
