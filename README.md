@@ -244,7 +244,7 @@ menu list every desktop entry, including terminals such as Konsole;
 | `steamFrame.dashboard.frameControls.inBar` | list of control names | `[ ]` | Controls that start in the bar: `keyboard`, `float`, `dashboard`, `theater`, `dockLeft`, `dockRight`, `close`, `curvature`, or `"icon:<n>"`. A popup choice wins until the entry changes. |
 | `steamFrame.dashboard.frameControls.inMenu` | list of control names | `[ ]` | Controls that start in the three-dot menu (same names). |
 | `steamFrame.dashboard.frameControls.floatInTheater` | bool | `false` | Give theater windows the "Float" control (stock only shows it for dashboard-docked windows). |
-| `steamFrame.steamvrDebugger.enable` | bool | `true` if a UI patch uses port 8087, else `false` | SteamVR dashboard DevTools on `127.0.0.1:8087` (`VRWebHelper/DebuggerEnabled`), needed by dashboard patches. See [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable). |
+| `steamFrame.steamvrDebugger.enable` | bool | automatic | SteamVR dashboard DevTools on `127.0.0.1:8087` (`VRWebHelper/DebuggerEnabled`), needed by the dashboard patches (window control bar, curvature, close button, dashboard windows). Turned on automatically when one of them is enabled; there is normally no need to set it. See [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable). |
 | `steamFrame.hiddenApps` | list of str | `[ ]` | Desktop entry ids (without `.desktop`) to hide from the "+" and KDE menus. |
 | `steamFrame.clipboardSync.enable` | bool | `true` | Clipboard bridge between the Steam session and the nested desktop. |
 | `steamFrame.clipboardSync.package` | package | built from `dnut/clipboard-sync` | The clipboard-sync package. |
@@ -293,15 +293,17 @@ steamFrame.uiPatches.patches = [ {
 } ];
 ```
 
-**DevTools on the LAN:** SteamOS images also forward these ports to all
-interfaces: `steam-web-debug-portforward.service` (`0.0.0.0:8081` →
-`8080`) and `steamvr-web-debug-portforward.service` (`0.0.0.0:8088` →
-`8087`), and firewalld's `public` zone allows ports 1024-65535. Anyone on
-the same network can then run code in Steam's UI. Masking both units is
-recommended; it is a system-level change, outside Home Manager (e.g. with
-[system-manager](https://github.com/numtide/system-manager): links
-`/etc/systemd/system/<unit>` → `/dev/null`). The injector itself only uses
-`127.0.0.1`.
+**DevTools on the LAN:** Steam's **Developer Mode** (via
+`steamos-devkit-mode`) enables `steam-web-debug-portforward.service`
+(`0.0.0.0:8081` → `8080`) and `steamvr-web-debug-portforward.service`
+(`0.0.0.0:8088` → `8087`), besides sshd, xrdp and the devkit service;
+firewalld's `public` zone allows ports 1024-65535, so anyone on the same
+network could then run code in Steam's UI. None of the patches need
+Developer Mode (they only use `127.0.0.1`; for the full "+" menu use
+`launcherMenu.showAllApps`), so keep it off. If it was on while those units
+were masked, turning it off can leave them enabled: check with
+`systemctl is-enabled steam-web-debug-portforward steamvr-web-debug-portforward`
+and `sudo systemctl disable` them.
 
 **Caveat:** patches depend on Steam UI internals and can break with a Steam
 update. Find modules by signature rather than by id (below).
@@ -971,11 +973,10 @@ only if this module set it (marker in
 `~/.local/state/steam-frame-nix/`); a setting you made yourself is left
 alone.
 
-**Security:** SteamOS's `steamvr-web-debug-portforward.service` forwards
-`0.0.0.0:8088` to this port, so with the debugger on, anyone on the same
-network could run code in the SteamVR dashboard. Masking it is recommended
-(see "DevTools on the LAN" in [UI patches](#ui-patches-uipatchespatches));
-the patches only use `127.0.0.1`.
+**Security:** the port listens on `127.0.0.1` only. With Steam's Developer
+Mode on, SteamOS also forwards it to `0.0.0.0:8088` (LAN); keep Developer
+Mode off (see "DevTools on the LAN" in
+[UI patches](#ui-patches-uipatchespatches)).
 
 ### Hidden apps (`hiddenApps`)
 

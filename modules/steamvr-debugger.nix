@@ -21,9 +21,9 @@
 # false at the next SteamVR start and removes the marker; otherwise it
 # leaves the file alone (a setting made by hand is kept).
 #
-# Security: SteamOS's steamvr-web-debug-portforward.service forwards
-# 0.0.0.0:8088 to this port (see README, "DevTools on the LAN"); masking it
-# is recommended. Our patches only use 127.0.0.1.
+# Security: the port listens on 127.0.0.1 only; Steam's Developer Mode makes
+# SteamOS forward it to 0.0.0.0:8088 (README, "DevTools on the LAN"), so keep
+# Developer Mode off. Our patches only use 127.0.0.1.
 { config, lib, pkgs, ... }:
 let
   cfg = config.steamFrame.steamvrDebugger;
@@ -71,16 +71,17 @@ in {
   options.steamFrame.steamvrDebugger.enable = lib.mkOption {
     type = lib.types.bool;
     default = false;
-    defaultText = lib.literalMD "`true` if a patch in `steamFrame.uiPatches.patches` uses port 8087, else `false`";
+    defaultText = lib.literalMD "on automatically when a dashboard patch (a `steamFrame.uiPatches.patches` entry on port 8087) is enabled";
     description = ''
       Enable SteamVR's web helper debugger (DevTools of the SteamVR dashboard
       on 127.0.0.1:8087, setting VRWebHelper/DebuggerEnabled in
       ~/.config/openvr/config/steamvr.vrsettings), needed by patches of the
       SteamVR dashboard. Set before each SteamVR start, so it takes effect
       after SteamVR is restarted once. Turning it off sets the key back to
-      false at the next SteamVR start. Note: SteamOS's
-      steamvr-web-debug-portforward.service exposes the port on 0.0.0.0:8088;
-      masking it is recommended.
+      false at the next SteamVR start. Normally there is no need to set it:
+      it is turned on automatically when a dashboard patch is enabled. The
+      port listens on 127.0.0.1; keep Steam's Developer Mode off, which would
+      also forward it to the LAN (0.0.0.0:8088).
     '';
   };
 
