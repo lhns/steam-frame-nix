@@ -1,13 +1,13 @@
 // window-curvature: adjustable curvature per SteamVR dashboard window. The
 // stock "Toggle Curvature" control becomes a wheel: in the More Options menu
 // row (value shown on the right) and, if the control is in the bottom bar
-// (e.g. via frame-controls), on that bar button (no value; steps and snap
-// points are felt as haptics). Click toggles (curved -> flat, flat -> stock
+// (e.g. via frame-controls), on that bar button (no value; steps and
+// detents are felt as haptics). Click toggles (curved -> flat, flat -> stock
 // curve); dragging up/down with the laser sets the curvature live.
 //
 // Target: SteamVR dashboard (vrwebhelper, DevTools 127.0.0.1:8087, title
 // "systemui"). mkPatch patch (see lib/default.nix); opts: { default, max,
-// step, snap, snapPoints, dragThreshold, dragPixelsPerUnit,
+// step, snapPixels, snapPoints, dragThreshold, dragPixelsPerUnit,
 // barDragPixelsPerUnit, barDragRoom, haptics }.
 //
 // Stock curvature (frame.curvature, systemui's `curvature` component):
@@ -36,9 +36,14 @@
 // origin is compensated in outgoing scene graphs so the bar stays put in VR.
 // Laser events still mapped with the old layout are detected and shifted.
 //
+// Dragging: value = start value + drag distance / px per unit, rounded to
+// step. Snap points are detents in drag distance: the value holds there for
+// opts.snapPixels of travel, then continues, so no value is skipped.
+//
 // Haptics (opts.haptics): VROverlay.TriggerOverlayHapticEffect with stock
 // EOverlayHapticEffect values: SlidingEdge at 0/max, Snap at snap points,
-// Sliding otherwise (at most every 30 ms).
+// Sliding per step (at most every 30 ms). During a drag the dashboard's own
+// haptics (hover clicks on buttons the laser passes) are muted.
 //
 // Contract with other patches (e.g. frame-controls' long press); this patch
 // owns press-and-drag on its controls:
@@ -56,19 +61,20 @@
 // thresholds or restores the other's state.
 //
 // Debugging: window.__sfuiWindowCurvature: dump(), hits (rewrite/haptic
-// counters), log, setValue(frameID, v), controls(), cancelPress().
+// counters), log, setValue(frameID, v), controls(), cancelPress(),
+// dragValue(v0, dy, ppu, cur).
 ((find, sigs, opts, hooks) => {
   const NAME = 'window-curvature';
-  const VERSION = 11;
+  const VERSION = 16;
   const FLAT = 999;                               // origin distances >= this are "flat"
   const ICON_OFF = 40, ICON_ON = 39;              // Toggle Curvature action icons (sigs.curvatureAction)
   const HAPTIC = { Snap: 3, Sliding: 4, SlidingEdge: 5 };   // EOverlayHapticEffect (sigs.hapticEffects)
 
   const o = {
-    default: 1, max: 3, step: 0.05, snap: 0.15, snapPoints: [0, 1], dragThreshold: 8, dragPixelsPerUnit: 60,
-    barDragPixelsPerUnit: 30, barDragRoom: 160, haptics: true, ...opts,
+    default: 1, max: 3, step: 0.05, snapPixels: 24, snapPoints: [0, 1], dragThreshold: 8, dragPixelsPerUnit: 120,
+    barDragPixelsPerUnit: 60, barDragRoom: 160, haptics: true, ...opts,
   };
-  if (!(o.max > 0 && o.step > 0 && o.step <= o.max && o.default >= 0 && o.default <= o.max && o.snap >= 0 &&
+  if (!(o.max > 0 && o.step > 0 && o.step <= o.max && o.default >= 0 && o.default <= o.max && o.snapPixels >= 0 &&
       Array.isArray(o.snapPoints) && o.snapPoints.every((p) => p >= 0 && p <= o.max) &&
       o.dragThreshold >= 0 && o.dragPixelsPerUnit > 0 && o.barDragPixelsPerUnit > 0 &&
       Number.isInteger(o.barDragRoom) && o.barDragRoom >= 0 && typeof o.haptics === 'boolean'))
@@ -119,27 +125,49 @@
   const curved = (f) => !!curvatureOf(f)?.shouldCurve;
   const shown = (f) => (curved(f) ? strength(f) : 0);
 
-  // Value for a drag position (target: unrounded value under the pointer),
-  // or null to keep the current one: within +-snap of a snap point the value
-  // is that point, else target rounded to step; a change of less than 0.6
-  // steps away from cur is ignored (laser jitter at a step boundary).
-  const dragValue = (target, cur) => {
-    const snapped = o.snapPoints.find((p) => Math.abs(target - p) <= o.snap);
-    const v = clamp(snapped ?? round(target));
-    if (v === cur || (snapped === undefined && Math.abs(target - cur) < o.step * 0.6)) return null;
-    return v;
+  // Value for a drag of dy px (up = positive) from v0 at ppu px per unit, or
+  // null to keep cur. Snap points are detents in drag distance: reaching one
+  // (or starting on it) holds the value there for snapPixels of travel, then
+  // it continues from the point, so no values are skipped. Off a snap point
+  // the value is rounded to step; a change of less than 0.6 steps away from
+  // cur is ignored (laser jitter at a step boundary).
+  const dragValue = (v0, dy, ppu, cur) => {
+    const dir = Math.sign(dy);
+    let v = v0, rest = Math.abs(dy), held = null;
+    const points = o.snapPoints.filter((p) => (dir > 0 ? p >= v0 : p <= v0)).sort((a, b) => dir * (a - b));
+    for (const p of points) {
+      const dist = Math.abs(p - v) * ppu;
+      if (rest <= dist) break;
+      rest -= dist; v = p;
+      if (rest <= o.snapPixels) { held = p; rest = 0; break; }
+      rest -= o.snapPixels;
+    }
+    const target = held ?? v + dir * rest / ppu;
+    const nv = clamp(held ?? round(target));
+    if (nv === cur || (held === null && Math.abs(target - cur) < o.step * 0.6)) return null;
+    return nv;
   };
 
   // ---- haptics -------------------------------------------------------------------------
-  let lastHaptic = -Infinity;
+  // While a drag runs, the dashboard's own haptics (a click whenever the laser
+  // enters a button, e.g. menu rows the drag passes over) are muted, so only
+  // the value's ticks and detents are felt. The stock function is wrapped
+  // once (restored by teardown); our ticks call the original.
+  let lastHaptic = -Infinity, muteStock = false;
+  const ov = window.VRHTML?.VROverlay;
+  const stockHaptic = typeof ov?.TriggerOverlayHapticEffect === 'function'
+    ? (ov.TriggerOverlayHapticEffect.__sfuiCurvOrig ?? ov.TriggerOverlayHapticEffect) : null;
+  if (stockHaptic) {
+    const wrapped = function (...a) { if (!muteStock) return stockHaptic.apply(this, a); };
+    wrapped.__sfuiCurvOrig = stockHaptic;
+    ov.TriggerOverlayHapticEffect = wrapped;
+  }
   const haptic = (effect) => {
-    if (!o.haptics) return;
-    const ov = window.VRHTML?.VROverlay;
-    if (typeof ov?.TriggerOverlayHapticEffect !== 'function' || typeof ov.ThisOverlayHandle !== 'function') return;
+    if (!o.haptics || !stockHaptic || typeof ov.ThisOverlayHandle !== 'function') return;
     const now = performance.now();
     if (effect === HAPTIC.Sliding && now - lastHaptic < 30) return;
     lastHaptic = now;
-    try { ov.TriggerOverlayHapticEffect(ov.ThisOverlayHandle(), effect); hits.haptics++; } catch (e) { log('haptic failed', String(e)); }
+    try { stockHaptic.call(ov, ov.ThisOverlayHandle(), effect); hits.haptics++; } catch (e) { log('haptic failed', String(e)); }
   };
   const hapticFor = (v) => haptic(v <= 0 || v >= o.max ? HAPTIC.SlidingEdge
     : o.snapPoints.includes(v) ? HAPTIC.Snap : HAPTIC.Sliding);
@@ -378,6 +406,7 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
     if (!p.moved) {
       if (Math.abs(y - p.y0) < o.dragThreshold) return;
       p.moved = true;
+      muteStock = true;
       p.c.el?.classList.add('sfui-dragging');
       log('drag', { frame: p.c.fid, where: p.c.where });
       emit(p.c, 'sfui-curv-dragstart');
@@ -387,7 +416,7 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
       return;
     }
     const ppu = p.c.where === 'bar' ? o.barDragPixelsPerUnit : o.dragPixelsPerUnit;
-    const v = dragValue(p.v0 + (p.y0 - y) / ppu, shown(f));
+    const v = dragValue(p.v0, p.y0 - y, ppu, shown(f));
     if (v === null) return;
     setValue(f, v, 'drag');
     hapticFor(v);
@@ -398,6 +427,7 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
   // Ends the press; `release` of a press that never moved is a click.
   function endPress(why) {
     const p = press;
+    muteStock = false;
     if (!p) return false;
     press = null;
     window.removeEventListener('mousemove', onMove, true);
@@ -526,6 +556,7 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
 
   const teardown = () => {
     endPress('teardown');
+    if (stockHaptic && ov.TriggerOverlayHapticEffect?.__sfuiCurvOrig === stockHaptic) ov.TriggerOverlayHapticEffect = stockHaptic;
     for (const d of disposers.splice(0)) d();
     clearTimeout(syncTimer); clearTimeout(resendTimer);
     for (const key of [...controls.keys()]) removeControl(key);
@@ -560,6 +591,6 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
   log('patched', { version: VERSION, opts: o });
   resend();
   queueSync();
-  return `patched (default ${o.default}, max ${o.max}, step ${o.step}, snap ±${o.snap} at ${o.snapPoints.join('/')}, ` +
+  return `patched (default ${o.default}, max ${o.max}, step ${o.step}, snap ${o.snapPixels} px at ${o.snapPoints.join('/')}, ` +
     `haptics ${o.haptics ? 'on' : 'off'})`;
 })

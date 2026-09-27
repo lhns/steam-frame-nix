@@ -12,7 +12,11 @@ let
     inherit default description;
   };
 in {
-  imports = [ ./steam-ui-patches.nix ./steamvr-debugger.nix ];
+  imports = [
+    ./steam-ui-patches.nix ./steamvr-debugger.nix
+    (lib.mkRemovedOptionModule [ "steamFrame" "dashboard" "windowCurvature" "snap" ]
+      "Snapping is a detent in drag pixels now: use steamFrame.dashboard.windowCurvature.snapPixels.")
+  ];
 
   options.steamFrame.dashboard.windowCurvature = {
     enable = lib.mkEnableOption ''
@@ -28,13 +32,19 @@ in {
     '';
     max = value 3.0 "Largest curvature the control goes to (relative to the stock curve).";
     step = value 0.05 "Step the value is rounded to while dragging.";
-    snap = value 0.15 ''
-      Snap distance around snap points while dragging; 0 = no snapping.
-    '';
+    snapPixels = mkOption {
+      type = types.ints.unsigned;
+      default = 24;
+      description = ''
+        Detent at each snap point, in pixels of drag: the value holds at the
+        point for this much travel, then continues from it (no values are
+        skipped). 0 = no detent.
+      '';
+    };
     snapPoints = mkOption {
       type = types.listOf types.number;
       default = [ 0 1.0 ];
-      description = "Values the drag snaps to (0 = flat, 1 = stock curve).";
+      description = "Values with a detent while dragging (0 = flat, 1 = stock curve).";
     };
     dragThreshold = mkOption {
       type = types.ints.unsigned;
@@ -43,11 +53,12 @@ in {
         Vertical laser travel (menu px) that turns a press into a drag.
       '';
     };
-    dragPixelsPerUnit = value 60 ''
-      Menu pixels per 1.0 of curvature. The laser stops at the menu's edge
-      (~190 px above the row), so 0 to `max` should fit.
+    dragPixelsPerUnit = value 120 ''
+      Menu pixels per 1.0 of curvature (6 px per 0.05 step). The laser stops
+      at the menu's edge (~190 px above the row): with the default, 0 to 1
+      fits into one drag, the full range to `max` = 3 takes two.
     '';
-    barDragPixelsPerUnit = value 30 ''
+    barDragPixelsPerUnit = value 60 ''
       Bar pixels per 1.0 of curvature on the bottom-bar button.
     '';
     barDragRoom = mkOption {
@@ -62,7 +73,7 @@ in {
       type = types.bool;
       default = true;
       description = ''
-        Controller haptics while dragging (snap points, 0/`max` edges, steps).
+        Controller haptics while dragging (steps, detents, 0/`max` edges); the dashboard's own hover clicks are muted during a drag.
       '';
     };
   };
@@ -78,8 +89,8 @@ in {
         message = "steamFrame.dashboard.windowCurvature.default must be within 0 .. max (${builtins.toJSON cfg.max}), got ${builtins.toJSON cfg.default}.";
       }
       {
-        assertion = cfg.snap >= 0 && lib.all (p: p >= 0 && p <= cfg.max) cfg.snapPoints;
-        message = "steamFrame.dashboard.windowCurvature: snap must be >= 0 and snapPoints within 0 .. max (${builtins.toJSON cfg.max}).";
+        assertion = lib.all (p: p >= 0 && p <= cfg.max) cfg.snapPoints;
+        message = "steamFrame.dashboard.windowCurvature: snapPoints must be within 0 .. max (${builtins.toJSON cfg.max}).";
       }
       {
         assertion = cfg.dragPixelsPerUnit > 0 && cfg.barDragPixelsPerUnit > 0;
@@ -94,7 +105,7 @@ in {
       patch = mkPatch {
         name = "window-curvature";
         src = ./window-curvature/patch.js;
-        opts = removeAttrs cfg [ "enable" ];
+        opts = removeAttrs cfg [ "enable" "snap" ];
       };
       unpatch = ./window-curvature/unpatch.js;
     } ];

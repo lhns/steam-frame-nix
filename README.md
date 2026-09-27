@@ -214,13 +214,13 @@ without it.
 | `steamFrame.dashboard.windowCurvature.default` | number | `1.0` | Curvature of curved world/hand windows without own value (1 = stock, 0 = flat). |
 | `steamFrame.dashboard.windowCurvature.max` | number | `3.0` | Largest curvature. |
 | `steamFrame.dashboard.windowCurvature.step` | number | `0.05` | Rounding step while dragging. |
-| `steamFrame.dashboard.windowCurvature.snap` | number | `0.15` | Snap distance around snap points; `0`: none. |
+| `steamFrame.dashboard.windowCurvature.snapPixels` | unsigned int (px) | `24` | Detent at each snap point in drag pixels: the value holds there, then continues (nothing skipped); `0`: none. |
 | `steamFrame.dashboard.windowCurvature.snapPoints` | list of numbers | `[ 0 1.0 ]` | Snap points (flat, stock). |
 | `steamFrame.dashboard.windowCurvature.dragThreshold` | unsigned int (px) | `8` | Vertical travel before a press becomes a drag. |
-| `steamFrame.dashboard.windowCurvature.dragPixelsPerUnit` | number (px) | `60` | Drag distance per 1.0 in the menu. |
-| `steamFrame.dashboard.windowCurvature.barDragPixelsPerUnit` | number (px) | `30` | Drag distance per 1.0 on the bar button. |
+| `steamFrame.dashboard.windowCurvature.dragPixelsPerUnit` | number (px) | `120` | Drag distance per 1.0 in the menu (6 px per 0.05 step). |
+| `steamFrame.dashboard.windowCurvature.barDragPixelsPerUnit` | number (px) | `60` | Drag distance per 1.0 on the bar button. |
 | `steamFrame.dashboard.windowCurvature.barDragRoom` | unsigned int (px) | `160` | Room added above/below the bar while dragging; `0`: none. |
-| `steamFrame.dashboard.windowCurvature.haptics` | bool | `true` | Controller haptics while dragging. |
+| `steamFrame.dashboard.windowCurvature.haptics` | bool | `true` | Controller haptics while dragging (steps, detents, edges); the dashboard's hover clicks are muted during a drag. |
 | `steamFrame.dashboard.frameControls.enable` | bool | `false` | Move window controls between bar and three-dot menu, see [Window control bar](#window-control-bar-dashboardframecontrols). |
 | `steamFrame.dashboard.frameControls.longPressMs` | int, 300-10000 (ms) | `1500` | Long-press duration. |
 | `steamFrame.dashboard.frameControls.inBar` | list of control names | `[ ]` | Controls that start in the bar: `keyboard`, `float`, `dashboard`, `theater`, `dockLeft`, `dockRight`, `close`, `curvature`, `"icon:<n>"`. |
@@ -599,8 +599,9 @@ without the value, with haptic steps.
 
 - **click:** curved → flat, flat → stock (1);
 - **drag up/down** with the laser: curvature from 0 (flat) to `max`,
-  relative to stock (2 = half the radius), snapping near `snapPoints`, with
-  haptics for snaps, edges and steps.
+  relative to stock (2 = half the radius), with a detent of `snapPixels` of
+  drag at each of `snapPoints` (no values skipped), and haptics for snaps,
+  edges and steps.
 
 A window without its own value is shown at `default` once curved in the
 world or on a hand, at 1 in the dashboard or theater. Values are kept per
@@ -611,8 +612,9 @@ window until SteamVR restarts. Debugging: `window.__sfuiWindowCurvature.dump()`
 
 - Laser only; with gamepad navigation the row is the stock toggle.
 - No thumbstick scrolling (SteamVR sends no wheel events to the menu).
-- The laser stops at the menu's edge, so `dragPixelsPerUnit` × `max` should
-  stay below ~190 px to reach `max` in one drag.
+- The laser stops at the menu's edge (~190 px above the row): with the
+  default 120 px per 1.0, 0 → 1 fits into one drag, 0 → 3 takes two. Lower
+  `dragPixelsPerUnit` (≤ 60) for the full range in one drag.
 
 **For patch authors** (other patches handling presses on these controls):
 every element the patch drives has class `sfui-curv-ctl`; when a press
