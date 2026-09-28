@@ -3,7 +3,8 @@
 # - patch.js (injected over CEF DevTools, 127.0.0.1:8080) adds a bottom row
 #   Esc Ctrl Alt [space] AltGr ← ↑ ↓ → (AltGr+arrows = Pos1/PgUp/PgDn/End) and
 #   hands chords, Shift+arrows and characters Steam would turn into "1"
-#   (non-ASCII, AltGr/dead keys) to the helper.
+#   (non-ASCII, AltGr/dead keys) to the helper. AltGr + the key left of
+#   Backspace = Delete.
 # - helper.mjs keeps it injected, sends those keys with xdotool on :0 (an
 #   allowlist: no ASCII text, no Enter) and unpatches on stop.
 # Tested with Steam client 1790377368 (UI build 11041156).

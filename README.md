@@ -459,6 +459,10 @@ reboot or Steam restart needed.
   or AltGr.
 - AltGr + arrows: Home, End, Page Up, Page Down (hinted on the keys);
   Shift + arrows select text.
+- AltGr + the key left of Backspace (`´` on German, `=` on US): Delete,
+  labelled like Steam's Delete key in its language (`Entf`; `Del` if that is
+  longer); repeats while held. Layouts with an AltGr character on that key
+  get none.
 - Ctrl/Alt chords and Esc are sent with `xdotool key` on `:0` (focus follows
   the VR-selected window); a toggled Ctrl/Alt is held down while the
   keyboard is open (e.g. Ctrl+scroll).

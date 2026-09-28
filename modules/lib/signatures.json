@@ -60,7 +60,9 @@
         "keyboardComponent": {
           "checkOnly": true,
           "module": { "includes": ["TypeKeyInternal(", "toggleStates", "standardLayout"] },
-          "expects": ["\"data-key\"", "\"data-key-row\"", "HandleVirtualKeyDown"]
+          "expects": ["\"data-key\"", "\"data-key-row\"", "HandleVirtualKeyDown", "RenderStandardKeyboard(",
+            "rgLayout:", "s_longPressThreshold", "s_longPressRepeatThreshold", "m_mapTouched",
+            "CancelLongPressTimer(){", "DismissLongPress(){", "ClearHoldTarget(){", "\"Backspace\""]
         },
         "popupManager": {
           "checkOnly": true,

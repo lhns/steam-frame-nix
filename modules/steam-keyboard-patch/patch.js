@@ -2,6 +2,8 @@
 // Extends Steam's VR keyboard for gamescope app windows:
 //  - bottom row: Esc Ctrl Alt [space] AltGr ← ↑ ↓ → Close, stable with Shift
 //    and AltGr; AltGr + arrows = Pos1/PgUp/PgDn/End
+//  - AltGr + the key left of Backspace (German ´/`, empty on AltGr) = Delete
+//    (Steam's "#Key_Delete" label, e.g. Entf), repeating while held
 //  - Ctrl/Alt chords, Esc, the AltGr arrow keys and Shift+arrows are pressed
 //    for real (Steam can't: in VR SteamClient.Input.ControllerKeyboardSetKeyState
 //    throws "Unknown method")
@@ -19,7 +21,7 @@
 // mkPatch patch (see lib/default.nix); no options. On a signature mismatch
 // it returns an error and changes nothing. Idempotent.
 ((find, sigs) => {
-  const VERSION = 10;
+  const VERSION = 11;
   const send = (msg) => window.__vrkbdKey && window.__vrkbdKey(msg);
   let mods;
   try {
@@ -33,6 +35,7 @@
   // For unpatch.js, which runs without the finder library.
   window.__vrkbdRefs = { Manager, currentLayout: Layouts.currentLayout };
   let changed = false;
+  const active = (v) => (v & 7) !== 0;           // toggle state bits: 1 one-shot, 2 locked, 4 held
 
   // Replace obj[name] with make(original), once per VERSION.
   const wrap = (obj, name, make) => {
@@ -70,12 +73,39 @@
     out.splice(out.length - 1, 0, ...ARROWS);      // before Close/Done (last entry)
     return out;
   };
+  // ---- AltGr: Delete on the key left of Backspace --------------------------------
+  // rgLayout is called while the keyboard component renders
+  // (RenderStandardKeyboard, wrapped below to publish the instance as
+  // window.__vrkbdRendering), so the rows follow its AltGr state. While AltGr
+  // is active, the key left of Backspace becomes Delete if it has no AltGr
+  // character (German ´/`, US =/+; Steam would draw it empty). Also while a
+  // Delete hold repeats: its first Delete releases a one-shot AltGr, like any
+  // key, but the held key stays until release.
+  const DEL = 'VKX_Delete';
+  const delLabel = () => {                         // Steam's own: Entf, Suppr, Canc, Del; English "Delete" -> Del
+    let l = null;
+    try { l = window.LocalizationManager?.LocalizeString?.('#Key_Delete'); } catch { /* not loaded */ }
+    return typeof l === 'string' && l && l.length <= 5 ? l : 'Del';
+  };
+  const freeOnAltGr = (x) => (Array.isArray(x) ? !x[2] : (typeof x === 'string' ? x : x?.key)?.length === 1);
+  const withDelete = (rows) => {
+    const kb = window.__vrkbdRendering;
+    if (!kb || !(active(kb.state?.toggleStates?.AltGr) || kb.__vrkbdDelHold)) return rows;
+    let done = false;
+    return rows.map((row) => {
+      const i = done ? -1 : row.findIndex((x) => !Array.isArray(x) && x?.key === 'Backspace');
+      if (i < 0) return row;
+      done = true;
+      if (i < 1 || !freeOnAltGr(row[i - 1])) return row;
+      return [...row.slice(0, i - 1), { key: DEL, label: delLabel(), type: first(row[i - 1])?.type }, ...row.slice(i)];
+    });
+  };
   window.__vrkbdLayouts ??= new Set();             // for unpatch.js, incl. layouts disabled since
   for (const l of [...(Layouts.enabledLayouts() || []), Layouts.currentLayout()]) {
     if (typeof l?.rgLayout !== 'function') continue;
     window.__vrkbdLayouts.add(l);
     wrap(l, 'rgLayout', (orig) => (opts) => {
-      const rows = orig(opts);
+      const rows = withDelete(orig(opts));
       return [...rows.slice(0, -1), bottomRow(rows[rows.length - 1])];
     });
   }
@@ -137,6 +167,14 @@
   while (!Object.prototype.hasOwnProperty.call(proto, 'TypeKeyInternal')) proto = Object.getPrototypeOf(proto);
   window.__vrkbdInst = inst;                       // for the hold timer and unpatch.js
   window.__vrkbdProto = proto;
+  const canDelete = typeof proto.RenderStandardKeyboard === 'function';
+  if (canDelete) {
+    wrap(proto, 'RenderStandardKeyboard', (orig) => function (...a) {
+      const prev = window.__vrkbdRendering;
+      window.__vrkbdRendering = this;
+      try { return orig.apply(this, a); } finally { window.__vrkbdRendering = prev; }
+    });
+  }
 
   // Stylesheet, re-applied on every inject (the popup can be recreated). The
   // space bar is the only flexible key, so it absorbs the width changes.
@@ -154,11 +192,10 @@
     // Arrow keys: smaller (still centered) icon and a small hint at the bottom edge.
     '[data-key^="Arrow"] span ~ span { font-size: 7px !important; top: auto !important; bottom: 3px !important; line-height: 1 !important; }',
     '[data-key^="Arrow"] span:first-child svg { height: 18px !important; }',
-    `${sel(ALTGR_ARROWS.map((x) => x.key), ' span')} { font-size: 13px !important; }`,
+    `${sel([...ALTGR_ARROWS.map((x) => x.key), DEL], ' span')} { font-size: 13px !important; }`,
   ].join('\n');
 
   // ---- key handling ----------------------------------------------------------
-  const active = (v) => (v & 7) !== 0;           // toggle state bits: 1 one-shot, 2 locked
   const release = (v) => { const z = v & 3; return (z === 1 ? 0 : z) | (v & 4); };
   const TOGGLES = ['Shift', 'CapsLock', 'Control', 'Alt', 'AltGr'];
   const SYMS = {
@@ -186,6 +223,70 @@
       Shift: release(s.toggleStates.Shift), Control: release(s.toggleStates.Control),
       Alt: release(s.toggleStates.Alt), AltGr: release(s.toggleStates.AltGr) } }));
   });
+
+  // ---- Delete repeat -----------------------------------------------------------
+  // Steam repeats only data-key "Backspace" on a long press (and types other
+  // keys once at release). Like it: after s_longPressThreshold of holding
+  // Delete, take the press over (Steam's own touch-end cleanup: no key at
+  // release, no long press) and type Delete every s_longPressRepeatThreshold
+  // until release. Passive capture listeners, one set per keyboard window.
+  const win = kbPopup.window;
+  if (canDelete && win.__vrkbdDelRepeat !== VERSION) {
+    win.__vrkbdDelDetach?.();
+    let hold = null;                               // { inst, el, target, timer, taken }
+    const stop = () => {
+      if (!hold) return;
+      const h = hold;
+      hold = null;
+      clearTimeout(h.timer);
+      if (h.inst.__vrkbdDelHold) { h.inst.__vrkbdDelHold = false; h.inst.forceUpdate(); }
+    };
+    const start = (target, el) => {
+      const kb = find.findFiberUp(el, (f) => typeof f.stateNode?.TypeKeyInternal === 'function', 200)?.stateNode;
+      if (!kb) return;
+      const C = kb.constructor;
+      const delay = C.s_longPressThreshold ?? 450, repeat = C.s_longPressRepeatThreshold ?? 200;
+      const h = hold = { inst: kb, el, target, timer: 0, taken: false };
+      const tick = (ms) => {
+        h.timer = setTimeout(() => {
+          if (hold !== h) return;
+          if (!el.isConnected || el.getAttribute('data-key') !== DEL || !Status.VRKeyboardStatus?.bIsOpen) { stop(); return; }
+          if (!h.taken) {
+            h.taken = true;
+            kb.__vrkbdDelHold = true;              // keeps the key after a one-shot AltGr is released
+            try {
+              for (const t of [...kb.m_mapTouched]) if (el.contains(t)) kb.m_mapTouched.delete(t);
+              kb.CancelLongPressTimer(); kb.DismissLongPress(); kb.ClearHoldTarget();
+            } catch { /* Steam changed: at worst one more Delete at release */ }
+          }
+          kb.TypeKeyInternal({ strKey: DEL });
+          tick(repeat);
+        }, ms);
+      };
+      tick(delay - 10);                            // just before Steam's own long-press timer
+    };
+    const keyEl = (t) => t?.closest?.('[data-key]');
+    const onDown = (e) => {
+      stop();
+      const t = e.type === 'touchstart' ? (e.touches.length === 1 ? e.changedTouches[0]?.target : null) : (e.button === 0 ? e.target : null);
+      const el = keyEl(t);
+      if (el?.getAttribute('data-key') === DEL) start(t, el);
+    };
+    const onUp = (e) => {
+      if (!hold) return;
+      if (e.type.startsWith('touch') && ![...e.changedTouches].some((t) => t.target === hold.target)) return;
+      stop();
+    };
+    const L = { capture: true, passive: true };
+    const types = [['touchstart', onDown], ['mousedown', onDown], ['touchend', onUp], ['touchcancel', onUp], ['mouseup', onUp]];
+    for (const [type, f] of types) win.addEventListener(type, f, L);
+    win.__vrkbdDelDetach = () => {
+      stop();
+      for (const [type, f] of types) win.removeEventListener(type, f, L);
+      delete win.__vrkbdDelDetach; delete win.__vrkbdDelRepeat;
+    };
+    win.__vrkbdDelRepeat = VERSION;                // __vrkbdDelDetach: for unpatch.js
+  }
 
   // ---- held modifiers ---------------------------------------------------------
   // Keep the real Ctrl/Alt pressed while the toggle is active and the keyboard is
