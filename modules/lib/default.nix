@@ -28,14 +28,28 @@ in {
 
   # name: file name (and default signatures entry); src: the patch file;
   # signatures: `sigs` (default: signatures.json entry `name`, else none);
-  # opts: JSON-serialisable options.
-  mkPatch = { name, src, signatures ? sigFile.patches.${name}.modules or { }, opts ? { } }:
-    pkgs.writeText "${name}.js" ''
-      (${builtins.readFile src}
-      )(${builtins.readFile ./finders.js}
-      , ${builtins.toJSON signatures}
-      , ${builtins.toJSON opts}
-      , ${builtins.readFile ./hooks.js}
-      )
-    '';
+  # opts: JSON-serialisable options; extraArgs: files or derivations with JS
+  # expressions passed as further arguments after hooks (built with
+  # runCommand, so they may be build outputs, e.g. generated data).
+  mkPatch = { name, src, signatures ? sigFile.patches.${name}.modules or { }, opts ? { }, extraArgs ? [ ] }:
+    if extraArgs == [ ] then
+      pkgs.writeText "${name}.js" ''
+        (${builtins.readFile src}
+        )(${builtins.readFile ./finders.js}
+        , ${builtins.toJSON signatures}
+        , ${builtins.toJSON opts}
+        , ${builtins.readFile ./hooks.js}
+        )
+      ''
+    else
+      pkgs.runCommand "${name}.js" { } ''
+        {
+          echo '('; cat ${src}; echo ')('; cat ${./finders.js}
+          echo ','; echo ${pkgs.lib.escapeShellArg (builtins.toJSON signatures)}
+          echo ','; echo ${pkgs.lib.escapeShellArg (builtins.toJSON opts)}
+          echo ','; cat ${./hooks.js}
+          for f in ${pkgs.lib.escapeShellArgs (map (f: "${f}") extraArgs)}; do echo ','; cat "$f"; done
+          echo ')'
+        } > $out
+      '';
 }
