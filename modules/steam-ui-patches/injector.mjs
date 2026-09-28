@@ -34,7 +34,9 @@
 // authoritative from then on. set() goes through the CDP binding
 // window.__sfuiStoreSave('{"name","value"}'), which this process writes to the
 // file (atomically, only on change, only for "state" patches of that target,
-// at most 64 KiB). The file is user data: nothing deletes it.
+// at most 64 KiB). The file is user data: kept when the patch is disabled or
+// removed, deleted only by steam-frame-nix-cleanup --all (install.sh
+// uninstall).
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 

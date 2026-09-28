@@ -6,7 +6,9 @@
 # It exists while `patches` is non-empty, restarts on every switch (the old
 # instance reverts removed patches) and is stopped once the list is empty.
 # Patches with `state = true` get a persistent JSON value (injector.mjs:
-# "Persistent state"). Patch calling convention (mkPatch): lib/default.nix.
+# "Persistent state"), kept when the patch goes and removed by
+# steam-frame-nix-cleanup --all. Patch calling convention (mkPatch):
+# lib/default.nix.
 { config, pkgs, lib, ... }:
 let
   cfg = config.steamFrame.uiPatches;
@@ -73,7 +75,10 @@ let
           SteamVR restarts and reboots: the page reads it with
           `window.__sfuiStore.get(name)` and writes it with
           `window.__sfuiStore.set(name, value)` (see injector.mjs). The file
-          is user data and stays when the patch is removed.
+          is kept when the patch is disabled or removed (the choices come
+          back when it is enabled again) and removed by
+          `steam-frame-nix-cleanup --all` (also run by `install.sh
+          uninstall`).
         '';
       };
     };

@@ -30,8 +30,7 @@
 // ~/.local/state/steam-frame-nix/ui-patches/frame-controls.json), which
 // seeds a fresh page (SteamVR restart, reboot, reload). localStorage can't
 // do that: steamvr.service deletes ~/.cache/SteamVR (vrwebhelper's profile)
-// on every start. Version 4's localStorage copy is read once as a fallback
-// (migration) and removed once the file has the state.
+// on every start (which also took version 4's localStorage copy with it).
 //
 // Long press: the dashboard only gets primary-button laser input (no right
 // click; thumbstick click arrives as nothing). Holding changes nothing; the
@@ -69,9 +68,8 @@
 // setPlacement(name or "icon:N", 'bar' | 'menu' | null), reset().
 ((find, sigs, opts) => {
   const NAME = 'frame-controls';
-  const VERSION = 5;
+  const VERSION = 6;
   const T_SPACER = 1, T_ACTION = 2;
-  const LS_KEY = 'sfui.frameControls.v1';        // version <= 4 (migration only)
   // Action icon enums (sigs.controls anchors them): names for the options.
   const NAMES = { keyboard: 22, float: 26, dashboard: 27, theater: 28, dockLeft: 29, dockRight: 30, close: 31, curvature: 40 };
   const ICON = { more: 38, float: 26, dashboard: 27 };
@@ -118,13 +116,9 @@
   const store = window.__sfuiStore;               // injector's persistent store (absent: in-page only)
   let S = window.__sfuiFrameControlsState, restored = null;
   if (S?.schema !== 1) {
-    let saved = store?.get(NAME), from = 'file';
-    if (saved?.schema !== 1) {
-      from = 'localStorage';
-      try { saved = JSON.parse(localStorage.getItem(LS_KEY) ?? 'null'); } catch { saved = null; }
-    }
+    const saved = store?.get(NAME);
     const ok = saved?.schema === 1 && saved.placement && typeof saved.placement === 'object';
-    restored = ok ? from : 'nothing';
+    restored = ok ? 'file' : 'nothing';
     S = window.__sfuiFrameControlsState = { schema: 1, placement: ok ? { ...saved.placement } : {}, nixSeen: ok ? { ...saved.nixSeen } : {}, log: [] };
   }
   const logBuf = S.log ??= [];
@@ -136,7 +130,6 @@
   let unsaved = true;                             // last save not sent (no injector binding): retried by check()
   const save = () => {
     unsaved = !store?.set?.(NAME, { schema: 1, placement: { ...S.placement }, nixSeen: { ...S.nixSeen } });
-    if (!unsaved) { try { localStorage.removeItem(LS_KEY); } catch { /* none */ } }
   };
   for (const k of new Set([...Object.keys(optMap), ...Object.keys(S.nixSeen)])) {
     if (S.nixSeen[k] !== optMap[k] && k in S.placement) {
