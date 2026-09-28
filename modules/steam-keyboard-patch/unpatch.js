@@ -26,10 +26,7 @@
     if (refs?.currentLayout) inst.setState({ standardLayout: refs.currentLayout() });
     inst.forceUpdate();
   }
-  for (const p of g_PopupManager.GetPopups?.() || []) {
-    p.window?.document.getElementById('vrkbd-style')?.remove();
-    p.window?.document.documentElement.classList.remove('vrkbd-del-hint');
-  }
+  for (const p of g_PopupManager.GetPopups?.() || []) p.window?.document.getElementById('vrkbd-style')?.remove();
   for (const k of ['__vrkbdHoldTimer', '__vrkbdHeld', '__vrkbdInst', '__vrkbdProto', '__vrkbdLayouts', '__vrkbdRefs', '__vrkbdRendering']) delete window[k];
   return 'unpatched';
 })()

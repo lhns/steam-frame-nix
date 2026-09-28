@@ -21,7 +21,7 @@
 // mkPatch patch (see lib/default.nix); no options. On a signature mismatch
 // it returns an error and changes nothing. Idempotent.
 ((find, sigs) => {
-  const VERSION = 16;
+  const VERSION = 17;
   const send = (msg) => window.__vrkbdKey && window.__vrkbdKey(msg);
   let mods;
   try {
@@ -95,18 +95,24 @@
   // its type with an empty AltGr entry.
   const keepSize = (x) => (Array.isArray(x) && x.length < 3 && first(x)?.type != null
     ? [x[0], x[1] ?? null, { key: '', label: '', type: first(x).type }] : x);
-  // Without AltGr the free key shows a small Delete hint (stylesheet, like
-  // the arrows' AltGr hints), enabled by the class vrkbd-del-hint on the
-  // keyboard document while the current layout has such a key.
+  // Without AltGr the free key shows Delete as its AltGr hint, drawn by
+  // Steam like the others (e.g. } on 0): a third entry with an empty key
+  // (so it adds nothing to the long-press characters) and the label.
   const withDelete = (rows) => {
     const kb = window.__vrkbdRendering;
     if (!kb) return rows;
     const bsRow = rows.findIndex((row) => row.some((x) => !Array.isArray(x) && x?.key === 'Backspace'));
     const i = bsRow < 0 ? -1 : rows[bsRow].findIndex((x) => !Array.isArray(x) && x?.key === 'Backspace');
     const free = i >= 1 && freeOnAltGr(rows[bsRow][i - 1]);
-    try { kb.m_keyboardDiv?.ownerDocument?.documentElement.classList.toggle('vrkbd-del-hint', free); } catch { /* no document */ }
     const altGr = active(kb.state?.toggleStates?.AltGr);
-    if (!(altGr || kb.__vrkbdDelHold)) return rows;
+    if (!(altGr || kb.__vrkbdDelHold)) {
+      if (!free) return rows;
+      const x = rows[bsRow][i - 1], hint = [...(Array.isArray(x) ? x : [x]), null].slice(0, 2);
+      rows = [...rows];
+      rows[bsRow] = [...rows[bsRow]];
+      rows[bsRow][i - 1] = [...hint, { key: '', label: delLabel() }];
+      return rows;
+    }
     if (altGr) rows = rows.map((row) => row.map(keepSize));
     if (!free) return rows;
     const row = rows[bsRow];
@@ -212,12 +218,6 @@
     `[data-key="${DEL}"] { width: 0 !important; flex-grow: 1 !important; }`,
     `[data-key="${DEL}"] > div { justify-content: center !important; text-align: center !important; }`,
     `[data-key="${DEL}"] > div > span { margin: 0 !important; }`,
-    // Delete hint on the free key without AltGr: the arrow hints' size, on
-    // the baseline of Steam's AltGr hints (e.g. } on 0: right/bottom 4px,
-    // 9px, line-height normal; 1px more for 7px's shorter descent).
-    `.vrkbd-del-hint [role="gridcell"]:has(+ [role="gridcell"] > [data-key="Backspace"]) > [data-key]:not([data-key="${DEL}"]) > div::after {` +
-      ` content: ${JSON.stringify(delLabel())}; position: absolute; right: 4px; bottom: 5px; font-size: 7px; line-height: normal;` +
-      ' opacity: 0.45; pointer-events: none; }',
   ].join('\n');
 
   // ---- key handling ----------------------------------------------------------
