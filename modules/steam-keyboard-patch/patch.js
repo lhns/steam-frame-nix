@@ -3,7 +3,8 @@
 //  - bottom row: Esc Ctrl Alt [space] AltGr ← ↑ ↓ → Close, stable with Shift
 //    and AltGr; AltGr + arrows = Pos1/PgUp/PgDn/End
 //  - AltGr + the key left of Backspace (German ´/`, empty on AltGr) = Delete
-//    (Steam's "#Key_Delete" label, e.g. Entf), repeating while held
+//    (Steam's "#Key_Delete" label, e.g. Entf), repeating while held; layouts
+//    without AltGr (US, ...) get Steam's AltGr key labelled Fn
 //  - Ctrl/Alt chords, Esc, the AltGr arrow keys and Shift+arrows are pressed
 //    for real (Steam can't: in VR SteamClient.Input.ControllerKeyboardSetKeyState
 //    throws "Unknown method")
@@ -21,7 +22,7 @@
 // mkPatch patch (see lib/default.nix); no options. On a signature mismatch
 // it returns an error and changes nothing. Idempotent.
 ((find, sigs) => {
-  const VERSION = 19;
+  const VERSION = 20;
   const send = (msg) => window.__vrkbdKey && window.__vrkbdKey(msg);
   let mods;
   try {
@@ -62,13 +63,20 @@
     .map((a, i) => [{ ...a, type: HALF }, null, ALTGR_ARROWS[i]]);
   const first = (x) => (Array.isArray(x) ? x.find((y) => y) : x);
   const isArrow = (x) => (Array.isArray(x) ? x : [x]).some((y) => y?.key?.startsWith?.('Arrow'));
+  // Layouts without AltGr (Steam's bottom row without it: US, Dvorak,
+  // Colemak, Bulgarian, Chinese, Japanese, Korean) get Steam's own AltGr
+  // toggle key, labelled Fn, where German has AltGr (right of the space bar):
+  // same one-shot/locked/held semantics, AltGr layer, Delete, arrow keys.
+  const FN = { key: 'AltGr', label: 'Fn', type: 4 };  // type Meta, like Steam's AltGr key
   const bottomRow = (row) => {
     const out = [];
+    const hasAltGr = row.some((x) => (Array.isArray(x) ? x : [x]).some((y) => y?.key === 'AltGr'));
     for (const x of row) {
       const key = first(x);
       if (!key || isArrow(x)) continue;
       if (key.key === ' ') out.push(...MODS.map(same));
       out.push(same(key));
+      if (key.key === ' ' && !hasAltGr) out.push(same(FN));
     }
     out.splice(out.length - 1, 0, ...ARROWS);      // before Close/Done (last entry)
     return out;

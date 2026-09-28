@@ -463,6 +463,9 @@ reboot or Steam restart needed.
   labelled like Steam's Delete key in its language (`Entf`; `Del` if that is
   longer), hinted on the key without AltGr; repeats while held. Layouts with
   an AltGr character on that key get none.
+- Layouts without AltGr (US, Dvorak, Colemak, Bulgarian, Chinese, Japanese,
+  Korean) get an `Fn` key right of the space bar: Steam's AltGr toggle
+  (tap: once, tap twice: locked, hold), for Delete and Home/End/Page Up/Down.
 - Ctrl/Alt chords and Esc are sent with `xdotool key` on `:0` (focus follows
   the VR-selected window); a toggled Ctrl/Alt is held down while the
   keyboard is open (e.g. Ctrl+scroll).
