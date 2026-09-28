@@ -5,19 +5,25 @@
 #   readable at eval time, so user.js is linked into each profile on switch.
 # - desktopProfile: the sessions have separate buses/displays, so a second
 #   Firefox can't reach the running one and hits the profile lock; the nested
-#   desktop gets its own profile (no user.js: fullscreen works there).
+#   desktop gets its own profile (no fullscreen fix: fullscreen works there).
+# - prefs: about:config values for every profile, desktop one included.
 # The entry shadows the Flatpak's (same ID), keeping MIME associations, and is
 # seen by the "+" menu (which reads only ~/.local/share/applications).
 { config, pkgs, lib, ... }:
 let
   cfg = config.steamFrame.firefox;
-  userJs = pkgs.writeText "firefox-user.js" ''
-    user_pref("full-screen-api.ignore-widgets", true);
-  '';
+  toUserJs = name: prefs: pkgs.writeText name (lib.concatStrings (lib.mapAttrsToList
+    (k: v: "user_pref(${builtins.toJSON k}, ${builtins.toJSON v});\n") prefs));
+  vrPrefs = cfg.prefs // lib.optionalAttrs cfg.vrFullscreenFix { "full-screen-api.ignore-widgets" = true; };
+  userJs = toUserJs "firefox-user.js" vrPrefs;
+  desktopUserJs = toUserJs "firefox-desktop-user.js" cfg.prefs;
   ffDir = "$HOME/.var/app/org.mozilla.firefox/config/mozilla/firefox";
   profileDir = "${ffDir}/${cfg.desktopProfile}";
-  skipDesktopProfile = lib.optionalString (cfg.desktopProfile != null)
-    ''[ "$(basename "$prof")" = ${lib.escapeShellArg cfg.desktopProfile} ] && continue'';
+  # user.js for a profile dir ($prof): desktop profile -> prefs only.
+  pickUserJs = if cfg.desktopProfile == null then "js=${userJs}" else ''
+    js=${userJs}
+    [ "$(basename "$prof")" = ${lib.escapeShellArg cfg.desktopProfile} ] && js=${desktopUserJs}
+  '';
 
   firefox = pkgs.writeShellScript "firefox-launcher" (''
     profile=()
@@ -40,9 +46,20 @@ in {
       type = lib.types.bool;
       default = true;
       description = ''
-        Link a user.js (full-screen-api.ignore-widgets) into every existing
-        profile except the desktop one, so fullscreen fills the window instead
-        of freezing in the Steam session.
+        Set full-screen-api.ignore-widgets in every profile except the
+        desktop one, so fullscreen fills the window instead of freezing in the
+        Steam session.
+      '';
+    };
+    prefs = lib.mkOption {
+      type = with lib.types; attrsOf (oneOf [ bool int str ]);
+      default = { };
+      example = { "media.av1.enabled" = false; };
+      description = ''
+        about:config preferences for every profile (desktop one included),
+        set through a linked user.js on each switch. E.g. media.av1.enabled =
+        false: the Frame's decoder has no AV1, so sites like YouTube fall back
+        to VP9/H.264, which it decodes in hardware.
       '';
     };
     desktopProfile = lib.mkOption {
@@ -56,17 +73,19 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    home.activation.firefoxUserJs = lib.mkIf cfg.vrFullscreenFix
+    # Linked into every existing profile (profile names are random); an empty
+    # user.js is harmless and keeps turning prefs off revertible.
+    home.activation.firefoxUserJs =
       (lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         for prof in "${ffDir}"/*/; do
-          ${skipDesktopProfile}
           [ -f "$prof/prefs.js" ] || continue            # only real profiles
+          ${pickUserJs}
           target="$prof/user.js"
           if [ -e "$target" ] && [ ! -L "$target" ]; then
             echo "firefox: skipping $target (not managed by us, move it away to adopt)"
             continue
           fi
-          run ln -sfn ${userJs} "$target"
+          run ln -sfn "$js" "$target"
         done
       '');
 
