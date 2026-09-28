@@ -21,6 +21,7 @@
       steam-ui-patches = ./modules/steam-ui-patches.nix;
       launcher-menu = ./modules/launcher-menu.nix;
       steamvr-debugger = ./modules/steamvr-debugger.nix;
+      cleanup = ./modules/cleanup.nix;
       dashboard-windows = ./modules/dashboard-windows.nix;
       steam-close-button = ./modules/steam-close-button.nix;
       window-curvature = ./modules/window-curvature.nix;

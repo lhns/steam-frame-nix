@@ -7,6 +7,8 @@
 let
   cfg = config.steamFrame.clipboardSync;
 in {
+  imports = [ ./cleanup.nix ];
+
   options.steamFrame.clipboardSync = {
     enable = lib.mkOption {
       type = lib.types.bool;

@@ -92,7 +92,7 @@ let
     patches = map entry cfg.patches;
   });
 in {
-  imports = [ ./session.nix ];
+  imports = [ ./session.nix ./cleanup.nix ];
 
   options.steamFrame.uiPatches.lib = mkOption {
     type = types.attrsOf types.raw;

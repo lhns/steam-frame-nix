@@ -77,6 +77,7 @@ Commands:
         --keep       still in use (with --orphans): debugger,
                      firefox-desktop-userjs=<profile>
         --dry-run    only print what would be done
+        --quiet      print only actions, deferrals and warnings
       SteamVR's VRWebHelper.DebuggerEnabled can't be changed while SteamVR
       runs; it is then restored when SteamVR stops (a drop-in in
       /run/user/<uid>, gone at reboot).
@@ -427,14 +428,18 @@ JF_SHIM_MARKER="$SFN_STATE/jellyfin-hwdec-shim"
 UI_STATE="$SFN_STATE/ui-patches"
 
 CLEAN_DRY=0
+CLEAN_QUIET=0
+CLEAN_HEADER=''
 CLEAN_ACTIONS=0
 CLEAN_DEFERRED=()
 declare -A CLEAN_GONE=()
 
-c_do()    { CLEAN_ACTIONS=$((CLEAN_ACTIONS + 1)); if (( CLEAN_DRY )); then info "would $1"; return 1; fi; }
-c_done()  { info "$1"; }
-c_left()  { info "left alone: $1"; }
-c_defer() { CLEAN_DEFERRED+=("$1"); info "deferred: $1"; }
+# Output; the header only before the first line (--quiet).
+c_line()  { if [[ -n $CLEAN_HEADER ]]; then step "$CLEAN_HEADER"; CLEAN_HEADER=''; fi; info "$1"; }
+c_do()    { CLEAN_ACTIONS=$((CLEAN_ACTIONS + 1)); if (( CLEAN_DRY )); then c_line "would $1"; return 1; fi; }
+c_done()  { c_line "$1"; }
+c_left()  { (( CLEAN_QUIET )) || c_line "left alone: $1"; }
+c_defer() { CLEAN_DEFERRED+=("$1"); c_line "deferred: $1"; }
 
 c_rm() { # path why
   c_do "remove $1 ($2)" || { CLEAN_GONE[$1]=1; return 0; }
@@ -573,7 +578,7 @@ debugger_remove_hook() {
 }
 
 clean_debugger() { # keep
-  local keep=$1 prior='' state cur
+  local keep=$1 prior='' state cur out
   if [[ -f $DEBUGGER_ARMED ]]; then
     prior="$(tr -d '[:space:]' <"$DEBUGGER_ARMED")"
     [[ -e $DEBUGGER_MARKER_V1 ]] && c_rm "$DEBUGGER_MARKER_V1" "old debugger marker, superseded by ${DEBUGGER_ARMED##*/}"
@@ -604,8 +609,9 @@ clean_debugger() { # keep
     cur="$(jq -r '.VRWebHelper.DebuggerEnabled // "absent"' "$VRSETTINGS" 2>/dev/null || echo '?')"
     if [[ $cur == true ]]; then
       if c_do "restore VRWebHelper.DebuggerEnabled in $VRSETTINGS (${prior/nofile/absent})"; then
-        debugger_restore "$VRSETTINGS" "$DEBUGGER_ARMED" 2>&1 | sed 's/^steam-frame-nix: /    /' \
+        out="$(debugger_restore "$VRSETTINGS" "$DEBUGGER_ARMED" 2>&1)" \
           || warn "restoring VRWebHelper.DebuggerEnabled failed; $DEBUGGER_ARMED kept"
+        [[ -z $out ]] || c_line "${out//steam-frame-nix: /}"
       fi
     fi
     if [[ -f $DEBUGGER_ARMED && ( $cur != true || CLEAN_DRY -eq 1 ) ]]; then
@@ -672,7 +678,7 @@ clean_firefox() { # keep_profile ('' = none)
           kind="desktop profile user.js link"; keys='"full-screen-api.ignore-widgets"' ;;
         /nix/store/*-firefox-user.js|/nix/store/*-firefox-desktop-user.js)
           kind="user.js link of an older version"; keys="$(ff_keys "$u")"
-          [[ -e $u ]] || info "note: $t is gone; values it set stay in $prof/prefs.js" ;;
+          [[ -e $u ]] || c_line "note: $t is gone; values it set stay in $prof/prefs.js" ;;
         *) c_left "$u (link to $t)"; continue ;;
       esac
     elif [[ -f $u && $(head -n1 "$u") == "$FF_MARKER" ]]; then
@@ -745,7 +751,7 @@ clean_jellyfin() {
     else
       rc=0; out="$(jf_strip "$JF_OVERRIDE")" || rc=$?
       if (( rc == 0 )); then
-        [[ ${out%%$'\n'*} == devices=1 ]] && info "devices=all goes too (it came with the hwdec shim entries)"
+        [[ ${out%%$'\n'*} == devices=1 ]] && c_line "devices=all goes too (it came with the hwdec shim entries)"
         out=${out#*$'\n'}; [[ $out == devices=? ]] && out=''
         if [[ -z $(tr -d '[:space:]' <<<"$out") ]]; then
           c_rm "$JF_OVERRIDE" "Flatpak override with only the hwdec shim entries"
@@ -795,6 +801,7 @@ cmd_cleanup() {
       --all) mode=all; shift ;;
       --orphans) mode=orphans; shift ;;
       --dry-run|-n) CLEAN_DRY=1; shift ;;
+      --quiet|-q) CLEAN_QUIET=1; shift ;;
       --keep)
         [[ $# -ge 2 ]] || die "--keep needs an artifact"
         k=$2; shift 2; keeps=$((keeps + 1))
@@ -812,7 +819,9 @@ cmd_cleanup() {
   need_not_root
 
   CLEAN_ACTIONS=0; CLEAN_DEFERRED=(); CLEAN_GONE=()
-  step "steam-frame-nix: cleaning up files outside Nix ($mode$( (( CLEAN_DRY )) && echo ', dry run'))"
+  CLEAN_HEADER="steam-frame-nix: cleaning up files outside Nix ($mode"
+  if (( CLEAN_DRY )); then CLEAN_HEADER+=", dry run)"; else CLEAN_HEADER+=")"; fi
+  if (( ! CLEAN_QUIET )); then step "$CLEAN_HEADER"; CLEAN_HEADER=''; fi
   clean_debugger "$keep_debugger"
   clean_icons
   clean_firefox "$keep_ff"
@@ -820,7 +829,7 @@ cmd_cleanup() {
   clean_ui_state "$([[ $mode == all ]] && echo 1 || echo 0)"
   c_rmdir "$SFN_STATE"
   if [[ $mode == all ]]; then c_rmdir "$SFN_RUNTIME"; fi
-  (( CLEAN_ACTIONS || ${#CLEAN_DEFERRED[@]} )) || info "nothing to clean up"
+  (( CLEAN_ACTIONS || ${#CLEAN_DEFERRED[@]} || CLEAN_QUIET )) || info "nothing to clean up"
   return 0
 }
 

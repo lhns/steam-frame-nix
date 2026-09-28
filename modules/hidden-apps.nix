@@ -2,6 +2,7 @@
 # Hidden=true masks the system one.
 { config, lib, ... }: {
   imports = [
+    ./cleanup.nix
     (lib.mkRenamedOptionModule
       [ "steamFrame" "hiddenApps" ] [ "steamFrame" "launcherMenu" "hiddenApps" ])
   ];

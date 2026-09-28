@@ -31,6 +31,8 @@ let
       "${key}=${if lib.isList value then lib.concatMapStrings (v: "${v};") value else value}\n") entries))
     override));
 in {
+  imports = [ ./cleanup.nix ];
+
   options.steamFrame.jellyfin.hardwareDecoding = {
     enable = lib.mkOption {
       type = lib.types.bool;
@@ -55,18 +57,8 @@ in {
     };
   };
 
+  # The shim copy of earlier versions is removed by steam-frame-nix-cleanup.
   config = lib.mkMerge [
-    {
-      # Remove the shim copy of earlier versions (copied into the app's data
-      # dir, marked in $XDG_STATE_HOME/steam-frame-nix).
-      home.activation.steamFrameJellyfinHwdec = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        marker="''${XDG_STATE_HOME:-$HOME/.local/state}/steam-frame-nix/jellyfin-hwdec-shim"
-        if [ -e "$marker" ]; then
-          run rm -f "$HOME/.var/app/${app}/mpv-hwdec-shim.so" "$marker"
-          run rmdir --ignore-fail-on-non-empty "''${marker%/*}"
-        fi
-      '';
-    }
     (lib.mkIf (cfg.enable && !useNixFlatpak) {
       # force: `flatpak override --user` replaces the link with a file.
       xdg.dataFile."flatpak/overrides/${app}" = { source = overrideFile; force = true; };

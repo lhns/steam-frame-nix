@@ -7,6 +7,7 @@ let
   cfg = config.steamFrame.keyboard;
 in {
   imports = [
+    ./cleanup.nix
     (lib.mkRenamedOptionModule [ "steamFrame" "keyboardLayout" ] [ "steamFrame" "keyboard" "layout" ])
     (lib.mkRenamedOptionModule [ "steamFrame" "keyboardVariant" ] [ "steamFrame" "keyboard" "variant" ])
   ];

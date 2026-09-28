@@ -27,6 +27,7 @@ let
   };
 in {
   imports = [
+    ./cleanup.nix
     ./steam-ui-patches.nix
     (lib.mkRenamedOptionModule
       [ "steamFrame" "launcherMenu" "launchDebounce" ]

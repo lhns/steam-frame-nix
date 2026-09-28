@@ -47,7 +47,7 @@ let
   new = [ "steamFrame" "dashboard" "windows" ];
 in {
   imports = [
-    ./steam-ui-patches.nix ./steamvr-debugger.nix
+    ./cleanup.nix ./steam-ui-patches.nix ./steamvr-debugger.nix
     (lib.mkRenamedOptionModule (old ++ [ "windowMaxScale" ]) (new ++ [ "maxScale" ]))
   ] ++ lib.concatMap (kind: map (bound:
     lib.mkRenamedOptionModule

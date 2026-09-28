@@ -119,6 +119,8 @@ let
       --file-forwarding org.mozilla.firefox "''${profile[@]}" "$@"
   '');
 in {
+  imports = [ ./cleanup.nix ];
+
   options.steamFrame.firefox = {
     enable = lib.mkEnableOption ''
       the Firefox Flatpak (org.mozilla.firefox) launcher with Steam Frame
@@ -167,6 +169,8 @@ in {
       # Always, so disabling removes our user.js links (and old copies).
       home.activation.firefoxProfiles =
         lib.hm.dag.entryAfter [ "writeBoundary" ] "run ${profileSync}\n";
+      # The desktop profile's user.js link (steam-frame-nix-cleanup).
+      steamFrame.cleanup.keep = lib.optional desktopFix "firefox-desktop-userjs=${cfg.desktopProfile}";
     }
     (lib.mkIf cfg.enable {
       # stable: the branch the launcher runs (the extension point has no

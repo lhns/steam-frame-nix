@@ -6,7 +6,7 @@ let
   cfg = config.steamFrame.dashboard.steamCloseButton;
   inherit (import ./lib { inherit pkgs; }) mkPatch;
 in {
-  imports = [ ./steam-ui-patches.nix ./steamvr-debugger.nix ];
+  imports = [ ./cleanup.nix ./steam-ui-patches.nix ./steamvr-debugger.nix ];
 
   options.steamFrame.dashboard.steamCloseButton.enable = lib.mkEnableOption ''
     a Close (X) button on the dashboard's Steam window. It hides Steam

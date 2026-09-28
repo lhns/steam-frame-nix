@@ -53,7 +53,7 @@ let
     '';
   };
 in {
-  imports = [ ./steam-ui-patches.nix ];
+  imports = [ ./cleanup.nix ./steam-ui-patches.nix ];
 
   options.steamFrame.steamvrDebugger.enable = lib.mkOption {
     type = lib.types.bool;
@@ -74,6 +74,7 @@ in {
   config = {
     steamFrame.steamvrDebugger.enable =
       lib.mkDefault (lib.any usesDebugger config.steamFrame.uiPatches.patches);
+    steamFrame.cleanup.keep = lib.optional cfg.enable "debugger";
 
     systemd.user.services.steamvr-webhelper-debugger = {
       Unit = {

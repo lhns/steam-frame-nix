@@ -17,7 +17,7 @@ let
   cfg = config.steamFrame.keyboard.vr.extraKeys;
 in {
   imports = [
-    ./session.nix
+    ./session.nix ./cleanup.nix
     (lib.mkRenamedOptionModule
       [ "steamFrame" "steamKeyboardPatch" "enable" ]
       [ "steamFrame" "keyboard" "vr" "extraKeys" "enable" ])

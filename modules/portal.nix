@@ -9,6 +9,7 @@ let
   dir = "xdg-desktop-portal/gamescope-portals";
 in {
   imports = [
+    ./cleanup.nix
     (lib.mkRenamedOptionModule
       [ "steamFrame" "portalFix" "enable" ]
       [ "steamFrame" "session" "portalFix" "enable" ])

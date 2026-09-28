@@ -19,7 +19,7 @@ let
     inherit description;
   };
 in {
-  imports = [ ./steam-ui-patches.nix ./steamvr-debugger.nix ];
+  imports = [ ./cleanup.nix ./steam-ui-patches.nix ./steamvr-debugger.nix ];
 
   options.steamFrame.dashboard.frameControls = {
     enable = lib.mkEnableOption ''

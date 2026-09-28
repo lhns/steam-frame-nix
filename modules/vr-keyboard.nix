@@ -85,7 +85,7 @@ let
     };
   };
 in {
-  imports = [ ./session.nix ./steam-ui-patches.nix ./keyboard-layout.nix ];
+  imports = [ ./session.nix ./cleanup.nix ./steam-ui-patches.nix ./keyboard-layout.nix ];
 
   options.steamFrame.keyboard.vr = {
     enable = mkEnableOption ''

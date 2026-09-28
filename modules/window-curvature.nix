@@ -15,7 +15,7 @@ let
   };
 in {
   imports = [
-    ./steam-ui-patches.nix ./steamvr-debugger.nix
+    ./cleanup.nix ./steam-ui-patches.nix ./steamvr-debugger.nix
     (lib.mkRemovedOptionModule (path ++ [ "barDragRoom" ])
       "Not needed: SteamVR keeps sending the bar's coordinates past its edge during a drag.")
     (lib.mkRemovedOptionModule (path ++ [ "snap" ])
