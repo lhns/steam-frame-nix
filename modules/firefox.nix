@@ -134,7 +134,7 @@ in {
     };
     disableAv1 = lib.mkOption {
       type = lib.types.bool;
-      default = true;
+      default = false;
       description = ''
         Default media.av1.enabled to false: the Frame's decoder driver has no
         AV1 (H.264, HEVC, VP9 only), so sites like YouTube send VP9/H.264,

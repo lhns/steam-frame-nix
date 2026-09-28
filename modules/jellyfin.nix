@@ -34,9 +34,7 @@ in {
   options.steamFrame.jellyfin.hardwareDecoding = {
     enable = lib.mkOption {
       type = lib.types.bool;
-      default = lib.any (p: (if builtins.isString p then p else p.appId or null) == app)
-        (config.services.flatpak.packages or [ ]);
-      defaultText = lib.literalMD "`true` if nix-flatpak installs `org.jellyfin.JellyfinDesktop` (`services.flatpak.packages`), else `false`";
+      default = false;
       description = ''
         Hardware video decoding (the Frame's V4L2 decoder) in the Jellyfin
         Desktop Flatpak: device access for the sandbox (devices=all) and an

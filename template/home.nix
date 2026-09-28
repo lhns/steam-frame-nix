@@ -54,8 +54,10 @@
   #     frameControls.enable = true;
   #   };
   #   firefox.enable = true;             # launcher for the Firefox Flatpak
-  #   # Jellyfin Desktop Flatpak: hardware video decoding is on by itself
-  #   # when nix-flatpak installs it; otherwise (gives it devices=all):
-  #   # jellyfin.hardwareDecoding.enable = true;
+  #   # the Frame has no AV1 decoder: sites send VP9/H.264 (hardware):
+  #   firefox.disableAv1 = true;
+  #   # Hardware video decoding in the Jellyfin Desktop Flatpak (install
+  #   # org.jellyfin.JellyfinDesktop yourself); gives it devices=all:
+  #   jellyfin.hardwareDecoding.enable = true;
   # };
 }

@@ -257,10 +257,10 @@ without it.
 | `steamFrame.clipboardSync.package` | package | built from `dnut/clipboard-sync` | The clipboard-sync package. |
 | `steamFrame.firefox.enable` | bool | `false` | Launcher for the Flathub Firefox Flatpak with the fixes below. |
 | `steamFrame.firefox.vrFullscreenFix` | bool | `true` | Default `full-screen-api.ignore-widgets` to `true` (not in the desktop profile). |
-| `steamFrame.firefox.disableAv1` | bool | `true` | Default `media.av1.enabled` to `false`: the Frame's decoder driver has no AV1, so sites send VP9/H.264, decoded in hardware. |
+| `steamFrame.firefox.disableAv1` | bool | `false` | Default `media.av1.enabled` to `false`: the Frame's decoder driver has no AV1, so sites send VP9/H.264, decoded in hardware. |
 | `steamFrame.firefox.prefs` | attrs of bool, int or str | `{ }` | Further `about:config` default values for every profile (override the fixes too). |
 | `steamFrame.firefox.desktopProfile` | null or str | `"desktop"` | Separate profile for the nested desktop; `null`: none. |
-| `steamFrame.jellyfin.hardwareDecoding.enable` | bool | `true` if nix-flatpak installs Jellyfin Desktop, else `false` | Hardware video decoding in the Jellyfin Desktop Flatpak, see [Jellyfin](#jellyfin-hardware-decoding-jellyfinhardwaredecoding). |
+| `steamFrame.jellyfin.hardwareDecoding.enable` | bool | `false` | Hardware video decoding in the Jellyfin Desktop Flatpak, see [Jellyfin](#jellyfin-hardware-decoding-jellyfinhardwaredecoding). |
 | `steamFrame.jellyfin.hardwareDecoding.hwdec` | str | `"v4l2m2m-copy,auto-copy"` | mpv `hwdec` used instead of Jellyfin's automatic one. |
 
 Renamed options still work under their old names, with a warning:
@@ -811,7 +811,7 @@ associations keep working.
   Firefox looks frozen. `full-screen-api.ignore-widgets` makes fullscreen
   fill just the window. **Remove when** gamescope shows fullscreen X11
   windows in VR.
-- **`disableAv1`** (on by default): `media.av1.enabled = false`. The Frame's
+- **`disableAv1`**: `media.av1.enabled = false`. The Frame's
   decoder driver (`iris`) has no AV1, only H.264, HEVC and VP9, so YouTube
   and co. send VP9/H.264, decoded in hardware, instead of software AV1.
   **Remove when** a SteamOS kernel adds AV1 to `iris`.
@@ -864,10 +864,6 @@ wrappers, only libc) is preloaded from the Nix store: the override exposes
 its store path (only that one, read-only) to the sandbox. It would work for
 any libmpv app that sets `hwdec=auto*`, but only Jellyfin Desktop is set up
 here.
-
-On by default when nix-flatpak installs the app
-(`services.flatpak.packages` contains `org.jellyfin.JellyfinDesktop`);
-otherwise set `enable = true` yourself.
 
 The override goes through nix-flatpak's `services.flatpak.overrides` if
 [nix-flatpak](https://github.com/gmodena/nix-flatpak) is imported and
