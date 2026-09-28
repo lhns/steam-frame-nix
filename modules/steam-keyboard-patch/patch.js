@@ -22,7 +22,7 @@
 // mkPatch patch (see lib/default.nix); no options. On a signature mismatch
 // it returns an error and changes nothing. Idempotent.
 ((find, sigs) => {
-  const VERSION = 20;
+  const VERSION = 21;
   const send = (msg) => window.__vrkbdKey && window.__vrkbdKey(msg);
   let mods;
   try {
@@ -55,9 +55,10 @@
   // without them Shift moves the close icon and AltGr yields empty
   // full-width keys. null shifted = same key, no shift label.
   const HALF = 2;                                  // key type "Half"; widths set by the stylesheet
-  const k = (key, label) => ({ key, label, type: HALF });
+  const META = 4;                                  // key type "Meta" (AltGr, layout keys): the dark special-key face
+  const k = (key, label, type = HALF) => ({ key, label, type });
   const same = (x) => [x, null, x];
-  const MODS = [k('VKX_Escape', 'Esc'), k('Control', 'Ctrl'), k('Alt', 'Alt')];
+  const MODS = [k('VKX_Escape', 'Esc', META), k('Control', 'Ctrl', META), k('Alt', 'Alt', META)];
   const ALTGR_ARROWS = [k('VKX_Home', 'Pos1'), k('VKX_Prior', 'Bild↑'), k('VKX_Next', 'Bild↓'), k('VKX_End', 'Ende')];
   const ARROWS = [Layouts.arrowLeft, Layouts.arrowUp, Layouts.arrowDown, Layouts.arrowRight]   // Steam's own keys
     .map((a, i) => [{ ...a, type: HALF }, null, ALTGR_ARROWS[i]]);
