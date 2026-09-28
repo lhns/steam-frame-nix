@@ -1,5 +1,5 @@
-// decoder.js: swipe path -> words. Evaluates to { VERSION, parseDict, layout,
-// decode, ... }. SHARK2-style template matching (Kristensson & Zhai 2004):
+// swipe-decoder.js: swipe path -> words. Evaluates to { VERSION, parseDict,
+// layout, decode, ... }. SHARK2-style template matching (Kristensson & Zhai 2004):
 // each word's ideal path runs through its key centres; candidates starting
 // and ending near the path's ends, with every key near the path, are scored
 // by point distances of the resampled paths (proportional and DTW), how
@@ -9,7 +9,7 @@
   const VERSION = 3;
   const N = 32;                                   // resample points
   const SKIP = new Set(["'", '-', '\u2019']);
-  // Cost weights and pruning limits (tuned with tests/decoder.test.mjs; distances in key widths).
+  // Cost weights and pruning limits (tuned with tests/swipe-decoder.test.mjs; distances in key widths).
   const W = {
     loc: 4.4,                                     // mean point distance, proportional alignment
     dtw: 2.0,                                     // mean point distance, dynamic time warping

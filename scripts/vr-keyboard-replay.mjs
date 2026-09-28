@@ -1,7 +1,8 @@
 // Replays recorded swipes (window.__sfuiSwipePaths of Steam's SharedJSContext,
 // saved as JSON) through the decoder: top candidates and the cost terms of
 // the expected word. The dictionary is the built vr-keyboard-dictionary.js.
-// usage: node scripts/vr-keyboard-replay.mjs modules/vr-keyboard/decoder.js <dictionary.js> <paths.json> [word]
+// usage: node scripts/vr-keyboard-replay.mjs modules/vr-keyboard/swipe-decoder.js
+//          <dictionary.js> <paths.json> [word]
 import { readFileSync } from 'node:fs';
 const [, , decoderPath, dictPath, pathsPath, expected] = process.argv;
 const D = (0, eval)(readFileSync(decoderPath, 'utf8'));

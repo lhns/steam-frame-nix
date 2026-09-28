@@ -6,7 +6,7 @@
 let
   cfg = config.steamFrame.dashboard.windows;
   inherit (lib) mkOption types;
-  inherit (import ./lib { inherit pkgs; }) mkPatch;
+  inherit (import ./steam-ui-patches/lib { inherit pkgs; }) mkPatch;
 
   # Stock grab distance ranges (meters), matched by the patch.
   stockDistance = {

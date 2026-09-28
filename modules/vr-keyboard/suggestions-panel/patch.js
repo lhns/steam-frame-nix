@@ -1,6 +1,7 @@
 // The suggestion strip as a SteamVR dashboard panel above or below Steam's
-// VR keyboard (suggestions.position "above" / "below"), injected into
-// SteamVR's systemui page (8087). State comes from the keyboard page through relay.mjs:
+// VR keyboard (suggestions.position "above" / "below"; patch name
+// "vr-keyboard-panel"), injected into SteamVR's systemui page (8087). State
+// comes from the keyboard page (../patch.js) through relay.mjs:
 // __sfuiKbdStrip.show({ seq, items, current, visible, style }); a click calls
 // the binding __sfuiStripPick('{"seq":n,"index":i}').
 //

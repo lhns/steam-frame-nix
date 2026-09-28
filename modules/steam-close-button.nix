@@ -4,7 +4,7 @@
 { config, lib, pkgs, ... }:
 let
   cfg = config.steamFrame.dashboard.steamCloseButton;
-  inherit (import ./lib { inherit pkgs; }) mkPatch;
+  inherit (import ./steam-ui-patches/lib { inherit pkgs; }) mkPatch;
 in {
   imports = [ ./cleanup.nix ./steam-ui-patches.nix ./steamvr-debugger.nix ];
 

@@ -1,9 +1,11 @@
-// helper.mjs: injects the patch (patch.js wrapped with the finder library by
-// lib/default.nix mkPatch) into Steam's UI via CEF DevTools and
-// performs the key requests of the patched VR keyboard with xdotool on :0.
+// xdotool-helper.mjs (user service steam-keyboard-patch): injects the patch
+// (patch.js wrapped with the finder library by mkPatch,
+// steam-ui-patches/lib/default.nix) into Steam's UI via CEF DevTools itself
+// (not through the steam-ui-patches injector) and performs the key requests
+// of the patched VR keyboard with xdotool on :0.
 // On SIGTERM/SIGINT it reverts the patch (unpatch.js), so stopping the service
 // restores Steam's stock keyboard without restarting Steam.
-// usage: node helper.mjs <patch.js> <unpatch.js> [xdotool]
+// usage: node xdotool-helper.mjs <patch.js> <unpatch.js> [xdotool]
 import { readFileSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 

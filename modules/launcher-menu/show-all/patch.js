@@ -1,7 +1,8 @@
 // show-all: the VR dashboard's "+" menu lists all programs without Steam's
 // Developer Mode.
-// mkPatch patch (see lib/default.nix); no opts; sigs: "launcher-menu-show-all"
-// (the module exporting the list, plus a check-only anchor for the filter).
+// mkPatch patch (see steam-ui-patches/lib/default.nix); no opts; sigs:
+// "launcher-menu-show-all" (the module exporting the list, plus a check-only
+// anchor for the filter).
 //
 // Steam hides some executables always (steam, vrurlhandler) and, without
 // Developer Mode, a second list (firewall-config, vlc, dolphin, cmake-gui,

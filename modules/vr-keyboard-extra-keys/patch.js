@@ -1,4 +1,5 @@
-// Injected into Steam's SharedJSContext (CEF, 127.0.0.1:8080) by helper.mjs.
+// Injected into Steam's SharedJSContext (CEF, 127.0.0.1:8080) by
+// xdotool-helper.mjs.
 // Extends Steam's VR keyboard for gamescope app windows:
 //  - bottom row: Esc Ctrl Alt [space] AltGr ← ↑ ↓ → Close, stable with Shift
 //    and AltGr; AltGr + arrows = Pos1/PgUp/PgDn/End
@@ -16,11 +17,11 @@
 //  - Enter types Return for app windows, even if a Steam search box had focus
 //    before (Steam then labels it "Search" and closes the keyboard instead)
 // Key output goes through the CDP binding window.__vrkbdKey("<op>:<arg>"),
-// run by helper.mjs with xdotool on :0. Replaced functions keep their
+// run by xdotool-helper.mjs with xdotool on :0. Replaced functions keep their
 // original as __vrkbdOrig; window.__vrkbdRefs etc. are for unpatch.js.
 //
-// mkPatch patch (see lib/default.nix); no options. On a signature mismatch
-// it returns an error and changes nothing. Idempotent.
+// mkPatch patch (see steam-ui-patches/lib/default.nix); no options. On a
+// signature mismatch it returns an error and changes nothing. Idempotent.
 ((find, sigs) => {
   const VERSION = 22;
   const send = (msg) => window.__vrkbdKey && window.__vrkbdKey(msg);
@@ -143,7 +144,7 @@
   // All text for gamescope windows ends in ControllerKeyboardSendText, which
   // only maps plain ASCII on the base/shift levels (else "1"). Those
   // characters go to the helper, in order; the rest passes through.
-  // (helper.mjs checks the same set.)
+  // (xdotool-helper.mjs checks the same set.)
   const viaHelper = (c) => c.codePointAt(0) > 127 || '|@{[]}\\~^`'.includes(c);
   wrap(SteamClient.Input, 'ControllerKeyboardSendText', (orig) => function (text, ...rest) {
     if (typeof text !== 'string') return orig.call(this, text, ...rest);

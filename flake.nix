@@ -15,7 +15,7 @@
       session = ./modules/session.nix;
       portal = ./modules/portal.nix;
       keyboard-layout = ./modules/keyboard-layout.nix;
-      steam-keyboard-patch = ./modules/steam-keyboard-patch.nix;
+      vr-keyboard-extra-keys = ./modules/vr-keyboard-extra-keys.nix;
       vr-keyboard = ./modules/vr-keyboard.nix;
       hidden-apps = ./modules/hidden-apps.nix;
       steam-ui-patches = ./modules/steam-ui-patches.nix;
@@ -37,10 +37,15 @@
       keyring = ./modules/keyring.nix;
       docker = ./modules/docker.nix;
     };
+    # Former attribute names, kept so existing imports keep working (not in
+    # `default`, which imports each module once under its current name).
+    aliases = {
+      steam-keyboard-patch = modules.vr-keyboard-extra-keys;   # its name until 2026-09
+    };
     systems = [ "aarch64-linux" "x86_64-linux" ];
     forSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
   in {
-    homeManagerModules = modules // {
+    homeManagerModules = modules // aliases // {
       default = { imports = builtins.attrValues modules; };
     };
 
@@ -64,16 +69,7 @@
       cleanup = import ./modules/cleanup/check.nix { inherit pkgs; };
       firefox = import ./modules/firefox/check.nix { inherit pkgs; };
       jellyfin = import ./modules/jellyfin/check.nix { inherit pkgs; };
-      vr-keyboard = (import ./modules/vr-keyboard/build.nix {
-        inherit pkgs;
-        dictionary = {
-          languages = map (l: l // { keepFrequentAbove = 4.0; }) [
-            { language = "de"; hunspell = "de_DE"; words = 60000; frequencyOffset = 0.0; }
-            { language = "en"; hunspell = "en_US"; words = 40000; frequencyOffset = -0.3; }
-          ];
-          contractions = true; extraWords = [ ]; extraWordsFrequency = 5.0; extraWordFiles = [ ]; excludeWords = [ ];
-        };
-      }).checks;
+      vr-keyboard = import ./modules/vr-keyboard/check.nix { inherit pkgs; };
     });
 
     # nix flake init -t github:lhns/steam-frame-nix

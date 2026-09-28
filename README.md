@@ -57,6 +57,8 @@ configuration, limitations and how it works.
 
 **Your own patches** of Steam's UI, and fixing patches after a Steam update: [UI patches](docs/ui-patches.md).
 
+**Working on steam-frame-nix:** [Development](docs/development.md) (repository layout: which file runs where, runtime names, checks).
+
 ## Install
 
 On the Frame (or a Steam Deck), in a terminal (Konsole in desktop mode or the
@@ -213,9 +215,11 @@ home-manager switch --flake .#steamos  # manual setup, from the flake's director
 In your own flake, add the input as above and
 `steam-frame-nix.homeManagerModules.default` to the modules. `default`
 imports all modules; single ones:
-`homeManagerModules.{session,portal,keyboard-layout,steam-keyboard-patch,vr-keyboard,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,cleanup,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox,jellyfin,keyring,docker}`.
-Every module imports `cleanup` (see
-[Changes outside Nix](#changes-outside-nix-exceptions)).
+`homeManagerModules.{session,portal,keyboard-layout,vr-keyboard-extra-keys,vr-keyboard,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,cleanup,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox,jellyfin,keyring,docker}`
+(`steam-keyboard-patch` still works as the former name of
+`vr-keyboard-extra-keys`). Every module imports `cleanup` (see
+[Changes outside Nix](#changes-outside-nix-exceptions)); which file is
+which: [Repository layout](docs/development.md).
 
 ## Options
 

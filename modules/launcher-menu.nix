@@ -22,7 +22,7 @@
 { config, lib, pkgs, ... }:
 let
   cfg = config.steamFrame.launcherMenu;
-  inherit (import ./lib { inherit pkgs; }) mkPatch;
+  inherit (import ./steam-ui-patches/lib { inherit pkgs; }) mkPatch;
   sharedJSContext = { title = "SharedJSContext"; };
 
   iconSuggest = pkgs.writeShellApplication {

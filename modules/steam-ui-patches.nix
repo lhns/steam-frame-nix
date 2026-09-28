@@ -7,8 +7,8 @@
 # instance reverts removed patches) and is stopped once the list is empty.
 # Patches with `state = true` get a persistent JSON value (injector.mjs:
 # "Persistent state"), kept when the patch goes and removed by
-# steam-frame-nix-cleanup --all. Patch calling convention (mkPatch):
-# lib/default.nix.
+# steam-frame-nix-cleanup --all. Patch calling convention (mkPatch) and the
+# finder library: steam-ui-patches/lib/default.nix.
 { config, pkgs, lib, ... }:
 let
   cfg = config.steamFrame.uiPatches;
@@ -97,12 +97,13 @@ in {
   options.steamFrame.uiPatches.lib = mkOption {
     type = types.attrsOf types.raw;
     readOnly = true;
-    default = import ./lib { inherit pkgs; };
-    defaultText = lib.literalMD "the helpers of `modules/lib`";
+    default = import ./steam-ui-patches/lib { inherit pkgs; };
+    defaultText = lib.literalMD "the helpers of `modules/steam-ui-patches/lib`";
     description = ''
-      Patch helpers from modules/lib/default.nix: `mkPatch { name, src,
-      signatures ? …, opts ? { }, extraArgs ? [ ] }` (calls `src` as
-      `(find, sigs, opts, hooks, ...extraArgs) => …`; see there), plus
+      Patch helpers from modules/steam-ui-patches/lib/default.nix:
+      `mkPatch { name, src, signatures ? …, opts ? { }, extraArgs ? [ ] }`
+      (calls `src` as `(find, sigs, opts, hooks, ...extraArgs) => …`; see
+      there), plus
       `finders`, `hooks` (paths) and `signatures` (parsed signatures.json).
     '';
   };

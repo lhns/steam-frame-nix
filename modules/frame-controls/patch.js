@@ -6,8 +6,8 @@
 // opts.floatInTheater gives theater windows the "Float" control back.
 //
 // Target: SteamVR dashboard (vrwebhelper, DevTools 127.0.0.1:8087, title
-// "systemui"). mkPatch patch (see lib/default.nix); opts: { inBar, inMenu,
-// longPressMs, floatInTheater }.
+// "systemui"). mkPatch patch (see steam-ui-patches/lib/default.nix); opts:
+// { inBar, inMenu, longPressMs, floatInTheater }.
 //
 // Stock: each Frame renders <FrameControlsItem params={type, action_id}>
 // (2 = action, 1 = spacer); <FrameControls> passes the lists to the MobX

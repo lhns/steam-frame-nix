@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // check-signatures.mjs: checks offline (no Steam, no browser) that every
-// signature in modules/lib/signatures.json still matches the installed Steam /
-// SteamVR web UI bundles: module and export signatures exactly once,
-// "expects" strings still present (warnings), "stylesheet" signatures exactly
-// one file of the bundle's "styles" directory. Run it after a Steam update:
+// signature in modules/steam-ui-patches/lib/signatures.json still matches the
+// installed Steam / SteamVR web UI bundles: module and export signatures
+// exactly once, "expects" strings still present (warnings), "stylesheet"
+// signatures exactly one file of the bundle's "styles" directory. Run it
+// after a Steam update:
 //
 //   nix shell nixpkgs#nodejs -c node scripts/check-signatures.mjs
 //
@@ -20,7 +21,8 @@
 // Modules come from webpack-modules.mjs (factory sources as the page's
 // Function.prototype.toString sees them). For export signatures the matched
 // factory runs in a throwaway VM context where imports and unknown globals
-// are inert stubs, and is matched with modules/lib/finders.js.
+// are inert stubs, and is matched with
+// modules/steam-ui-patches/lib/finders.js.
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
@@ -29,7 +31,7 @@ import vm from 'node:vm';
 import { loadBundles, pageFiles } from './webpack-modules.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const libDir = join(here, '..', 'modules', 'lib');
+const libDir = join(here, '..', 'modules', 'steam-ui-patches', 'lib');
 
 // ---- arguments -----------------------------------------------------------------
 const args = process.argv.slice(2);

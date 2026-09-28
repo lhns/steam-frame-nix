@@ -1,6 +1,6 @@
-// Reverts patch.js in Steam's SharedJSContext (run by helper.mjs on stop).
-// Patched functions keep their original as __vrkbdOrig; objects Steam doesn't
-// expose are in window.__vrkbdRefs/__vrkbdLayouts/__vrkbdProto/__vrkbdInst;
+// Reverts patch.js in Steam's SharedJSContext (run by xdotool-helper.mjs on
+// stop). Patched functions keep their original as __vrkbdOrig; objects Steam
+// doesn't expose are in window.__vrkbdRefs/__vrkbdLayouts/__vrkbdProto/__vrkbdInst;
 // the Delete-repeat listeners of a keyboard window in its __vrkbdDelDetach.
 // Safe when not patched.
 (() => {

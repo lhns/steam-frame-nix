@@ -8,7 +8,8 @@ The keyboard layout of the Steam session itself is a separate fix
 
 ## Extra keys
 
-`keyboard.vr.extraKeys.enable`, module `steam-keyboard-patch`.
+`keyboard.vr.extraKeys.enable`, module `vr-keyboard-extra-keys` (sources in
+`modules/vr-keyboard-extra-keys/`).
 
 **Problem:** Steam's VR keyboard has no Ctrl, Alt or Esc, can't press real
 keys, and its text emulation only maps plain ASCII: non-ASCII and
@@ -55,9 +56,10 @@ Steam client 1790377368 (UI build 11041156).
 
 ### How it works
 
-- The `steam-keyboard-patch` user service (`helper.mjs`) injects a patch
-  into Steam's `SharedJSContext` over DevTools (`127.0.0.1:8080`) and
-  re-injects it after Steam restarts; stopping it (or disabling the option)
+- The `steam-keyboard-patch` user service
+  (`modules/vr-keyboard-extra-keys/xdotool-helper.mjs`) injects a patch into
+  Steam's `SharedJSContext` over DevTools (`127.0.0.1:8080`) and re-injects
+  it after Steam restarts; stopping it (or disabling the option)
   runs the unpatch.
 - Ctrl/Alt chords and Esc are sent with `xdotool key` on `:0` (focus follows
   the VR-selected window); a toggled Ctrl/Alt is held down with `xdotool`.
@@ -133,15 +135,16 @@ has the letters.
 ### How it works
 
 - A Steam UI patch (`vr-keyboard`, injected by `steam-ui-patches` like the
-  other [UI patches](ui-patches.md)).
+  other [UI patches](ui-patches.md)); sources in `modules/vr-keyboard/`.
 - Swiped words are matched by shape (SHARK2-style template matching)
   against a dictionary built at build time from wordfreq frequency lists
   and Hunspell, both from nixpkgs (per language the `words` most frequent
   wordfreq entries, shifted by `frequencyOffset`, filtered by Hunspell
   except words at or above `keepFrequentAbove`).
 - The strip below/above the keyboard is a SteamVR dashboard panel
-  (`panel.js`, a patch of SteamVR's `systemui` page on port 8087), fed by
-  the `vr-keyboard-relay` user service (`relay.mjs`) between the two pages.
+  (`suggestions-panel/patch.js`, a patch of SteamVR's `systemui` page on
+  port 8087), fed by the `vr-keyboard-relay` user service
+  (`suggestions-panel/relay.mjs`) between the two pages.
   With `inside` neither the panel nor the relay runs.
 - Found by signature (entries `vr-keyboard`, `vr-keyboard-panel`).
 

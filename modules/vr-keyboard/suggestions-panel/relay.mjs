@@ -1,6 +1,7 @@
-// relay.mjs: carries the suggestion strip between Steam's keyboard page
-// (SharedJSContext, 8080) and SteamVR's systemui page (8087) for
-// suggestions.position "above" / "below". CDP bindings: the keyboard page calls
+// relay.mjs (user service vr-keyboard-relay): carries the suggestion strip
+// between Steam's keyboard page (../patch.js in SharedJSContext, 8080) and
+// SteamVR's systemui page (patch.js here, 8087) for suggestions.position
+// "above" / "below". CDP bindings: the keyboard page calls
 // __sfuiStripOut(state json) -> systemui __sfuiKbdStrip.show(state); the
 // panel calls __sfuiStripPick({ seq, index } json) -> keyboard page
 // __sfuiSwipe.remote.pick(seq, index). Only these two messages, validated.

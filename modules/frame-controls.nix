@@ -7,7 +7,7 @@
 let
   cfg = config.steamFrame.dashboard.frameControls;
   inherit (lib) mkOption types;
-  inherit (import ./lib { inherit pkgs; }) mkPatch;
+  inherit (import ./steam-ui-patches/lib { inherit pkgs; }) mkPatch;
 
   # Control names -> SteamVR action icon enums (the patch keys controls by icon).
   names = [ "keyboard" "float" "dashboard" "theater" "dockLeft" "dockRight" "close" "curvature" ];

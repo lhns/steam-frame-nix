@@ -79,7 +79,7 @@ its option is set and reverted by its unpatch when unset:
   sounds and controller navigation keep working;
 - `show-all/`: empties the list Steam hides without Developer Mode.
 
-Their anchors (APIs, React props, CSS) are in `modules/lib/signatures.json`
+Their anchors (APIs, React props, CSS) are in `modules/steam-ui-patches/lib/signatures.json`
 and verified by the [offline checker](ui-patches.md#after-a-steam-update).
 
 ## Hidden apps

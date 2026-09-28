@@ -6,9 +6,9 @@
 // curve); dragging up/down with the laser sets the curvature live.
 //
 // Target: SteamVR dashboard (vrwebhelper, DevTools 127.0.0.1:8087, title
-// "systemui"). mkPatch patch (see lib/default.nix); opts: { initial, max,
-// step, detentPixels, detentPoints, dragThresholdPixels, dragPixelsPerUnit,
-// barDragPixelsPerUnit, haptics }.
+// "systemui"). mkPatch patch (see steam-ui-patches/lib/default.nix); opts:
+// { initial, max, step, detentPixels, detentPoints, dragThresholdPixels,
+// dragPixelsPerUnit, barDragPixelsPerUnit, haptics }.
 //
 // Stock curvature (frame.curvature, systemui's `curvature` component):
 // shouldCurve = m_bCurveOverride (set by ToggleCurvature(), cleared on dock
@@ -18,10 +18,10 @@
 // 1.8 m) : 1000; its panels reference it as "curvature-origin-id" and
 // vrcompositor bends them onto a cylinder around it (curvature = 1/radius).
 // Those MobX properties are non-configurable, so this patch hooks the mailbox
-// SendMessage (lib/hooks.js, shared with dashboard-windows) and rewrites the
-// origin's z in outgoing scene graphs to stock / value (1 = stock, 2 = half
-// the radius, 0 = flat = stock toggle off). On/off stays the stock state, so
-// stock toggle and wheel always agree.
+// SendMessage (steam-ui-patches/lib/hooks.js, shared with dashboard-windows)
+// and rewrites the origin's z in outgoing scene graphs to stock / value
+// (1 = stock, 2 = half the radius, 0 = flat = stock toggle off). On/off stays
+// the stock state, so stock toggle and wheel always agree.
 //
 // Values per window (key: first overlay key) in
 // window.__sfuiWindowCurvatureState (schema 1: { values, log }); kept across

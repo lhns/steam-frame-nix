@@ -1,7 +1,8 @@
 // dashboard-windows: resize and grab-distance limits of SteamVR dashboard
 // windows (Steam, app windows, overlays, theater screen, the dashboard).
 // Target: SteamVR dashboard (vrwebhelper, DevTools 127.0.0.1:8087, title
-// "systemui"). mkPatch patch (see lib/default.nix); opts (null = stock):
+// "systemui"). mkPatch patch (see steam-ui-patches/lib/default.nix); opts
+// (null = stock):
 //   { maxScale: 4.0,
 //     distance: { world: {min: null, max: 10}, theater: {...}, dashboard: {...} } }
 //
@@ -16,8 +17,9 @@
 //     dashboard "grab-transform" 0.3  / 4  the dashboard itself
 //   (the keyboard's grab-transform, 0.2 / 1, is left alone).
 // They are literals in systemui's bundle, so SendMessage is hooked on the
-// mailbox prototype (lib/hooks.js, shared with window-curvature) and outgoing
-// scene graphs (fresh objects per update) are edited in place. Grab nodes are
+// mailbox prototype (steam-ui-patches/lib/hooks.js, shared with
+// window-curvature) and outgoing scene graphs (fresh objects per update) are
+// edited in place. Grab nodes are
 // matched by type plus exact stock values, so if SteamVR changes them the
 // distance rewrite becomes a no-op. A scene-graph resend (systemui's debounced
 // scheduler) applies new limits at once.

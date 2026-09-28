@@ -1,7 +1,7 @@
 // grid: shows the programs section of the VR dashboard's "+" menu
 // (#VRDashboard_LaunchNonSteamApp) as a grid of tiles (icon, name below).
-// mkPatch patch (see lib/default.nix); opts: { columns, maxRows } (maxRows
-// null: the stock 600 px max height).
+// mkPatch patch (see steam-ui-patches/lib/default.nix); opts: { columns,
+// maxRows } (maxRows null: the stock 600 px max height).
 //
 // Pure restyling in SharedJSContext (the bar popups share its realm): Steam's
 // items and handlers stay, so the other launcher-menu patches keep working. A
@@ -19,7 +19,7 @@
 //   maxRows caps the scroller, the inner panel is what scrolls.
 // Gamepad navigation follows the computed display: grid. The pinned-desktop
 // row (.sfui-pinned-desktop) is made slim and centred.
-// Anchors: "launcher-menu-grid" in lib/signatures.json.
+// Anchors: "launcher-menu-grid" in steam-ui-patches/lib/signatures.json.
 // unpatch.js (or a new VERSION/options) calls __sfuiLauncherGrid.stop().
 ((find, sigs, opts) => {
   const NAME = 'launcher-menu-grid';

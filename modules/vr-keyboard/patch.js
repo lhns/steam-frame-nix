@@ -1,8 +1,8 @@
 // Gestures and suggestions for Steam's VR keyboard (vr-keyboard.nix),
 // injected into Steam's SharedJSContext (8080). The keyboard is a popup of
 // that context ("SteamVR - Keyboard"); everything works on its document.
-// mkPatch convention plus four more arguments: decoder.js, textmodel.js,
-// corrector.js and the dictionary text ("word<TAB>zipf*10\n...").
+// mkPatch convention plus four more arguments: swipe-decoder.js,
+// textmodel.js, corrector.js and the dictionary text ("word<TAB>zipf*10\n...").
 //
 // - Swipe: the laser arrives as touch events; Steam types the key a touch
 //   started on at release. Once a press leaves its first key we drop that
@@ -20,9 +20,9 @@
 //   replace text only while the model proves the characters they replace
 //   intact.
 // - Strip: in the page over the number row ("inside") or as a SteamVR panel
-//   above/below the keyboard ("above"/"below", panel.js): state out via the
-//   CDP binding __sfuiStripOut, picks back via
-//   __sfuiSwipe.remote.pick(seq, index) (relay.mjs).
+//   above/below the keyboard ("above"/"below", suggestions-panel/patch.js):
+//   state out via the CDP binding __sfuiStripOut, picks back via
+//   __sfuiSwipe.remote.pick(seq, index) (suggestions-panel/relay.mjs).
 // All Steam internals are checked first (sigs, instance members); if one is
 // missing the keyboard stays stock. Only passive listeners; never blocks
 // Steam's events. Debugging: __sfuiSwipeLog, __sfuiSwipePaths
@@ -87,7 +87,7 @@
     const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
     // ---- trail and in-page strip -------------------------------------------------
-    const inPage = O.position === 'inside';       // else a SteamVR panel (panel.js)
+    const inPage = O.position === 'inside';       // else a SteamVR panel (suggestions-panel/)
     const style = doc.createElement('style');
     style.textContent = `
       #sfui-swipe-trail { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 10000; }

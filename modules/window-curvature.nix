@@ -5,7 +5,7 @@
 let
   cfg = config.steamFrame.dashboard.windowCurvature;
   inherit (lib) mkOption types;
-  inherit (import ./lib { inherit pkgs; }) mkPatch;
+  inherit (import ./steam-ui-patches/lib { inherit pkgs; }) mkPatch;
 
   path = [ "steamFrame" "dashboard" "windowCurvature" ];
   rename = from: to: lib.mkRenamedOptionModule (path ++ [ from ]) (path ++ [ to ]);

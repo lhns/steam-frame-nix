@@ -2,7 +2,8 @@
 
 `uiPatches.patches`, `uiPatches.lib` (modules `steam-ui-patches`,
 `steamvr-debugger`). For patch authors, and for fixing patches after a Steam
-update. Options: [README, Options](../README.md#options).
+update. Options: [README, Options](../README.md#options). Which file runs
+where: [Development](development.md).
 
 ## Problem
 
@@ -53,7 +54,7 @@ it runs. What they have in common:
 - Each turns on the [SteamVR debugger](steamvr-debugger.md) (**the first
   time, restart SteamVR once**).
 - They depend on SteamVR UI internals: each is found by signature (its entry
-  in `modules/lib/signatures.json` has the patch's name); after an update
+  in `modules/steam-ui-patches/lib/signatures.json` has the patch's name); after an update
   that changes them the dashboard stays stock (see
   [after a Steam update](#after-a-steam-update)). Tested with SteamVR build
   11008059.
@@ -110,7 +111,7 @@ see [changes outside Nix](../README.md#changes-outside-nix-exceptions).
 ## Finders and signatures
 
 Webpack module ids and export names change with every Steam UI build, so
-patches never use them. `modules/lib/finders.js` (like Decky Loader's
+patches never use them. `modules/steam-ui-patches/lib/finders.js` (like Decky Loader's
 `findModule`/`findInReactTree` or Vencord's `find`) locates by *signature*:
 
 - a **module** by strings/regexes in its factory source;
@@ -126,7 +127,7 @@ candidates r_, xy` as the patch's result. Results are cached per page. The
 library also has `ensureStyle(doc, id, css)` and `logger(buffer)` (a capped
 debug log).
 
-Signatures live in `modules/lib/signatures.json`, shared by patches and the
+Signatures live in `modules/steam-ui-patches/lib/signatures.json`, shared by patches and the
 offline checker. An entry can also list `expects` (strings the patch relies
 on, checked offline only) or be `checkOnly` (anchors not used through the
 finder, checked offline only; with `stylesheet` instead of `module` it is
@@ -137,7 +138,7 @@ matched against the bundle's CSS).
 `steamFrame.uiPatches.lib.mkPatch` wraps a patch file — a function
 expression `(find, sigs, opts, hooks) => …` returning a status string — with
 the finder library, its signatures, options and the shared hooks (details in
-`modules/lib/default.nix`):
+`modules/steam-ui-patches/lib/default.nix`):
 
 ```nix
 steamFrame.uiPatches.patches = [ {
@@ -167,7 +168,7 @@ steamFrame.uiPatches.patches = [ {
 
 ### Shared method hooks
 
-`modules/lib/hooks.js`, argument `hooks`, also `window.__sfuiHooks`: patches
+`modules/steam-ui-patches/lib/hooks.js`, argument `hooks`, also `window.__sfuiHooks`: patches
 intercepting the same method (e.g. the dashboard mailbox's `SendMessage`,
 used by [dashboard windows](dashboard-windows.md#how-it-works) and
 [window curvature](window-curvature.md#how-it-works)) register named hooks;

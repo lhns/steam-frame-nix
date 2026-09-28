@@ -1,22 +1,24 @@
-# Swipe typing, suggestions and a Backspace drag for Steam's VR keyboard.
-# - vr-keyboard/patch.js (Steam UI, 8080): swipe gestures (decoder.js), a
-#   model of what the keyboard typed (textmodel.js), suggestions (swipe
+# Swipe typing, suggestions and a Backspace drag for Steam's VR keyboard
+# (steamFrame.keyboard.vr; the extra keys are vr-keyboard-extra-keys.nix).
+# - vr-keyboard/patch.js (Steam UI, 8080): swipe gestures (swipe-decoder.js),
+#   a model of what the keyboard typed (textmodel.js), suggestions (swipe
 #   alternatives, corrections and completions, corrector.js; never changing
 #   text by themselves), Backspace drag (left: delete with a detent at word
 #   borders; right: retype), haptic ticks.
 # - The suggestion strip: over the number row ("inside"), or a SteamVR
-#   dashboard panel above/below the keyboard (panel.js in systemui, 8087),
-#   fed by relay.mjs (user service vr-keyboard-relay).
-# - Dictionary: built by gen-dict.py from wordfreq frequency lists, filtered
-#   and cased by Hunspell (nixpkgs' hunspellDicts).
+#   dashboard panel above/below the keyboard (suggestions-panel/patch.js in
+#   systemui, 8087), fed by suggestions-panel/relay.mjs (user service
+#   vr-keyboard-relay).
+# - Dictionary: dictionary.nix (gen-dict.py) from wordfreq frequency lists,
+#   filtered and cased by Hunspell (nixpkgs' hunspellDicts).
 # Works alongside keyboard.vr.extraKeys (both hook the same keyboard; this
-# one resets its text model on the extra keys it can't follow). Tests: the
-# checks below (also flake check `vr-keyboard`).
+# one resets its text model on the extra keys it can't follow). Tests:
+# check.nix (built before the patch; also flake check `vr-keyboard`).
 { config, pkgs, lib, ... }:
 let
   cfg = config.steamFrame.keyboard.vr;
   inherit (lib) mkOption mkEnableOption types;
-  uiLib = import ./lib { inherit pkgs; };
+  uiLib = import ./steam-ui-patches/lib { inherit pkgs; };
 
   on = cfg.enable && (cfg.swipe.enable || cfg.autocorrect.enable || cfg.completions.enable || cfg.backspaceDrag.enable);
   panel = on && cfg.suggestions.position != "inside";
@@ -34,9 +36,10 @@ let
     ++ [ { language = "en"; hunspell = "en_US"; words = if layoutLanguage != null then 40000 else 60000;
            frequencyOffset = if layoutLanguage != null then -0.3 else 0.0; } ];
 
-  built = import ./vr-keyboard/build.nix { inherit pkgs; inherit (cfg) dictionary; };
+  dictionaryJs = import ./vr-keyboard/dictionary.nix { inherit pkgs; inherit (cfg) dictionary; };
+  checks = import ./vr-keyboard/check.nix { inherit pkgs; inherit (cfg) dictionary; };
   patch = pkgs.runCommand "vr-keyboard.js" { nativeBuildInputs = [ pkgs.nodejs ]; } ''
-    : ${built.checks}
+    : ${checks}
     cp ${uiLib.mkPatch {
       name = "vr-keyboard";
       src = ./vr-keyboard/patch.js;
@@ -52,7 +55,7 @@ let
         inherit (cfg.backspaceDrag) wordDetentPixels;
         inherit (cfg) haptics;
       };
-      extraArgs = [ ./vr-keyboard/decoder.js ./vr-keyboard/textmodel.js ./vr-keyboard/corrector.js built.dictionary ];
+      extraArgs = [ ./vr-keyboard/swipe-decoder.js ./vr-keyboard/textmodel.js ./vr-keyboard/corrector.js dictionaryJs ];
     }} $out
     node --check $out
   '';
@@ -180,7 +183,7 @@ in {
     checks = mkOption {
       type = types.package;
       readOnly = true;
-      default = built.checks;
+      default = checks;
       defaultText = lib.literalMD "the tests, built with the configured dictionary";
       description = "The tests (also built with the patch).";
     };
@@ -202,15 +205,15 @@ in {
         name = "vr-keyboard-panel";
         endpoint = "http://127.0.0.1:8087";
         target.title = "systemui";
-        patch = pkgs.writeText "vr-keyboard-panel.js" "(${builtins.readFile ./vr-keyboard/panel.js})()";
-        unpatch = ./vr-keyboard/unpatch-panel.js;
+        patch = pkgs.writeText "vr-keyboard-panel.js" "(${builtins.readFile ./vr-keyboard/suggestions-panel/patch.js})()";
+        unpatch = ./vr-keyboard/suggestions-panel/unpatch.js;
       };
       steamFrame.session.services.${if panel then "restart" else "stop"} = [ "vr-keyboard-relay.service" ];
     }
     (lib.mkIf panel {
       systemd.user.services.vr-keyboard-relay = {
         Unit.Description = "Relay of the VR keyboard's suggestion strip (Steam UI <-> SteamVR dashboard)";
-        Service = { ExecStart = "${pkgs.nodejs}/bin/node ${./vr-keyboard/relay.mjs}"; Restart = "always"; RestartSec = 5; };
+        Service = { ExecStart = "${pkgs.nodejs}/bin/node ${./vr-keyboard/suggestions-panel/relay.mjs}"; Restart = "always"; RestartSec = 5; };
         Install.WantedBy = [ "default.target" ];
       };
     })

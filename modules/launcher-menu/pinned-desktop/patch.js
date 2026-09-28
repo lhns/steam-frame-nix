@@ -1,6 +1,7 @@
 // pinned-desktop: pins "Desktop" (the nested Plasma session) above or below
 // the scrolling list of the VR dashboard's "+" menu.
-// mkPatch patch (see lib/default.nix); opts: { position: "top" | "bottom" }.
+// mkPatch patch (see steam-ui-patches/lib/default.nix); opts: { position:
+// "top" | "bottom" }.
 //
 // DOM patch in SharedJSContext: a timer attaches a MutationObserver to every
 // bar popup document (g_PopupManager). The stock Desktop item (fiber list key
@@ -9,7 +10,8 @@
 // region. Clicking the clone clicks the hidden item, so Steam's own handler
 // runs. The list container is a flex column with a max-height, so the scroll
 // region shrinks and the menu keeps its size.
-// Anchors: "launcher-menu-pinned-desktop" in lib/signatures.json.
+// Anchors: "launcher-menu-pinned-desktop" in
+// steam-ui-patches/lib/signatures.json.
 // unpatch.js (or a new VERSION/position) calls __sfuiPinnedDesktop.stop().
 ((find, sigs, opts) => {
   const NAME = 'launcher-menu-pinned-desktop';

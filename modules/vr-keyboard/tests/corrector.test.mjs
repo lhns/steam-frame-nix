@@ -1,5 +1,5 @@
 // Offline check of corrector.js on the built dictionary.
-// usage: node corrector.test.mjs <corrector.js> <decoder.js> <dictionary.js>
+// usage: node corrector.test.mjs <corrector.js> <swipe-decoder.js> <dictionary.js>
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 

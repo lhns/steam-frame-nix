@@ -1,6 +1,7 @@
-// Offline check of decoder.js with synthetic swipes on Steam's German VR
+// Offline check of swipe-decoder.js with synthetic swipes on Steam's German VR
 // keyboard (key centres measured in the keyboard popup, 854x280 CSS px).
-// usage: node decoder.test.mjs <decoder.js> <dictionary.js> [words-per-sample] [seed]
+// usage: node swipe-decoder.test.mjs <swipe-decoder.js> <dictionary.js>
+//          [words-per-sample] [seed]
 // Each word's path goes through its key centres with random offsets (up to
 // about half a key), cuts corners (spline) and jitters. Prints top-1/top-3
 // accuracy for frequent German and English words and a list of fixed words.

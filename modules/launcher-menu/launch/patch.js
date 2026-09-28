@@ -1,5 +1,6 @@
 // launch: what activating a program in the VR dashboard's "+" menu does.
-// mkPatch patch (see lib/default.nix); opts: { closeOnLaunch, launchDebounceSeconds }.
+// mkPatch patch (see steam-ui-patches/lib/default.nix); opts: { closeOnLaunch,
+// launchDebounceSeconds }.
 //
 // Stock, an item only calls SteamClient.Apps.LaunchNonSteamApp(cmdline) and
 // the popup stays open until the new window appears, so users click twice.
@@ -12,7 +13,7 @@
 //   popup handle (closePopup(), as stock does after adding a desktop window),
 //   found through React props: a .VRDashboardBarSmallButton whose fiber
 //   ancestors have refBarPopopHandle and, above, allowLaunchProgram
-//   ("launcher-menu-launch" in lib/signatures.json).
+//   ("launcher-menu-launch" in steam-ui-patches/lib/signatures.json).
 // Covers every activation path (pointer, controller, pinned Desktop copy).
 // Original kept as __sfuiOrig for unpatch.js; bump VERSION on changes.
 ((find, sigs, opts) => {
