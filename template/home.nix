@@ -17,6 +17,7 @@
   # steamFrame = {
   #   keyboard.layout = "de";               # XKB layout, Steam session
   #   keyboard.vr.extraKeys.enable = true;  # Esc/Ctrl/Alt/arrows in VR
+  #   keyboard.vr.enable = true;            # swipe, suggestions, Backspace drag
   #   # VR "+" menu: sorted by name, Desktop pinned below the list, closed
   #   # on click, no second launch of the same program within 10 s, programs
   #   # as a grid of 4 columns, at most 4 rows visible:

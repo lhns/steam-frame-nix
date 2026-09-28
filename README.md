@@ -21,6 +21,7 @@ on by default; everything else is opt-in.
   [portal](#portal-sessionportalfix),
   [keyboard layout](#keyboard-layout-keyboardlayout-keyboardvariant),
   [Steam keyboard](#steam-keyboard-patch-keyboardvrextrakeysenable),
+  [swipe and suggestions](#vr-keyboard-swipe-and-suggestions-keyboardvr),
   [launcher menu](#launcher-menu-launchermenu),
   [dashboard windows](#dashboard-windows-dashboardwindows),
   [Steam close button](#steam-close-button-dashboardsteamclosebuttonenable),
@@ -135,6 +136,7 @@ a commented version of these two files ([`template/`](template)):
   steamFrame = {
     keyboard.layout = "de";
     keyboard.vr.extraKeys.enable = true;
+    keyboard.vr.enable = true;   # swipe typing, suggestions, Backspace drag
     launcherMenu = {
       sort = true;
       pinDesktop = "bottom";
@@ -174,7 +176,7 @@ home-manager switch --flake .#steamos
 ```
 
 Individual modules:
-`homeManagerModules.{session,portal,keyboard-layout,steam-keyboard-patch,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox}`;
+`homeManagerModules.{session,portal,keyboard-layout,steam-keyboard-patch,vr-keyboard,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox}`;
 `default` imports all.
 
 **Steam Developer Mode** (a Steam setting, not managed here) makes the "+"
@@ -195,6 +197,28 @@ without it.
 | `steamFrame.keyboard.layout` | null or str | `null` | XKB layout for the Steam session, e.g. `"de"`; `null`: US. |
 | `steamFrame.keyboard.variant` | null or str | `null` | XKB variant for the Steam session, e.g. `"nodeadkeys"`; see [Keyboard layout](#keyboard-layout-keyboardlayout-keyboardvariant). |
 | `steamFrame.keyboard.vr.extraKeys.enable` | bool | `false` | VR keyboard with Esc/Ctrl/Alt, arrows, real chords, AltGr/non-ASCII. |
+| `steamFrame.keyboard.vr.enable` | bool | `false` | Swipe typing, suggestions and Backspace drag on the VR keyboard; the sub-features below are on by default, see [VR keyboard](#vr-keyboard-swipe-and-suggestions-keyboardvr). |
+| `steamFrame.keyboard.vr.swipe.enable` | bool | `true` | Swipe typing. |
+| `steamFrame.keyboard.vr.dictionary.languages` | list of submodules | layout language + English | `{ language; hunspell; words; frequencyOffset; keepFrequentAbove; }`: wordfreq language, `pkgs.hunspellDicts` name (or `null`), most frequent words taken, zipf offset, keep words Hunspell rejects from this zipf on (default `4.0`). Default: the `keyboard.layout` language (de, fr, es, it, nl, pt, sv; 60000) + English (40000, `-0.3`), else English (60000). |
+| `steamFrame.keyboard.vr.dictionary.contractions` | bool | `true` | Words with apostrophes (`couldn't`, `geht's`), swiped by their letters. |
+| `steamFrame.keyboard.vr.dictionary.extraWords` | list of str | `[ ]` | Words always included, casing as given. |
+| `steamFrame.keyboard.vr.dictionary.extraWordsFrequency` | number | `5.0` | Zipf frequency of extra words. |
+| `steamFrame.keyboard.vr.dictionary.extraWordFiles` | list of paths | `[ ]` | Word lists, `word` or `word<TAB>zipf` per line. |
+| `steamFrame.keyboard.vr.dictionary.excludeWords` | list of str | `[ ]` | Words never suggested. |
+| `steamFrame.keyboard.vr.text.bufferChars` | int | `64` | Characters of typed text the keyboard remembers. |
+| `steamFrame.keyboard.vr.text.resetAfterIdleSeconds` | int | `30` | Forget it after this long without typing (`0`: never). |
+| `steamFrame.keyboard.vr.text.autoSpace` | bool | `true` | Space before a swiped word after a known non-space character. |
+| `steamFrame.keyboard.vr.suggestions.position` | `"below"`, `"above"`, `"inside"` | `"below"` | Suggestion strip: SteamVR panel below/above the keyboard, or over its number row. |
+| `steamFrame.keyboard.vr.suggestions.count` | int | `5` | Suggestions shown. |
+| `steamFrame.keyboard.vr.autocorrect.enable` | bool | `true` | Correction suggestions for finished tapped words not in the dictionary. |
+| `steamFrame.keyboard.vr.autocorrect.maxEditDistance` | int | `2` | Largest edit distance (neighbouring keys and swaps count 0.5). |
+| `steamFrame.keyboard.vr.completions.enable` | bool | `true` | Completions of the tapped word. |
+| `steamFrame.keyboard.vr.completions.minPrefix` | int | `2` | Letters typed before completions show. |
+| `steamFrame.keyboard.vr.backspaceDrag.enable` | bool | `true` | Backspace drag: left deletes, back right retypes. |
+| `steamFrame.keyboard.vr.backspaceDrag.pixelsPerChar` | int | `25` | Travel per character (keyboard px; a key is ~60). |
+| `steamFrame.keyboard.vr.backspaceDrag.wordDetentPixels` | int | `90` | Extra travel across a word border (`0`: none). |
+| `steamFrame.keyboard.vr.haptics` | bool | `true` | Haptic ticks for drag steps, word detents and picks. |
+| `steamFrame.keyboard.vr.checks` | package, read-only | | The tests, built with the configured dictionary. |
 | `steamFrame.uiPatches.patches` | list of submodules | `[ ]` | Runtime patches of Steam's web UIs, see [UI patches](#ui-patches-uipatchespatches). |
 | `steamFrame.uiPatches.lib` | attrs, read-only | | Patch helpers (`mkPatch`), see [Finders and signatures](#finders-and-signatures). |
 | `steamFrame.launcherMenu.sort` | bool | `false` | Sort the "+" menu alphabetically. |
@@ -488,6 +512,53 @@ the keyboard stays stock and the journal says why (see
 1790377368 (UI build 11041156).
 
 **Remove when** Steam's VR keyboard gets these keys.
+
+### VR keyboard: swipe and suggestions (`keyboard.vr.*`)
+
+**Problem:** Steam's VR keyboard is tap-only: no swipe typing, no
+suggestions, and deleting more than a few characters means many Backspace
+taps.
+
+**Fix:** a Steam UI patch (`vr-keyboard`, injected like the other UI
+patches); opt in with `keyboard.vr.enable`.
+
+- **Swipe:** press the trigger on the first letter, sweep over the others,
+  release on the last. The word is typed with a space before it if needed;
+  alternatives show in the strip. Words are matched by shape (SHARK2-style
+  template matching) against a dictionary built from wordfreq frequency
+  lists and Hunspell, both from nixpkgs; `'` and `-` are typed, not swiped.
+- **Suggestions** never change text by themselves: a finished tapped word
+  that isn't in the dictionary gets corrections (itself first), a word being
+  tapped gets completions (the typed letters first). A pick replaces exactly
+  what it typed and can be switched again.
+- **Backspace drag:** drag Backspace left to delete one character per
+  `pixelsPerChar`, with a detent (`wordDetentPixels`) at each word border
+  and at the start of what the keyboard typed; drag back right to retype.
+- **Strip:** a SteamVR dashboard panel below or above the keyboard (patch of
+  SteamVR's `systemui`, with the `vr-keyboard-relay` user service carrying
+  the strip between the two pages), or inside the keyboard over its number
+  row. Its buttons take the keyboard's key style.
+- **Haptics:** light ticks for drag steps and picks, a Snap at word detents.
+
+The keyboard can't read the text field, so it remembers what it typed
+itself (`text.bufferChars`); anything it can't follow (Enter, arrows,
+extraKeys' xdotool keys, another field, `text.resetAfterIdleSeconds`) resets
+that, and suggestions only replace text the memory proves intact. Works with
+and without `keyboard.vr.extraKeys` (with it, non-ASCII words are typed via
+its xdotool helper).
+
+**Tests:** `nix flake check` (checks `vr-keyboard`: text model, corrector,
+decoder accuracy on German + English) and `keyboard.vr.checks` for the
+configured dictionary. Debugging: `window.__sfuiSwipeLog` and
+`__sfuiSwipePaths` in Steam's SharedJSContext (replay swipes with
+`scripts/vr-keyboard-replay.mjs`).
+
+**Caveat:** found by signature (entries `vr-keyboard`, `vr-keyboard-panel`);
+if one stops matching the keyboard stays stock. Accented words of other
+languages are in the dictionary but only swipable where the layout has the
+letters.
+
+**Remove when** Steam's VR keyboard gets swipe typing and suggestions.
 
 ### Launcher menu (`launcherMenu.*`)
 
