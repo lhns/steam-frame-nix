@@ -18,16 +18,16 @@ on by default; everything else is opt-in.
   [after a Steam update](#after-a-steam-update)
 - [Fixes in detail](#fixes-in-detail):
   [session](#session-settings-and-background-services-sessionnix),
-  [portal](#portal-portalfix),
+  [portal](#portal-sessionportalfix),
   [keyboard layout](#keyboard-layout-keyboardlayout-keyboardvariant),
-  [Steam keyboard](#steam-keyboard-patch-steamkeyboardpatchenable),
+  [Steam keyboard](#steam-keyboard-patch-keyboardvrextrakeysenable),
   [launcher menu](#launcher-menu-launchermenu),
-  [dashboard windows](#dashboard-windows-dashboard),
+  [dashboard windows](#dashboard-windows-dashboardwindows),
   [Steam close button](#steam-close-button-dashboardsteamclosebuttonenable),
   [window curvature](#window-curvature-dashboardwindowcurvature),
   [window control bar](#window-control-bar-dashboardframecontrols),
   [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable),
-  [hidden apps](#hidden-apps-hiddenapps),
+  [hidden apps](#hidden-apps-launchermenuhiddenapps),
   [clipboard sync](#clipboard-sync-clipboardsyncenable),
   [Firefox](#firefox-firefox)
 - [Rollback](#rollback)
@@ -86,10 +86,10 @@ of their differences:
 
 - **Wallet:** there should be one `kwalletd6`, on the outer bus; apps started
   from the desktop would otherwise start a second one whose secrets VR can't
-  see. Prefix launchers' `Exec=` with `steamFrame.outerBusEnv`.
+  see. Prefix launchers' `Exec=` with `steamFrame.session.busEnv`.
 - **User services:** home-manager skips `reloadSystemd` when switching from
-  the desktop terminal, so `steamFrame.userServices` talks to the outer user
-  manager directly.
+  the desktop terminal, so `steamFrame.session.services` talks to the outer
+  user manager directly.
 - **Launchers:** the "+" menu only sees `~/.local/share/applications` (not
   `~/.nix-profile/share`), so entries are written there, shadowing
   Flatpak/package entries with the same ID.
@@ -133,27 +133,27 @@ a commented version of these two files ([`template/`](template)):
   targets.genericLinux.enable = true;
 
   steamFrame = {
-    keyboardLayout = "de";
-    steamKeyboardPatch.enable = true;
+    keyboard.layout = "de";
+    keyboard.vr.extraKeys.enable = true;
     launcherMenu = {
       sort = true;
       pinDesktop = "bottom";
       closeOnLaunch = true;
-      launchDebounce = 10;
+      launchDebounceSeconds = 10;
       grid = { enable = true; columns = 4; maxRows = 4; };
       showAllApps = true;
+      # Listed in the "+" menu only with showAllApps or Steam Developer Mode.
+      hiddenApps = [ "lxterminal" "cmake-gui" "firewall-config" "renderdoc" ];
     };
     dashboard = {
-      windowMaxScale = 4.0;
-      windowDistance.world.max = 10.0;
-      windowDistance.theater.max = 12.0;
+      windows.maxScale = 4.0;
+      windows.distance.world.max = 10.0;
+      windows.distance.theater.max = 12.0;
       steamCloseButton.enable = true;
       windowCurvature.enable = true;
       frameControls.enable = true;
     };
     firefox.enable = true;
-    # Listed in the "+" menu only with showAllApps or Steam Developer Mode.
-    hiddenApps = [ "lxterminal" "cmake-gui" "firewall-config" "renderdoc" ];
   };
 
   # Example: an app that must use the single wallet on the outer bus.
@@ -161,7 +161,7 @@ a commented version of these two files ([`template/`](template)):
   #   [Desktop Entry]
   #   Type=Application
   #   Name=Example
-  #   Exec=${config.steamFrame.outerBusEnv} flatpak run org.example.App %U
+  #   Exec=${config.steamFrame.session.busEnv} flatpak run org.example.App %U
   # '';
 }
 ```
@@ -185,40 +185,41 @@ without it.
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `steamFrame.runtimeDir` | str | `"/run/user/1000"` | `XDG_RUNTIME_DIR` of the outer (Steam/VR) session. |
-| `steamFrame.userBus` | str | `"unix:path=${runtimeDir}/bus"` | Outer session D-Bus (user manager, `kwalletd6`). |
-| `steamFrame.outerBusEnv` | str, read-only | `"env DBUS_SESSION_BUS_ADDRESS=${userBus}"` | Prefix for launchers that must use the outer bus. |
-| `steamFrame.userServices.start` | list of str | `[ ]` | User units started on switch if not running. |
-| `steamFrame.userServices.restart` | list of str | `[ ]` | User units restarted on every switch. |
-| `steamFrame.userServices.stop` | list of str | `[ ]` | User units stopped on switch if running (e.g. of a disabled feature). |
-| `steamFrame.portalFix.enable` | bool | `true` | Working portal config (OpenURI) for the Steam session. |
-| `steamFrame.keyboardLayout` | null or str | `null` | XKB layout for the Steam session, e.g. `"de"`; `null`: US. |
-| `steamFrame.keyboardVariant` | null or str | `null` | XKB variant for the Steam session, e.g. `"nodeadkeys"`; see [Keyboard layout](#keyboard-layout-keyboardlayout-keyboardvariant). |
-| `steamFrame.steamKeyboardPatch.enable` | bool | `false` | VR keyboard with Esc/Ctrl/Alt, arrows, real chords, AltGr/non-ASCII. |
+| `steamFrame.session.runtimeDir` | str | `"/run/user/1000"` | `XDG_RUNTIME_DIR` of the outer (Steam/VR) session. |
+| `steamFrame.session.bus` | str | `"unix:path=${runtimeDir}/bus"` | Outer session D-Bus (user manager, `kwalletd6`). |
+| `steamFrame.session.busEnv` | str, read-only | `"env DBUS_SESSION_BUS_ADDRESS=${bus}"` | Prefix for launchers that must use the outer bus. |
+| `steamFrame.session.services.start` | list of str | `[ ]` | User units started on switch if not running. |
+| `steamFrame.session.services.restart` | list of str | `[ ]` | User units restarted on every switch. |
+| `steamFrame.session.services.stop` | list of str | `[ ]` | User units stopped on switch if running (e.g. of a disabled feature). |
+| `steamFrame.session.portalFix.enable` | bool | `true` | Working portal config (OpenURI) for the Steam session. |
+| `steamFrame.keyboard.layout` | null or str | `null` | XKB layout for the Steam session, e.g. `"de"`; `null`: US. |
+| `steamFrame.keyboard.variant` | null or str | `null` | XKB variant for the Steam session, e.g. `"nodeadkeys"`; see [Keyboard layout](#keyboard-layout-keyboardlayout-keyboardvariant). |
+| `steamFrame.keyboard.vr.extraKeys.enable` | bool | `false` | VR keyboard with Esc/Ctrl/Alt, arrows, real chords, AltGr/non-ASCII. |
 | `steamFrame.uiPatches.patches` | list of submodules | `[ ]` | Runtime patches of Steam's web UIs, see [UI patches](#ui-patches-uipatchespatches). |
 | `steamFrame.uiPatches.lib` | attrs, read-only | | Patch helpers (`mkPatch`), see [Finders and signatures](#finders-and-signatures). |
 | `steamFrame.launcherMenu.sort` | bool | `false` | Sort the "+" menu alphabetically. |
 | `steamFrame.launcherMenu.pinDesktop` | null or `"top"` / `"bottom"` | `null` | Pin "Desktop" above/below the "+" menu's list; `null`: normal entry. |
 | `steamFrame.launcherMenu.closeOnLaunch` | bool | `false` | Close the "+" menu when a program is clicked. |
-| `steamFrame.launcherMenu.launchDebounce` | unsigned int (seconds) | `0` | Ignore repeat launches of a program within this time; `0`: off. |
+| `steamFrame.launcherMenu.launchDebounceSeconds` | unsigned int (s) | `0` | Ignore repeat launches of a program within this time; `0`: off. |
 | `steamFrame.launcherMenu.grid.enable` | bool | `false` | Show the "+" menu's programs as a grid of tiles. |
 | `steamFrame.launcherMenu.grid.columns` | int, 1-8 | `4` | Tiles per row (3 ≈ 92 px, 4 ≈ 68 px, 5 ≈ 53 px). |
 | `steamFrame.launcherMenu.grid.maxRows` | null or positive int | `null` | Visible rows, the rest scrolls; `null`: up to 600 px. |
 | `steamFrame.launcherMenu.showAllApps` | bool | `false` | List all programs without Developer Mode, see [Launcher menu](#launcher-menu-launchermenu). |
 | `steamFrame.launcherMenu.iconFallbacks.enable` | bool | `true` | Link Breeze icons into hicolor for entries Steam shows without icon, see [Icon fallbacks](#icon-fallbacks-launchermenuiconfallbacks). |
 | `steamFrame.launcherMenu.iconFallbacks.extra` | list of str | `[ ]` | Extra icon names to provide. |
-| `steamFrame.dashboard.windowMaxScale` | null or number | `null` | Max resize scale of dashboard windows; `null`: stock (2), see [Dashboard windows](#dashboard-windows-dashboard). |
-| `steamFrame.dashboard.windowDistance.{world,theater,dashboard}.{min,max}` | null or number (m) | `null` | Pull-in / push-back limits of grabbed windows; `null`: stock (world 0.25-5, theater 1-6, dashboard 0.3-4 m). |
+| `steamFrame.launcherMenu.hiddenApps` | list of str | `[ ]` | Desktop entry ids (no `.desktop`) hidden from the "+" and KDE menus. |
+| `steamFrame.dashboard.windows.maxScale` | null or positive number | `null` | Max resize scale of dashboard windows; `null`: stock (2), see [Dashboard windows](#dashboard-windows-dashboardwindows). |
+| `steamFrame.dashboard.windows.distance.{world,theater,dashboard}.{min,max}` | null or positive number (m) | `null` | Pull-in / push-back limits of grabbed windows; `null`: stock (world 0.25-5, theater 1-6, dashboard 0.3-4 m). |
 | `steamFrame.dashboard.steamCloseButton.enable` | bool | `false` | X button on the dashboard's Steam window, see [Steam close button](#steam-close-button-dashboardsteamclosebuttonenable). |
 | `steamFrame.dashboard.windowCurvature.enable` | bool | `false` | Adjustable curvature per window, see [Window curvature](#window-curvature-dashboardwindowcurvature). |
-| `steamFrame.dashboard.windowCurvature.default` | number | `1.0` | Curvature of curved world/hand windows without own value (1 = stock, 0 = flat). |
-| `steamFrame.dashboard.windowCurvature.max` | number | `3.0` | Largest curvature. |
-| `steamFrame.dashboard.windowCurvature.step` | number | `0.05` | Rounding step while dragging. |
-| `steamFrame.dashboard.windowCurvature.snapPixels` | unsigned int (px) | `24` | Detent at each snap point in drag pixels: the value holds there, then continues (nothing skipped); `0`: none. |
-| `steamFrame.dashboard.windowCurvature.snapPoints` | list of numbers | `[ 0 1.0 ]` | Snap points (flat, stock). |
-| `steamFrame.dashboard.windowCurvature.dragThreshold` | unsigned int (px) | `8` | Vertical travel before a press becomes a drag. |
-| `steamFrame.dashboard.windowCurvature.dragPixelsPerUnit` | number (px) | `120` | Drag distance per 1.0 in the menu (6 px per 0.05 step). |
-| `steamFrame.dashboard.windowCurvature.barDragPixelsPerUnit` | number (px) | `60` | Drag distance per 1.0 on the bar button. |
+| `steamFrame.dashboard.windowCurvature.initial` | non-negative number | `1.0` | Curvature of curved world/hand windows without own value (1 = stock, 0 = flat). |
+| `steamFrame.dashboard.windowCurvature.max` | positive number | `3.0` | Largest curvature. |
+| `steamFrame.dashboard.windowCurvature.step` | positive number | `0.05` | Rounding step while dragging (at most `max`). |
+| `steamFrame.dashboard.windowCurvature.detentPixels` | unsigned int (px) | `24` | Detent at each detent point in drag pixels: the value holds there, then continues (nothing skipped); `0`: none. |
+| `steamFrame.dashboard.windowCurvature.detentPoints` | list of non-negative numbers | `[ 0 1.0 ]` | Detent points (flat, stock), at most `max`. |
+| `steamFrame.dashboard.windowCurvature.dragThresholdPixels` | unsigned int (px) | `8` | Vertical travel before a press becomes a drag. |
+| `steamFrame.dashboard.windowCurvature.dragPixelsPerUnit` | positive number (px) | `120` | Drag distance per 1.0 in the menu (6 px per 0.05 step). |
+| `steamFrame.dashboard.windowCurvature.barDragPixelsPerUnit` | positive number (px) | `60` | Drag distance per 1.0 on the bar button. |
 | `steamFrame.dashboard.windowCurvature.haptics` | bool | `true` | Controller haptics while dragging (steps, detents, edges); the dashboard's hover clicks are muted during a drag. |
 | `steamFrame.dashboard.frameControls.enable` | bool | `false` | Move window controls between bar and three-dot menu, see [Window control bar](#window-control-bar-dashboardframecontrols). |
 | `steamFrame.dashboard.frameControls.longPressMs` | int, 300-10000 (ms) | `1500` | Long-press duration. |
@@ -226,12 +227,28 @@ without it.
 | `steamFrame.dashboard.frameControls.inMenu` | list of control names | `[ ]` | Controls that start in the three-dot menu. |
 | `steamFrame.dashboard.frameControls.floatInTheater` | bool | `false` | "Float" control on theater windows. |
 | `steamFrame.steamvrDebugger.enable` | bool | automatic | SteamVR dashboard DevTools on `127.0.0.1:8087`; on when a dashboard patch is, see [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable). |
-| `steamFrame.hiddenApps` | list of str | `[ ]` | Desktop entry ids (no `.desktop`) hidden from the "+" and KDE menus. |
 | `steamFrame.clipboardSync.enable` | bool | `true` | Clipboard bridge between the Steam session and the nested desktop. |
 | `steamFrame.clipboardSync.package` | package | built from `dnut/clipboard-sync` | The clipboard-sync package. |
 | `steamFrame.firefox.enable` | bool | `false` | Launcher for the Flathub Firefox Flatpak with the fixes below. |
 | `steamFrame.firefox.vrFullscreenFix` | bool | `true` | Link a `user.js` with `full-screen-api.ignore-widgets` into profiles. |
 | `steamFrame.firefox.desktopProfile` | null or str | `"desktop"` | Separate profile for the nested desktop; `null`: none. |
+
+Renamed options still work under their old names, with a warning:
+
+| Old | New |
+|---|---|
+| `keyboardLayout`, `keyboardVariant` | `keyboard.layout`, `keyboard.variant` |
+| `steamKeyboardPatch.enable` | `keyboard.vr.extraKeys.enable` |
+| `hiddenApps` | `launcherMenu.hiddenApps` |
+| `launcherMenu.launchDebounce` | `launcherMenu.launchDebounceSeconds` |
+| `runtimeDir`, `userBus`, `outerBusEnv` | `session.runtimeDir`, `session.bus`, `session.busEnv` |
+| `userServices.{start,restart,stop}` | `session.services.{start,restart,stop}` |
+| `portalFix.enable` | `session.portalFix.enable` |
+| `dashboard.windowMaxScale` | `dashboard.windows.maxScale` |
+| `dashboard.windowDistance.*` | `dashboard.windows.distance.*` |
+| `dashboard.windowCurvature.default` | `dashboard.windowCurvature.initial` |
+| `dashboard.windowCurvature.snapPixels`, `snapPoints` | `detentPixels`, `detentPoints` |
+| `dashboard.windowCurvature.dragThreshold` | `dragThresholdPixels` |
 
 ## UI patches (`uiPatches.patches`)
 
@@ -337,7 +354,7 @@ steamFrame.uiPatches.patches = [ {
 **Shared method hooks** (`modules/lib/hooks.js`, argument `hooks`, also
 `window.__sfuiHooks`): patches intercepting the same method (e.g. the
 dashboard mailbox's `SendMessage`, used by
-[Dashboard windows](#dashboard-windows-dashboard) and
+[Dashboard windows](#dashboard-windows-dashboardwindows) and
 [Window curvature](#window-curvature-dashboardwindowcurvature)) register
 named hooks; one wrapper per method runs them in registration order, so
 patches can be injected, upgraded and reverted in any order.
@@ -387,16 +404,16 @@ bundles `steamui` / `vrwebui-systemui`), `--dir steamui=DIR`,
 
 Used by the other modules; normally nothing to set.
 
-- `runtimeDir` / `userBus` point at the Steam session's runtime dir and bus
-  (services, KDE wallet), which the nested desktop can't see; `outerBusEnv`
-  is a launcher prefix to reach them
-  (`Exec=${config.steamFrame.outerBusEnv} flatpak run …`).
+- `session.runtimeDir` / `session.bus` point at the Steam session's runtime
+  dir and bus (services, KDE wallet), which the nested desktop can't see;
+  `session.busEnv` is a launcher prefix to reach them
+  (`Exec=${config.steamFrame.session.busEnv} flatpak run …`).
 - Switching from the nested desktop, Home Manager can't reach the service
   manager ("User systemd daemon not running"). So after every switch this
   module reloads the Steam session's user manager and applies
-  `userServices.start` / `stop` / `restart`, which other modules fill.
+  `session.services.start` / `stop` / `restart`, which other modules fill.
 
-### Portal (`portalFix`)
+### Portal (`session.portalFix`)
 
 **Problem:** the Frame image (SteamOS 0.3.0, build 20260922) points the Steam
 session's `xdg-desktop-portal` at `/usr/share/xdg-desktop-portal/gamescope-portals`,
@@ -409,7 +426,7 @@ a config (`default=holo;gamescope`), and a drop-in on
 
 **Remove when** SteamOS ships `gamescope-portals.conf`.
 
-### Keyboard layout (`keyboardLayout`, `keyboardVariant`)
+### Keyboard layout (`keyboard.layout`, `keyboard.variant`)
 
 **Problem:** gamescope and its Xwayland displays use US unless
 `XKB_DEFAULT_*` is set; KDE's layout only affects the nested desktop, and
@@ -418,7 +435,7 @@ a config (`default=holo;gamescope`), and a drop-in on
 **Fix:** a drop-in on `gamescope-session.service` setting
 `XKB_DEFAULT_LAYOUT`/`VARIANT`; applies at the next Steam session start.
 
-`keyboardVariant` picks a variant of the layout, e.g. for `de`: `null`
+`keyboard.variant` picks a variant of the layout, e.g. for `de`: `null`
 (standard, with dead keys: `^`, `` ` ``, `´` wait for the next key),
 `"nodeadkeys"` (those are typed immediately), `"mac"`, `"neo"`, `"e1"`, `"us"`
 (German letters on a US layout). List them with
@@ -426,7 +443,7 @@ a config (`default=holo;gamescope`), and a drop-in on
 
 **Remove when** SteamOS applies a layout setting to gamescope.
 
-### Steam keyboard patch (`steamKeyboardPatch.enable`)
+### Steam keyboard patch (`keyboard.vr.extraKeys.enable`)
 
 **Problem:** Steam's VR keyboard has no Ctrl, Alt or Esc, can't press real
 keys, and its text emulation only maps plain ASCII: non-ASCII and
@@ -478,7 +495,7 @@ feedback until the window appears, so programs often get started twice.
   always visible. **Limitation:** the pinned copy works with the laser but
   not with thumbstick / D-pad navigation.
 - `closeOnLaunch`: the menu closes on click.
-- `launchDebounce = <seconds>`: a repeat launch of the same command within
+- `launchDebounceSeconds = <seconds>`: a repeat launch of the same command within
   that time is ignored (and logged); a program that exits right away can
   only be restarted once the time is up.
 - `grid.enable`: the programs section becomes a grid of tiles (icon, name
@@ -490,7 +507,7 @@ feedback until the window appears, so programs often get started twice.
   `systemsettings`, `dolphin`, `plasma-discover`, `vlc`, `firewall-config`,
   `cmake-gui`, `qrenderdoc`, `lxterminal` and `sh`; this lifts that filter
   only, so Developer Mode (sshd, xrdp, LAN DevTools forwards) can stay off.
-  Hide single programs with `steamFrame.hiddenApps`.
+  Hide single programs with [`hiddenApps`](#hidden-apps-launchermenuhiddenapps).
 
 All revert when turned off (next switch). The anchors (APIs, React props,
 CSS) are verified by the offline checker. Tested with Steam client
@@ -515,7 +532,7 @@ their fallback on the next switch.
 `iconFallbacks` used to be a list; a list now fails with a hint (use
 `extra`, or `enable = false` for `[ ]`).
 
-### Dashboard windows (`dashboard.*`)
+### Dashboard windows (`dashboard.windows.*`)
 
 **Problem:** SteamVR dashboard windows can only be enlarged to 2x, and
 grabbed windows pushed back only to 5 m (6 m in theater), too close for a big
@@ -527,10 +544,10 @@ limits, which the dashboard sends to the compositor in its scene graph:
 
 | Option | Stock |
 |---|---|
-| `windowMaxScale` | 2 (relative to the window's default size; the theater screen's default is 2.8x larger) |
-| `windowDistance.world.{min,max}` | 0.25-5 m |
-| `windowDistance.theater.{min,max}` | 1-6 m |
-| `windowDistance.dashboard.{min,max}` | 0.3-4 m |
+| `maxScale` | 2 (relative to the window's default size; the theater screen's default is 2.8x larger) |
+| `distance.world.{min,max}` | 0.25-5 m |
+| `distance.theater.{min,max}` | 1-6 m |
+| `distance.dashboard.{min,max}` | 0.3-4 m |
 
 Distances limit pulling in / pushing back a grabbed window (thumbstick or
 scroll while dragging); `null` keeps stock. Changes apply immediately, and
@@ -538,10 +555,10 @@ turning options off reverts on the next switch. The keyboard's range is not
 patched.
 
 ```nix
-steamFrame.dashboard = {
-  windowMaxScale = 4.0;              # resize up to 4x (theater: 11.2x)
-  windowDistance.world.max = 10.0;   # push windows back up to 10 m
-  windowDistance.theater.max = 12.0;
+steamFrame.dashboard.windows = {
+  maxScale = 4.0;              # resize up to 4x (theater: 11.2x)
+  distance.world.max = 10.0;   # push windows back up to 10 m
+  distance.theater.max = 12.0;
 };
 ```
 
@@ -590,11 +607,11 @@ without the value, with haptic steps.
 
 - **click:** curved → flat, flat → stock (1);
 - **drag up/down** with the laser: curvature from 0 (flat) to `max`,
-  relative to stock (2 = half the radius), with a detent of `snapPixels` of
-  drag at each of `snapPoints` (no values skipped), and haptics for snaps,
-  edges and steps.
+  relative to stock (2 = half the radius), with a detent of `detentPixels`
+  of drag at each of `detentPoints` (no values skipped), and haptics for
+  detents, edges and steps.
 
-A window without its own value is shown at `default` once curved in the
+A window without its own value is shown at `initial` once curved in the
 world or on a hand, at 1 in the dashboard or theater. Values are kept per
 window until SteamVR restarts. Debugging: `window.__sfuiWindowCurvature.dump()`
 (`.log` recent events).
@@ -674,7 +691,7 @@ SteamVR start, but only if this module set it.
 **Security:** the port listens on `127.0.0.1` only; keep Developer Mode off
 (see "DevTools on the LAN" in [UI patches](#ui-patches-uipatchespatches)).
 
-### Hidden apps (`hiddenApps`)
+### Hidden apps (`launcherMenu.hiddenApps`)
 
 **Problem:** with Developer Mode or `launcherMenu.showAllApps`, the "+" menu
 lists every desktop entry, including system tools.

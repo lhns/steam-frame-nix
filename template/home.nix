@@ -13,10 +13,10 @@
   # home.packages = with pkgs; [ htop ripgrep ];
 
   # Steam Frame fixes, see https://github.com/lhns/steam-frame-nix
-  # (portalFix and clipboardSync are on by default).
+  # (session.portalFix and clipboardSync are on by default).
   # steamFrame = {
-  #   keyboardLayout = "de";             # XKB layout for the Steam session
-  #   steamKeyboardPatch.enable = true;  # Esc/Ctrl/Alt/arrows on the VR keyboard
+  #   keyboard.layout = "de";               # XKB layout, Steam session
+  #   keyboard.vr.extraKeys.enable = true;  # Esc/Ctrl/Alt/arrows in VR
   #   # VR "+" menu: sorted by name, Desktop pinned below the list, closed
   #   # on click, no second launch of the same program within 10 s, programs
   #   # as a grid of 4 columns, at most 4 rows visible:
@@ -24,7 +24,7 @@
   #     sort = true;
   #     pinDesktop = "bottom";
   #     closeOnLaunch = true;
-  #     launchDebounce = 10;
+  #     launchDebounceSeconds = 10;
   #     grid = { enable = true; columns = 4; maxRows = 4; };
   #     # All programs without Steam's Developer Mode (Konsole, KDE System
   #     # Settings, Dolphin, ... are hidden otherwise):
@@ -32,13 +32,15 @@
   #     # Icon fallbacks for programs without an icon in the menu are on by
   #     # default; names to provide in addition to what the scan finds:
   #     # iconFallbacks.extra = [ "system-file-manager" ];
+  #     # Hidden from the menu (listed with Developer Mode or showAllApps):
+  #     hiddenApps = [ "lxterminal" "cmake-gui" "firewall-config" "renderdoc" ];
   #   };
   #   # SteamVR dashboard windows: resizable up to 4x (stock 2x), pushed
   #   # back up to 10 m in the world / 12 m in theater mode (stock 5 / 6 m):
   #   dashboard = {
-  #     windowMaxScale = 4.0;
-  #     windowDistance.world.max = 10.0;
-  #     windowDistance.theater.max = 12.0;
+  #     windows.maxScale = 4.0;
+  #     windows.distance.world.max = 10.0;
+  #     windows.distance.theater.max = 12.0;
   #     # X button on the Steam window: back to the previous window, or
   #     # just the dashboard bar:
   #     steamCloseButton.enable = true;
@@ -51,7 +53,5 @@
   #     frameControls.enable = true;
   #   };
   #   firefox.enable = true;             # launcher for the Firefox Flatpak
-  #   # Hidden from the "+" menu (listed with Developer Mode or showAllApps):
-  #   hiddenApps = [ "lxterminal" "cmake-gui" "firewall-config" "renderdoc" ];
   # };
 }
