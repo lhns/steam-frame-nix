@@ -3,7 +3,8 @@
 [Home Manager](https://github.com/nix-community/home-manager) modules for the
 Valve Steam Frame (SteamOS, `aarch64-linux`, standalone home-manager). They
 work around quirks of the Frame's two graphical sessions (portal, keyboard
-layout, clipboard, Firefox) and extend Steam's and SteamVR's UIs at runtime
+layout, clipboard, Firefox), enable hardware video decoding in Jellyfin, and
+extend Steam's and SteamVR's UIs at runtime
 (VR keyboard, "+" menu, dashboard windows, Steam close button, window
 curvature, window controls). Everything is declarative and reverts by
 activating an older generation.
@@ -30,7 +31,8 @@ on by default; everything else is opt-in.
   [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable),
   [hidden apps](#hidden-apps-launchermenuhiddenapps),
   [clipboard sync](#clipboard-sync-clipboardsyncenable),
-  [Firefox](#firefox-firefox)
+  [Firefox](#firefox-firefox),
+  [Jellyfin hardware decoding](#jellyfin-hardware-decoding-jellyfinhardwaredecoding)
 - [Rollback](#rollback)
 
 ## Install
@@ -156,6 +158,7 @@ a commented version of these two files ([`template/`](template)):
       frameControls.enable = true;
     };
     firefox.enable = true;
+    jellyfin.hardwareDecoding.enable = true;
   };
 
   # Example: an app that must use the single wallet on the outer bus.
@@ -176,7 +179,7 @@ home-manager switch --flake .#steamos
 ```
 
 Individual modules:
-`homeManagerModules.{session,portal,keyboard-layout,steam-keyboard-patch,vr-keyboard,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox}`;
+`homeManagerModules.{session,portal,keyboard-layout,steam-keyboard-patch,vr-keyboard,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox,jellyfin}`;
 `default` imports all.
 
 **Steam Developer Mode** (a Steam setting, not managed here) makes the "+"
@@ -256,6 +259,8 @@ without it.
 | `steamFrame.firefox.enable` | bool | `false` | Launcher for the Flathub Firefox Flatpak with the fixes below. |
 | `steamFrame.firefox.vrFullscreenFix` | bool | `true` | Link a `user.js` with `full-screen-api.ignore-widgets` into profiles. |
 | `steamFrame.firefox.desktopProfile` | null or str | `"desktop"` | Separate profile for the nested desktop; `null`: none. |
+| `steamFrame.jellyfin.hardwareDecoding.enable` | bool | `false` | Hardware video decoding in the Jellyfin Desktop Flatpak, see [Jellyfin](#jellyfin-hardware-decoding-jellyfinhardwaredecoding). |
+| `steamFrame.jellyfin.hardwareDecoding.hwdec` | str | `"v4l2m2m-copy,auto-copy"` | mpv `hwdec` used instead of Jellyfin's automatic one. |
 
 Renamed options still work under their old names, with a warning:
 
@@ -809,6 +814,60 @@ associations keep working.
 - **`desktopProfile`:** the sessions can't see each other's Firefox, so a
   second instance stops at the locked profile; in the nested desktop the
   launcher uses this separate profile.
+
+### Jellyfin hardware decoding (`jellyfin.hardwareDecoding.*`)
+
+For the Flathub [Jellyfin Desktop](https://github.com/jellyfin/jellyfin-desktop)
+Flatpak (`org.jellyfin.JellyfinDesktop`), which plays video with libmpv.
+
+**Problem:** video is decoded in software (1080p H.264: ~40 % CPU). The
+Frame's hardware decoder is a V4L2 memory-to-memory device (`qcom-iris`,
+`/dev/video*`), which
+- the Flatpak can't open: its `devices=dri` covers only the GPU, and Flatpak
+  has nothing between that and `devices=all`;
+- mpv never tries: Jellyfin hard-sets `hwdec=auto-copy`, and mpv's `auto`
+  probing leaves out V4L2 M2M on purpose (its quality varies by SoC).
+  Jellyfin has no way to pass mpv options.
+
+**Fix:** a Flatpak override with `devices=all`, and an `LD_PRELOAD` shim that
+rewrites an `hwdec` value starting with `auto` (set through libmpv's
+`mpv_set_*` functions) to `$SFN_MPV_HWDEC` (`hwdec`, set in the override);
+explicit values such as `no` stay. mpv tries the listed decoders in order and
+falls back to software decoding per stream. With the default, 1080p H.264
+plays through `v4l2m2m-copy` at ~15-20 % CPU. The shim (a few libmpv
+wrappers, only libc) is preloaded from the Nix store: the override exposes
+its store path (only that one, read-only) to the sandbox. It would work for
+any libmpv app that sets `hwdec=auto*`, but only Jellyfin Desktop is set up
+here.
+
+The override goes through nix-flatpak's `services.flatpak.overrides` if
+[nix-flatpak](https://github.com/gmodena/nix-flatpak) is imported and
+enabled (merged with your own overrides there). Without it, home-manager
+owns `~/.local/share/flatpak/overrides/org.jellyfin.JellyfinDesktop` (a link
+to the store): overrides of your own for this app belong in Nix then;
+`flatpak override --user org.jellyfin.JellyfinDesktop ...` changes are
+replaced on the next switch.
+
+Changes take effect at the next start of Jellyfin. Log
+(`flatpak run org.jellyfin.JellyfinDesktop` in a terminal):
+`mpv-hwdec-shim: hwdec "auto-copy" -> "v4l2m2m-copy,auto-copy"`, then mpv's
+`Using hardware decoding (v4l2m2m-copy)`.
+
+Installing the Flatpak is up to you, e.g.
+`flatpak install --user flathub org.jellyfin.JellyfinDesktop`, or with
+nix-flatpak:
+
+```nix
+services.flatpak.packages = [ "org.jellyfin.JellyfinDesktop" ];
+```
+
+**Caveats:**
+- `devices=all` gives the app all of `/dev` (cameras, input devices, ...),
+  not just the decoder.
+- V4L2 M2M decoding quality varies with drivers and codecs. Tested: 8-bit
+  H.264; 10-bit HEVC is untested. mpv falls back to software only when the
+  decoder fails; for streams that decode with artifacts, disable the option
+  (or set `hwdec = "auto-copy"`, Jellyfin's own value).
 
 ## Rollback
 

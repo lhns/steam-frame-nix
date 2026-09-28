@@ -54,5 +54,8 @@
   #     frameControls.enable = true;
   #   };
   #   firefox.enable = true;             # launcher for the Firefox Flatpak
+  #   # Hardware video decoding in the Jellyfin Desktop Flatpak (install
+  #   # org.jellyfin.JellyfinDesktop yourself); gives it devices=all:
+  #   jellyfin.hardwareDecoding.enable = true;
   # };
 }

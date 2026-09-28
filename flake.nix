@@ -32,6 +32,7 @@
         imports = [ (import ./modules/clipboard-sync.nix { inherit clipboard-sync-src; }) ];
       };
       firefox = ./modules/firefox.nix;
+      jellyfin = ./modules/jellyfin.nix;
     };
   in {
     homeManagerModules = modules // {
@@ -39,8 +40,10 @@
     };
 
     # Tests of the VR keyboard (text model, corrector, swipe decoder on the
-    # default German + English dictionary): nix flake check
+    # default German + English dictionary) and of the Jellyfin mpv shim:
+    # nix flake check
     checks = nixpkgs.lib.genAttrs [ "aarch64-linux" "x86_64-linux" ] (system: {
+      jellyfin = import ./modules/jellyfin/check.nix { pkgs = nixpkgs.legacyPackages.${system}; };
       vr-keyboard = (import ./modules/vr-keyboard/build.nix {
         pkgs = nixpkgs.legacyPackages.${system};
         dictionary = {
