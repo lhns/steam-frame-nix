@@ -149,7 +149,7 @@ export function loadBundles(dir, { files, exclude } = {}) {
   for (const f of files) {
     if (exclude?.test(f)) continue;
     const p = join(dir, f);
-    if (!statSync(p).isFile()) continue;
+    if (!statSync(p, { throwIfNoEntry: false })?.isFile()) continue;   // listed by the page but missing
     const src = readFileSync(p, 'utf8');
     if (!/webpackChunk|[\w$]=\{\d+:/.test(src)) continue;
     for (const m of extractModules(src)) {

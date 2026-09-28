@@ -95,7 +95,11 @@ in {
   '' + lib.optionalString (cfg.services.start != [ ]) ''
     run /usr/bin/systemctl --user start ${units cfg.services.start}
   '' + lib.optionalString (cfg.services.stop != [ ]) ''
-    run /usr/bin/systemctl --user stop ${units cfg.services.stop} || true
+    # Skip inactive ones: stopping a unit that isn't loaded fails noisily.
+    for unit in ${units cfg.services.stop}; do
+      [[ $(/usr/bin/systemctl --user show -p ActiveState --value "$unit") == inactive ]] \
+        || run /usr/bin/systemctl --user stop "$unit" || true
+    done
   '' + lib.optionalString (cfg.services.restart != [ ]) ''
     run /usr/bin/systemctl --user restart ${units cfg.services.restart}
   '');

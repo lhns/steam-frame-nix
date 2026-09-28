@@ -246,7 +246,11 @@ in {
     assertions = map (id: {
       assertion = false;
       message = "steamFrame.keyring: \"${id}\" is in both flatpaks and programs.";
-    }) (lib.intersectLists (lib.attrNames cfg.flatpaks) (lib.attrNames cfg.programs));
+    }) (lib.intersectLists (lib.attrNames cfg.flatpaks) (lib.attrNames cfg.programs))
+    ++ lib.mapAttrsToList (mime: ids: {
+      assertion = lib.length ids == 1;
+      message = "steamFrame.keyring: ${lib.removePrefix "x-scheme-handler/" mime} is in the schemeHandlers of ${lib.concatStringsSep " and " ids}.";
+    }) (lib.zipAttrs (map (h: { ${h.name} = lib.removeSuffix ".desktop" h.value; }) handlers));
 
     xdg.dataFile = lib.mapAttrs' (id: app:
       lib.nameValuePair "applications/${id}.desktop" { text = entry id app; }) apps;
