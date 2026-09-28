@@ -22,14 +22,10 @@
 // mkPatch patch (see lib/default.nix); no options. On a signature mismatch
 // it returns an error and changes nothing. Idempotent.
 ((find, sigs) => {
-  const VERSION = 21;
+  const VERSION = 22;
   const send = (msg) => window.__vrkbdKey && window.__vrkbdKey(msg);
-  let mods;
-  try {
-    mods = find.resolveAll(find.getWebpackRequire('webpackChunksteamui'), sigs);
-  } catch (e) {
-    return `signature not found, Steam left unpatched: ${e.message}`;
-  }
+  const mods = find.resolvePatch('webpackChunksteamui', sigs);
+  if (typeof mods === 'string') return mods;
   const Layouts = mods.layouts.exports;            // currentLayout(), enabledLayouts(), arrow keys
   const Status = mods.vrStatus.exports.holder;     // .VRKeyboardStatus
   const Manager = mods.keyboardManager.exports.VirtualKeyboardManager.prototype;
@@ -214,9 +210,7 @@
   const sel = (keys, suffix = '') => keys.map((key) => `[data-key="${key}"]${suffix}`).join(',');
   const lastRow = Math.max(...[...doc.querySelectorAll('[data-key-row]')].map((e) => +e.getAttribute('data-key-row')));
   const added = [...MODS, ...ARROWS.map(first), ...ALTGR_ARROWS].map((x) => x.key);
-  let style = doc.getElementById('vrkbd-style');
-  if (!style) { style = doc.createElement('style'); style.id = 'vrkbd-style'; doc.head.appendChild(style); }
-  style.textContent = [
+  find.ensureStyle(doc, 'vrkbd-style', [
     `${sel(added)} { width: 43px !important; }`,
     '[data-key="AltGr"] { width: 52px !important; }',
     // Steam draws the AltGr variant as a small secondary label: hide it in the
@@ -236,7 +230,7 @@
     // Motiva Sans descent 0.24 em, } 0.094 em below the baseline).
     `.vrkbd-del-hint [role="gridcell"]:has(+ [role="gridcell"] > [data-key="Backspace"]) > [data-key]:not([data-key="${DEL}"]) > div > span:last-child:not(:first-child) {` +
       ' font-size: 7px !important; bottom: 4.42px !important; }',
-  ].join('\n');
+  ].join('\n'));
 
   // ---- key handling ----------------------------------------------------------
   const release = (v) => { const z = v & 3; return (z === 1 ? 0 : z) | (v & 4); };

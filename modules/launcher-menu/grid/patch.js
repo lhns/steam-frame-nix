@@ -23,7 +23,7 @@
 // unpatch.js (or a new VERSION/options) calls __sfuiLauncherGrid.stop().
 ((find, sigs, opts) => {
   const NAME = 'launcher-menu-grid';
-  const VERSION = 6;
+  const VERSION = 7;
   const COLS = opts.columns;
   const ROWS = opts.maxRows ?? null;
   if (!(Number.isInteger(COLS) && COLS >= 1) || !(ROWS === null || (Number.isInteger(ROWS) && ROWS >= 1)))
@@ -258,13 +258,7 @@ ${PINNED} > [role=button] * { flex-grow: 0 !important; text-align: center !impor
 
   const attach = (d) => {
     if (docs.has(d) || !d?.body) return;
-    let s = d.getElementById(STYLE_ID);
-    if (!s) {
-      s = d.createElement('style');
-      s.id = STYLE_ID;
-      (d.head ?? d.documentElement).appendChild(s);
-    }
-    if (s.textContent !== CSS) s.textContent = CSS;
+    find.ensureStyle(d, STYLE_ID, CSS);
     const obs = new MutationObserver(guard(() => update(d)));
     obs.observe(d.body, { childList: true, subtree: true, characterData: true });
     const ro = new d.defaultView.ResizeObserver(guard(() => regionsOf(d).forEach(layout)));

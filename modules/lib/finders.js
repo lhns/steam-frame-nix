@@ -3,6 +3,8 @@
 // ids or minified names (which change with every Steam update). Like Decky
 // Loader's @decky/ui finders and Vencord's `find`.
 //
+// Also small helpers every patch needs (resolvePatch, ensureStyle, logger).
+//
 // A single expression: installs window.__sfuiFind (unless an equal or newer
 // VERSION is there) and evaluates to it; mkPatch passes it as `find`.
 // scripts/check-signatures.mjs evaluates the same file in Node, so the
@@ -39,7 +41,7 @@
 // Every lookup must match exactly once; otherwise a FinderError names the
 // signature, the part that failed and the candidates.
 (() => {
-  const VERSION = 1;
+  const VERSION = 2;
   const G = globalThis;
   const have = G.__sfuiFind;
   if (have && have.version >= VERSION) return have;
@@ -259,10 +261,36 @@
     return null;
   }
 
+  // ---- patch helpers ------------------------------------------------------------
+  // resolveAll on the page's webpack chunk array, or the status string
+  // "signature not found, <Steam|dashboard> left unpatched: <why>".
+  function resolvePatch(chunkGlobal, sigs) {
+    try { return resolveAll(getWebpackRequire(chunkGlobal), sigs); } catch (e) {
+      return `signature not found, ${chunkGlobal === 'webpackChunkvrwebui' ? 'dashboard' : 'Steam'} left unpatched: ${e.message}`;
+    }
+  }
+  // <style id> in doc's head with the given text (created or updated).
+  function ensureStyle(doc, id, css) {
+    let s = doc.getElementById(id);
+    if (!s) {
+      s = doc.createElement('style');
+      s.id = id;
+      (doc.head ?? doc.documentElement).appendChild(s);
+    }
+    if (s.textContent !== css) s.textContent = css;
+    return s;
+  }
+  // log(msg, data?) appending { t, msg, data } to buf, keeping the last max.
+  const logger = (buf, max = 200) => (msg, data) => {
+    buf.push({ t: new Date().toISOString().slice(11, 23), msg, ...(data !== undefined ? { data } : {}) });
+    if (buf.length > max) buf.splice(0, buf.length - max);
+  };
+
   const lib = {
     version: VERSION, FinderError, fnSource, matchText, matchValue, kindOf,
     getWebpackRequire, findAllModules, findModule, findAllExports, findExport, resolve, resolveAll,
     fiberOf, propsOf, findFiberUp, findFiberDown, findInReactTree, cache, requires,
+    resolvePatch, ensureStyle, logger,
   };
   G.__sfuiFind = lib;
   return lib;

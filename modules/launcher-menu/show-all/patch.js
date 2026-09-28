@@ -11,13 +11,9 @@
 // nothing while its contents (and the signature) stay intact and the setting
 // itself is untouched. Remembered as window.__sfuiShowAllApps for unpatch.js.
 ((find, sigs) => {
-  const VERSION = 1;
-  let mods;
-  try {
-    mods = find.resolveAll(find.getWebpackRequire('webpackChunksteamui'), sigs);
-  } catch (e) {
-    return `signature not found, Steam left unpatched: ${e.message}`;
-  }
+  const VERSION = 2;
+  const mods = find.resolvePatch('webpackChunksteamui', sigs);
+  if (typeof mods === 'string') return mods;
   const list = mods.devModeApps.exports.devModeOnly;
   if (!Array.isArray(list)) return 'Developer Mode app list is not an array, Steam left unpatched';
   const prev = window.__sfuiShowAllApps;

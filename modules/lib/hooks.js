@@ -16,10 +16,9 @@
 //   has(obj, method, name)         registered and wrapper installed.
 // The wrapper (fn.__sfuiHooks = method, original in fn.__sfuiOrig) looks hooks
 // up per call, in registration order, and runs them once per call even if it
-// is in the chain twice. Legacy per-patch wrappers (fn.__sfuiPatch === name)
-// on top of obj[method] are unwound when `name` registers.
+// is in the chain twice.
 (() => {
-  const VERSION = 1;
+  const VERSION = 2;
   const G = globalThis;
   const have = G.__sfuiHooks;
   if (have && have.version >= VERSION) return have;
@@ -36,11 +35,6 @@
   };
 
   function install(obj, method) {
-    const names = hooksOf(obj, method);
-    // Unwind legacy per-patch wrappers of registered names from the top.
-    for (let f = obj[method], i = 0; typeof f === 'function' && typeof f.__sfuiPatch === 'string' &&
-        typeof f.__sfuiOrig === 'function' && names?.has(f.__sfuiPatch) && i < 50; f = obj[method], i++)
-      obj[method] = f.__sfuiOrig;
     if (inChain(obj, method)) return;
     const orig = obj[method];
     if (typeof orig !== 'function') throw new Error(`hooks: ${method} is not a function`);

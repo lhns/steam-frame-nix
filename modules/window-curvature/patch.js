@@ -71,7 +71,7 @@
 // scalePressDragThreshold(factor), pressing, dragValue(v0, dy, ppu, cur).
 ((find, sigs, opts, hooks) => {
   const NAME = 'window-curvature';
-  const VERSION = 20;
+  const VERSION = 21;
   const FLAT = 999;                               // origin distances >= this are "flat"
   const ICON_OFF = 40, ICON_ON = 39;              // Toggle Curvature action icons (sigs.curvatureAction)
   const HAPTIC = { Snap: 3, Sliding: 4, SlidingEdge: 5 };   // EOverlayHapticEffect (sigs.hapticEffects)
@@ -92,12 +92,8 @@
 
   const DS = window.DashboardStore, FS = window.FrameStore;
   if (!DS || !FS) return 'not patched: window.DashboardStore/FrameStore missing';
-  let mods;
-  try {
-    mods = find.resolveAll(find.getWebpackRequire('webpackChunkvrwebui'), sigs);
-  } catch (e) {
-    return `signature not found, dashboard left unpatched: ${e.message}`;
-  }
+  const mods = find.resolvePatch('webpackChunkvrwebui', sigs);
+  if (typeof mods === 'string') return mods;
   const mx = mods.mobx.module;
   if (typeof mx.reaction !== 'function') return 'signature not found, dashboard left unpatched: mobx.reaction';
   const proto = mods.mailbox.exports.Mailbox.prototype;
@@ -113,10 +109,7 @@
   let S = window.__sfuiWindowCurvatureState;
   if (S?.schema !== 1) S = window.__sfuiWindowCurvatureState = { schema: 1, values: {} };
   const logBuf = S.log ??= [];
-  const log = (msg, data) => {
-    logBuf.push({ t: new Date().toISOString().slice(11, 23), msg, ...(data ? { data } : {}) });
-    if (logBuf.length > 200) logBuf.splice(0, logBuf.length - 200);
-  };
+  const log = find.logger(logBuf);
   const hits = { sends: 0, origins: 0, scaled: 0, haptics: 0 };
 
   // ---- values ------------------------------------------------------------------------
@@ -265,12 +258,7 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
 .sfui-curv-ind > .sfui-curv-dn { top: calc(50% + 1.05em); clip-path: polygon(0 0, 100% 0, 50% 100%); }
 .sfui-curv-ind > .sfui-curv-up:empty, .sfui-curv-ind > .sfui-curv-dn:empty { visibility: hidden; }
 `;
-  const ensureStyle = () => {
-    if (document.getElementById(STYLE_ID)) return;
-    const s = document.createElement('style');
-    s.id = STYLE_ID; s.textContent = CSS;
-    document.head.appendChild(s);
-  };
+  const ensureStyle = () => find.ensureStyle(document, STYLE_ID, CSS);
 
   // Toggle Curvature action: invocation 2 with the curvature icons. Menu row:
   // by position, verified (else found) by label; bar button: by React

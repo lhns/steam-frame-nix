@@ -13,7 +13,7 @@
 // unpatch.js (or a new VERSION/position) calls __sfuiPinnedDesktop.stop().
 ((find, sigs, opts) => {
   const NAME = 'launcher-menu-pinned-desktop';
-  const VERSION = 3;
+  const VERSION = 4;
   const POS = opts.position === 'top' ? 'top' : 'bottom';
   const KEY = 'steamos-nested-desktop';
   const HIDDEN = 'data-sfui-desktop-hidden';
@@ -109,11 +109,7 @@
 
   const attach = (d) => {
     if (docs.has(d) || !d?.body) return;
-    if (!d.getElementById(STYLE_ID)) {
-      const s = d.createElement('style');
-      s.id = STYLE_ID; s.textContent = CSS;
-      (d.head ?? d.documentElement).appendChild(s);
-    }
+    find.ensureStyle(d, STYLE_ID, CSS);
     const obs = new MutationObserver(guard(() => update(d)));
     obs.observe(d.body, { childList: true, subtree: true, characterData: true });
     docs.set(d, obs);

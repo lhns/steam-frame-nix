@@ -68,7 +68,7 @@
 // setPlacement(name or "icon:N", 'bar' | 'menu' | null), reset().
 ((find, sigs, opts) => {
   const NAME = 'frame-controls';
-  const VERSION = 6;
+  const VERSION = 7;
   const T_SPACER = 1, T_ACTION = 2;
   // Action icon enums (sigs.controls anchors them): names for the options.
   const NAMES = { keyboard: 22, float: 26, dashboard: 27, theater: 28, dockLeft: 29, dockRight: 30, close: 31, curvature: 40 };
@@ -96,12 +96,8 @@
 
   const FS = window.FrameStore;
   if (!FS) return 'not patched: window.FrameStore missing';
-  let mods;
-  try {
-    mods = find.resolveAll(find.getWebpackRequire('webpackChunkvrwebui'), sigs);
-  } catch (e) {
-    return `signature not found, dashboard left unpatched: ${e.message}`;
-  }
+  const mods = find.resolvePatch('webpackChunkvrwebui', sigs);
+  if (typeof mods === 'string') return mods;
   const mx = mods.mobx.module;
   const P = mods.frame.exports.Frame.prototype;
   const actions = mods.actions.exports.store;
@@ -122,10 +118,7 @@
     S = window.__sfuiFrameControlsState = { schema: 1, placement: ok ? { ...saved.placement } : {}, nixSeen: ok ? { ...saved.nixSeen } : {}, log: [] };
   }
   const logBuf = S.log ??= [];
-  const log = (msg, data) => {
-    logBuf.push({ t: new Date().toISOString().slice(11, 23), msg, ...(data !== undefined ? { data } : {}) });
-    if (logBuf.length > 200) logBuf.splice(0, logBuf.length - 200);
-  };
+  const log = find.logger(logBuf);
   if (restored) log('state restored', { from: restored, popup: S.placement });
   let unsaved = true;                             // last save not sent (no injector binding): retried by check()
   const save = () => {
@@ -342,12 +335,7 @@
   border: solid #fff; border-width: 0 3px 3px 0; transform: rotate(45deg); }
 .sfui-fc-pressing { position: relative; }
 `;
-  const ensureStyle = () => {
-    if (document.getElementById(STYLE_ID)) return;
-    const s = document.createElement('style');
-    s.id = STYLE_ID; s.textContent = CSS;
-    document.head.appendChild(s);
-  };
+  const ensureStyle = () => find.ensureStyle(document, STYLE_ID, CSS);
 
   const PANEL_RE = /^legacy-frame-controls-(additional-options-)?(\d+)$/;
   // The control under an event target: { frame, actionId, where, button, panel } or null.

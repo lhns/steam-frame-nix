@@ -23,13 +23,11 @@
 // scheduler) applies new limits at once.
 //
 // State: window.__sfuiDashboardWindows (proto, resend, options id, counters in
-// .hits); hook name NAME. (VERSION 2 wrapped SendMessage itself and read
-// state.rewrite, no longer set, so a leftover wrapper is inert; hooks.js
-// unwinds one on top.) Signature mismatch -> error, nothing changed. Same
+// .hits); hook name NAME. Signature mismatch -> error, nothing changed. Same
 // VERSION and options -> "unchanged", else the rewrite is replaced in place.
 ((find, sigs, opts, hooks) => {
   const NAME = 'dashboard-windows';
-  const VERSION = 3;
+  const VERSION = 4;
   const GRAB = {
     world: { type: 'grab-scale', min: 0.25, max: 5 },
     theater: { type: 'grab-transform', min: 1, max: 6 },
@@ -49,12 +47,8 @@
 
   let st = window.__sfuiDashboardWindows;
   if (!st?.proto) {
-    let mods;
-    try {
-      mods = find.resolveAll(find.getWebpackRequire('webpackChunkvrwebui'), sigs);
-    } catch (e) {
-      return `signature not found, dashboard left unpatched: ${e.message}`;
-    }
+    const mods = find.resolvePatch('webpackChunkvrwebui', sigs);
+    if (typeof mods === 'string') return mods;
     // Mailbox: SendMessage(target, msg) -> WebSocketSend("mailbox_send ...").
     // resend: debounced "send the scene graph again" (0 args, NextSGID(), setTimeout).
     st = window.__sfuiDashboardWindows = {
@@ -62,7 +56,6 @@
       id: null, hits: {},
     };
   }
-  delete st.rewrite;                              // VERSION 2's wrapper reads it: keep that inert
 
   const active = maxScale !== null || rules.length > 0;
   if (st.version === VERSION && st.id === id && active === hooks.has(st.proto, 'SendMessage', NAME)) return 'unchanged';

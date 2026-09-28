@@ -35,13 +35,12 @@
 // -> just stays hidden (the overrides below keep stock from showing it).
 //
 // Contract: state in window.__sfuiSteamCloseState (schema 1: steamHidden,
-// barOnly, history, redirected, redirects, restorePending; older versions'
-// fields are left for a rollback) survives re-injection; teardown restores
-// all overrides and never switches frames.
+// barOnly, history, redirected, redirects, restorePending) survives
+// re-injection; teardown restores all overrides and never switches frames.
 // window.__sfuiSteamClose: plan(), homePlan(), steamHidden, barOnly, state.
 ((find, sigs, opts) => {
   const NAME = 'steam-close-button';
-  const VERSION = 8;
+  const VERSION = 9;
   const MAIN_KEY = 'valve.steam.gamepadui.main';   // sigs.overlayKeys
   const FRAME_ALIVE = 2;                           // sigs.frame
   const REASON = 'sfui steam-close-button';
@@ -53,12 +52,8 @@
 
   const DS = window.DashboardStore, FS = window.FrameStore;
   if (!DS || !FS) return 'not patched: window.DashboardStore/FrameStore missing';
-  let mods;
-  try {
-    mods = find.resolveAll(find.getWebpackRequire('webpackChunkvrwebui'), sigs);
-  } catch (e) {
-    return `signature not found, dashboard left unpatched: ${e.message}`;
-  }
+  const mods = find.resolvePatch('webpackChunkvrwebui', sigs);
+  if (typeof mods === 'string') return mods;
   const mx = mods.mobx.module;
   if (typeof mx.runInAction !== 'function' || typeof mx.reaction !== 'function')
     return 'signature not found, dashboard left unpatched: mobx.runInAction/reaction';
@@ -75,9 +70,8 @@
       return (window.__sfuiSteamCloseState = { schema: 1, steamHidden: hidden, barOnly: false, history: [],
         redirected: 0, redirects: [], restorePending: hidden, restored: saved?.schema === 1 ? { steamHidden: hidden } : null });
     }
-    s.steamHidden ??= !!s.barOnly;                 // version <= 5: bar-only implied hidden
     s.barOnly = !!s.barOnly && DS.activeFrame == null;
-    s.history ??= []; s.redirected ??= 0; s.redirects ??= []; s.restorePending = !!s.restorePending && s.steamHidden;
+    s.restorePending = !!s.restorePending && s.steamHidden;
     return s;
   })();
   let persisted;                                   // last steamHidden sent to the store
@@ -181,7 +175,6 @@
         __sfuiHadOwn: old ? cur.__sfuiHadOwn : !!own });
     }
   };
-  const DASH_NAMES = [...Object.keys(methodWrappers), 'onShowOverlayRequestFromSteam'];   // + version <= 6
   const unwrapAll = (obj, names) => {
     for (const name of names) {
       const f = obj?.[name];
@@ -197,7 +190,6 @@
     if (!dash) return false;
     if (guarded && guarded !== dash) unguard();   // Dashboard remounted
     guarded = dash;
-    unwrapAll(dash, DASH_NAMES.filter((n) => !(n in methodWrappers)));   // left by an older version
     wrapAll(dash, methodWrappers);
     const h = dash.m_mailbox?.m_oHandlers;        // registered once the mailbox is up
     if (h && typeof h === 'object') {
@@ -207,7 +199,7 @@
     return ours(dash.autoSwitchOverlayIfNeeded);
   };
   const unguard = () => {
-    unwrapAll(guarded, DASH_NAMES);
+    unwrapAll(guarded, Object.keys(methodWrappers));
     unwrapAll(guardedHandlers, Object.keys(handlerWrappers));
     guarded = guardedHandlers = null;
   };
