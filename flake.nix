@@ -34,18 +34,34 @@
       firefox = ./modules/firefox.nix;
       jellyfin = ./modules/jellyfin.nix;
     };
+    systems = [ "aarch64-linux" "x86_64-linux" ];
+    forSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
   in {
     homeManagerModules = modules // {
       default = { imports = builtins.attrValues modules; };
     };
 
+    # Removes what steam-frame-nix wrote outside the Nix store (install.sh
+    # cleanup): nix run github:lhns/steam-frame-nix#cleanup -- --all
+    packages = forSystems (pkgs: {
+      cleanup = pkgs.callPackage ./modules/cleanup/package.nix { };
+    });
+    apps = nixpkgs.lib.mapAttrs (_: p: {
+      cleanup = {
+        type = "app";
+        program = "${p.cleanup}/bin/steam-frame-nix-cleanup";
+        meta.description = "Remove what steam-frame-nix wrote outside the Nix store";
+      };
+    }) self.packages;
+
     # Tests of the VR keyboard (text model, corrector, swipe decoder on the
-    # default German + English dictionary) and of the Jellyfin mpv shim:
-    # nix flake check
-    checks = nixpkgs.lib.genAttrs [ "aarch64-linux" "x86_64-linux" ] (system: {
-      jellyfin = import ./modules/jellyfin/check.nix { pkgs = nixpkgs.legacyPackages.${system}; };
+    # default German + English dictionary), the Jellyfin mpv shim and
+    # install.sh cleanup: nix flake check
+    checks = forSystems (pkgs: {
+      cleanup = import ./modules/cleanup/check.nix { inherit pkgs; };
+      jellyfin = import ./modules/jellyfin/check.nix { inherit pkgs; };
       vr-keyboard = (import ./modules/vr-keyboard/build.nix {
-        pkgs = nixpkgs.legacyPackages.${system};
+        inherit pkgs;
         dictionary = {
           languages = map (l: l // { keepFrequentAbove = 4.0; }) [
             { language = "de"; hunspell = "de_DE"; words = 60000; frequencyOffset = 0.0; }

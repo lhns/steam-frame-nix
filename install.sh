@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Install or uninstall Nix + Home Manager on SteamOS (Steam Frame, Steam Deck).
+# Install or uninstall Nix + Home Manager on SteamOS (Steam Frame, Steam Deck),
+# and clean up what steam-frame-nix wrote outside the Nix store.
 #
 #   curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- install
 #   curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- uninstall
+#   curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- cleanup --all
 #
 # Run `install.sh --help` for details. Works from a file or piped into bash
 # (prompts read from /dev/tty).
@@ -24,7 +26,7 @@ USER_UNIT_DIR="$CONFIG_HOME/systemd/user"
 
 USER_NAME="$(id -un)"
 USER_ID="$(id -u)"
-OUTER_RUNTIME_DIR="/run/user/$USER_ID"
+OUTER_RUNTIME_DIR="${STEAM_FRAME_NIX_RUNTIME_DIR:-/run/user/$USER_ID}"
 
 ASSUME_YES=0
 RO_RELOCK=0
@@ -58,13 +60,30 @@ Commands:
       Re-running just switches again.
 
   uninstall [--yes] [--keep-nix]
-      Stop Home Manager's user services, uninstall Home Manager, uninstall
-      Nix (unless --keep-nix) and remove per-user Nix leftovers and the
-      dashboard patches' saved state (~/.local/state/steam-frame-nix/ui-patches).
-      Your configuration directory is never deleted.
+      Stop Home Manager's user services, run 'cleanup --all', uninstall Home
+      Manager, uninstall Nix (unless --keep-nix) and remove per-user Nix
+      leftovers. Your configuration directory is never deleted.
+
+  cleanup [--dry-run] (--all | --orphans [--keep <artifact>]...)
+      Remove what steam-frame-nix (any version) wrote outside the Nix store,
+      only where it is provably its own; everything else is reported as
+      "left alone". Safe to re-run. Needs bash, coreutils, findutils, jq.
+        --all        everything, incl. the dashboard patches' saved choices
+                     (~/.local/state/steam-frame-nix/ui-patches). Use after
+                     rolling back to a generation without steam-frame-nix,
+                     or before removing it.
+        --orphans    what the configuration no longer uses (run by the Home
+                     Manager module on every switch); keeps saved choices.
+        --keep       still in use (with --orphans): debugger,
+                     firefox-desktop-userjs=<profile>
+        --dry-run    only print what would be done
+      SteamVR's VRWebHelper.DebuggerEnabled can't be changed while SteamVR
+      runs; it is then restored when SteamVR stops (a drop-in in
+      /run/user/<uid>, gone at reboot).
 
   status
-      Show Nix, Home Manager and user service state.
+      Show Nix, Home Manager and user service state, and what
+      'cleanup --all' would remove.
 
 Options:
   --yes, -y      Don't ask; answer yes to every question.
@@ -358,6 +377,453 @@ Next steps:
 EOF
 }
 
+# --- cleanup ----------------------------------------------------------------
+#
+# Everything steam-frame-nix (any version) ever wrote outside the Nix store
+# and Home Manager's own links, and how it is proven to be ours:
+#
+#   debugger   VRWebHelper.DebuggerEnabled in steamvr.vrsettings. Proof:
+#              $SFN_STATE/steamvr-debugger.armed (holds the value before;
+#              older versions: the empty marker steamvr-debugger, value
+#              before = absent). Restored once SteamVR is stopped; while it
+#              runs a runtime drop-in restores it when SteamVR stops.
+#              Also the runtime drop-in and restore script themselves.
+#   icons      links hicolor/scalable/apps/<name>.svg -> Breeze in the store
+#              (the icon-fallbacks script of 2026-09; manifest
+#              $SFN_STATE/icon-fallbacks).
+#   firefox    user.js in Firefox profiles: links to the desktop profile's
+#              /app/etc/firefox/steam-frame-nix-desktop-user.js, older links
+#              to *-firefox-*user.js and copies starting with FF_MARKER, and
+#              the values they left in prefs.js (only with Firefox closed).
+#   jellyfin   the hwdec shim entries in the Jellyfin Flatpak's user override
+#              (nix-flatpak), an empty override file, and the shim copy of
+#              earlier versions (marker $SFN_STATE/jellyfin-hwdec-shim).
+#   ui-state   the dashboard patches' saved choices
+#              ($SFN_STATE/ui-patches/<name>.json; --all only, never
+#              --orphans) and stray *.json.tmp files.
+#   dirs       $SFN_STATE and $OUTER_RUNTIME_DIR/steam-frame-nix when empty.
+#
+# --orphans keeps what the current configuration still uses (--keep ...);
+# the Home Manager module runs it on every switch. Anything not proven ours
+# is reported as "left alone" and never touched.
+
+SFN_STATE="${XDG_STATE_HOME:-$HOME/.local/state}/steam-frame-nix"
+SFN_DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
+SFN_RUNTIME="$OUTER_RUNTIME_DIR/steam-frame-nix"
+VRSETTINGS="$HOME/.config/openvr/config/steamvr.vrsettings"
+DEBUGGER_ARMED="$SFN_STATE/steamvr-debugger.armed"
+DEBUGGER_MARKER_V1="$SFN_STATE/steamvr-debugger"
+DEBUGGER_RESTORE="$SFN_RUNTIME/steamvr-debugger-restore"
+DEBUGGER_DROPIN="$OUTER_RUNTIME_DIR/systemd/user/steamvr.service.d/50-steam-frame-nix-debugger.conf"
+ICON_DIR="$SFN_DATA/icons/hicolor/scalable/apps"
+ICON_MANIFEST="$SFN_STATE/icon-fallbacks"
+FF_DIR="$HOME/.var/app/org.mozilla.firefox/config/mozilla/firefox"
+FF_DESKTOP_JS=/app/etc/firefox/steam-frame-nix-desktop-user.js
+FF_MARKER="// Managed by steam-frame-nix (steamFrame.firefox); rewritten on switch."
+JF_APP=org.jellyfin.JellyfinDesktop
+JF_OVERRIDE="$SFN_DATA/flatpak/overrides/$JF_APP"
+JF_SHIM_COPY="$HOME/.var/app/$JF_APP/mpv-hwdec-shim.so"
+JF_SHIM_MARKER="$SFN_STATE/jellyfin-hwdec-shim"
+UI_STATE="$SFN_STATE/ui-patches"
+
+CLEAN_DRY=0
+CLEAN_ACTIONS=0
+CLEAN_DEFERRED=()
+declare -A CLEAN_GONE=()
+
+c_do()    { CLEAN_ACTIONS=$((CLEAN_ACTIONS + 1)); if (( CLEAN_DRY )); then info "would $1"; return 1; fi; }
+c_done()  { info "$1"; }
+c_left()  { info "left alone: $1"; }
+c_defer() { CLEAN_DEFERRED+=("$1"); info "deferred: $1"; }
+
+c_rm() { # path why
+  c_do "remove $1 ($2)" || { CLEAN_GONE[$1]=1; return 0; }
+  rm -f -- "$1" && CLEAN_GONE[$1]=1 && c_done "removed $1 ($2)"
+}
+
+# Empty, or will be once the planned removals are done (dry run).
+c_empty_after() {
+  local e
+  while IFS= read -r -d '' e; do
+    [[ -n ${CLEAN_GONE[$e]:-} ]] || return 1
+  done < <(find "$1" -mindepth 1 -maxdepth 1 -print0 2>/dev/null)
+}
+
+c_rmdir() { # dir: removed if empty (after the planned removals)
+  [[ -d $1 && ! -L $1 ]] && c_empty_after "$1" || return 0
+  c_do "remove empty directory $1" || { CLEAN_GONE[$1]=1; return 0; }
+  rmdir -- "$1" && CLEAN_GONE[$1]=1 && c_done "removed empty directory $1"
+}
+
+c_write() { # path why: replace the contents with stdin (same inode and mode)
+  local tmp
+  if (( CLEAN_DRY )); then cat >/dev/null; c_do "rewrite $1 ($2)" || true; return 0; fi
+  c_do "rewrite $1 ($2)"
+  tmp="$(mktemp "$1.sfn-XXXXXX")"
+  cat >"$tmp" && cat "$tmp" >"$1"
+  rm -f -- "$tmp"
+  c_done "rewrote $1 ($2)"
+}
+
+# systemctl --user of the outer session (overridable for tests).
+c_systemctl() {
+  if [[ -n ${STEAM_FRAME_NIX_SYSTEMCTL:-} ]]; then "$STEAM_FRAME_NIX_SYSTEMCTL" --user "$@"
+  elif outer_bus_ok; then outer_systemctl "$@"
+  else return 1; fi
+}
+
+# running | stopped | unknown
+steamvr_state() {
+  local s
+  if s="$(c_systemctl show -p ActiveState --value steamvr.service 2>/dev/null)" && [[ -n $s ]]; then
+    case $s in inactive|failed) echo stopped ;; *) echo running ;; esac
+  elif pgrep -u "$USER_ID" -x vrserver >/dev/null 2>&1; then echo running
+  else echo unknown; fi
+}
+
+# --- the SteamVR debugger key ---
+
+# Puts VRWebHelper.DebuggerEnabled back to the value in <armed> ("absent",
+# "false"; "nofile": the file didn't exist) if it is still true, then removes
+# <armed>. Standalone (also written into the runtime restore script): bash,
+# coreutils and jq only.
+debugger_restore() { # vrsettings armed
+  local f=$1 armed=$2 prior cur tmp filter
+  [[ -f $armed ]] || return 0
+  prior="$(tr -d '[:space:]' <"$armed")"
+  case $prior in
+    false) filter='.VRWebHelper.DebuggerEnabled = false' ;;
+    absent|nofile|'') filter='.VRWebHelper |= del(.DebuggerEnabled) | if .VRWebHelper == {} then del(.VRWebHelper) else . end' ;;
+    *) echo "steam-frame-nix: $armed holds '$prior', not a value it writes; left as is" >&2; return 1 ;;
+  esac
+  if [[ -f $f ]]; then
+    cur="$(jq -r '.VRWebHelper.DebuggerEnabled // "absent"' "$f")" || { echo "steam-frame-nix: can't read $f" >&2; return 1; }
+    if [[ $cur == true ]]; then
+      tmp="$(mktemp "$f.XXXXXX")" || return 1
+      if ! jq --indent 3 "$filter" "$f" >"$tmp"; then rm -f "$tmp"; return 1; fi
+      chmod --reference="$f" "$tmp"
+      mv -f "$tmp" "$f"
+      if [[ $prior == nofile && $(jq -c . "$f") == '{}' ]]; then
+        rm -f "$f"
+        echo "steam-frame-nix: removed $f (created only for VRWebHelper.DebuggerEnabled)"
+      else
+        echo "steam-frame-nix: VRWebHelper.DebuggerEnabled in $f restored (${prior/nofile/absent})"
+      fi
+    else
+      echo "steam-frame-nix: VRWebHelper.DebuggerEnabled in $f is $cur (changed since); left as is"
+    fi
+  fi
+  rm -f "$armed"
+}
+
+debugger_restore_script() {
+  # shellcheck disable=SC2016  # literal lines of the script
+  printf '%s\n' '#!/usr/bin/bash' \
+    '# steam-frame-nix: puts SteamVR'"'"'s VRWebHelper.DebuggerEnabled back to its' \
+    '# value from before steam-frame-nix set it. Run by the runtime drop-in' \
+    '# steamvr.service.d/50-steam-frame-nix-debugger.conf when SteamVR stops;' \
+    '# both live in $XDG_RUNTIME_DIR until reboot. /usr/bin tools only.' \
+    'PATH=/usr/bin:/bin${PATH:+:$PATH}'
+  declare -f debugger_restore
+  printf 'debugger_restore %q %q\n' "$VRSETTINGS" "$DEBUGGER_ARMED"
+}
+
+debugger_dropin() {
+  printf '%s\n' '# steam-frame-nix: restores VRWebHelper.DebuggerEnabled when SteamVR stops.' \
+    '# Runtime only (gone at reboot).' \
+    '[Service]' \
+    'ExecStopPost=-/usr/bin/bash %t/steam-frame-nix/steamvr-debugger-restore'
+}
+
+# Runtime drop-in + script so that stopping SteamVR restores the key, even
+# after Nix and Home Manager are gone. Returns 0 if it (would have) changed.
+debugger_ensure_hook() {
+  local changed=1
+  if [[ $(cat "$DEBUGGER_RESTORE" 2>/dev/null) != "$(debugger_restore_script)" ]]; then
+    changed=0
+    if c_do "write the restore script $DEBUGGER_RESTORE"; then
+      mkdir -p "$SFN_RUNTIME"
+      debugger_restore_script >"$DEBUGGER_RESTORE"
+      c_done "wrote the restore script $DEBUGGER_RESTORE"
+    fi
+  fi
+  if [[ $(cat "$DEBUGGER_DROPIN" 2>/dev/null) != "$(debugger_dropin)" ]]; then
+    changed=0
+    if c_do "write the runtime drop-in $DEBUGGER_DROPIN"; then
+      mkdir -p "${DEBUGGER_DROPIN%/*}"
+      debugger_dropin >"$DEBUGGER_DROPIN"
+      c_done "wrote the runtime drop-in $DEBUGGER_DROPIN"
+      c_systemctl daemon-reload || warn "could not reload the user manager; the restore on SteamVR stop needs: systemctl --user daemon-reload"
+    fi
+  fi
+  return $changed
+}
+
+debugger_remove_hook() {
+  [[ -f $DEBUGGER_RESTORE ]] && c_rm "$DEBUGGER_RESTORE" "debugger restore script"
+  c_rmdir "$SFN_RUNTIME"
+  [[ -f $DEBUGGER_DROPIN ]] || return 0
+  c_rm "$DEBUGGER_DROPIN" "runtime drop-in of the debugger restore"
+  # The directories only if they held nothing but the drop-in.
+  c_rmdir "${DEBUGGER_DROPIN%/*}"
+  c_rmdir "$OUTER_RUNTIME_DIR/systemd/user"
+  c_rmdir "$OUTER_RUNTIME_DIR/systemd"
+  (( CLEAN_DRY )) || c_systemctl daemon-reload || true
+  return 0
+}
+
+clean_debugger() { # keep
+  local keep=$1 prior='' state cur
+  if [[ -f $DEBUGGER_ARMED ]]; then
+    prior="$(tr -d '[:space:]' <"$DEBUGGER_ARMED")"
+    [[ -e $DEBUGGER_MARKER_V1 ]] && c_rm "$DEBUGGER_MARKER_V1" "old debugger marker, superseded by ${DEBUGGER_ARMED##*/}"
+  elif [[ -f $DEBUGGER_MARKER_V1 ]]; then
+    prior=absent
+    if c_do "migrate $DEBUGGER_MARKER_V1 to $DEBUGGER_ARMED (value before: absent)"; then
+      printf 'absent\n' >"$DEBUGGER_ARMED"
+      rm -f -- "$DEBUGGER_MARKER_V1"
+      c_done "migrated $DEBUGGER_MARKER_V1 to $DEBUGGER_ARMED (value before: absent)"
+    else
+      CLEAN_GONE[$DEBUGGER_MARKER_V1]=1
+    fi
+  fi
+
+  if [[ -z $prior ]]; then
+    if [[ -f $VRSETTINGS ]] && command -v jq >/dev/null 2>&1 \
+       && [[ $(jq -r '.VRWebHelper.DebuggerEnabled // empty' "$VRSETTINGS" 2>/dev/null) == true ]] \
+       && (( ! keep )); then
+      c_left "VRWebHelper.DebuggerEnabled = true in $VRSETTINGS (not set by steam-frame-nix)"
+    fi
+    (( keep )) || debugger_remove_hook
+    return 0
+  fi
+
+  command -v jq >/dev/null 2>&1 || { warn "jq not found; VRWebHelper.DebuggerEnabled left as is"; return 0; }
+  state="$(steamvr_state)"
+  if [[ $state == stopped ]]; then
+    cur="$(jq -r '.VRWebHelper.DebuggerEnabled // "absent"' "$VRSETTINGS" 2>/dev/null || echo '?')"
+    if [[ $cur == true ]]; then
+      if c_do "restore VRWebHelper.DebuggerEnabled in $VRSETTINGS (${prior/nofile/absent})"; then
+        debugger_restore "$VRSETTINGS" "$DEBUGGER_ARMED" 2>&1 | sed 's/^steam-frame-nix: /    /' \
+          || warn "restoring VRWebHelper.DebuggerEnabled failed; $DEBUGGER_ARMED kept"
+      fi
+    fi
+    if [[ -f $DEBUGGER_ARMED && ( $cur != true || CLEAN_DRY -eq 1 ) ]]; then
+      c_rm "$DEBUGGER_ARMED" "proof of the debugger key, no longer needed"
+    fi
+    (( keep )) || debugger_remove_hook
+  else
+    # Running (or unknown): SteamVR rewrites the file from memory; restore
+    # when it stops.
+    if [[ $state == unknown ]] && ! c_systemctl --version >/dev/null 2>&1; then
+      c_defer "VRWebHelper.DebuggerEnabled ($VRSETTINGS): user manager not reachable; run this again from the Steam session or with SteamVR stopped"
+      return 0
+    fi
+    debugger_ensure_hook || true
+    (( keep )) || c_defer "VRWebHelper.DebuggerEnabled ($VRSETTINGS) is restored to ${prior/nofile/absent} when SteamVR stops"
+  fi
+  return 0
+}
+
+# --- icon fallback links ---
+
+clean_icons() {
+  local l t removed=0
+  for l in "$ICON_DIR"/*.svg; do
+    [[ -L $l ]] || continue
+    t="$(readlink "$l")"
+    case $t in
+      /nix/store/*-breeze-icons-*/share/icons/breeze/apps/*) c_rm "$l" "icon fallback link to Breeze"; removed=1 ;;
+      *-home-manager-files/*) ;;
+    esac
+  done
+  [[ -e $ICON_MANIFEST ]] && c_rm "$ICON_MANIFEST" "icon fallback manifest" && removed=1
+  (( removed )) || return 0
+  # The directories only if they held nothing but our links.
+  c_rmdir "$ICON_DIR"
+  c_rmdir "${ICON_DIR%/*}"
+  c_rmdir "${ICON_DIR%/*/*}"
+  # GTK (Steam) rescans a theme only when a theme dir's mtime changes.
+  if [[ -d ${ICON_DIR%/*/*} && -z ${CLEAN_GONE[${ICON_DIR%/*/*}]:-} ]]; then
+    if c_do "touch ${ICON_DIR%/*/*} (mtime only, so Steam rescans icons)"; then
+      touch -- "${ICON_DIR%/*/*}"; c_done "touched ${ICON_DIR%/*/*} (mtime only, so Steam rescans icons)"
+    fi
+  fi
+  return 0
+}
+
+# --- Firefox user.js ---
+
+ff_keys() { sed -n 's/^[[:space:]]*user_pref(\("[^"]*"\),.*/\1/p' "$1" 2>/dev/null || true; }
+ff_in_use() { find /proc/[0-9]*/fd -lname "$1/.parentlock" -print -quit 2>/dev/null | grep -q .; }
+
+clean_firefox() { # keep_profile ('' = none)
+  local keep=$1 prof name u t kind keys pats left
+  [[ -d $FF_DIR ]] || return 0
+  for prof in "$FF_DIR"/*/; do
+    prof=${prof%/}; name=${prof##*/}; u=$prof/user.js
+    [[ -e $u || -L $u ]] || continue
+    keys=''
+    if [[ -L $u ]]; then
+      t="$(readlink "$u")"
+      case $t in
+        "$FF_DESKTOP_JS")
+          [[ $name == "$keep" ]] && continue
+          kind="desktop profile user.js link"; keys='"full-screen-api.ignore-widgets"' ;;
+        /nix/store/*-firefox-user.js|/nix/store/*-firefox-desktop-user.js)
+          kind="user.js link of an older version"; keys="$(ff_keys "$u")"
+          [[ -e $u ]] || info "note: $t is gone; values it set stay in $prof/prefs.js" ;;
+        *) c_left "$u (link to $t)"; continue ;;
+      esac
+    elif [[ -f $u && $(head -n1 "$u") == "$FF_MARKER" ]]; then
+      kind="user.js copy of an older version"; keys="$(ff_keys "$u")"
+    else
+      c_left "$u (not written by steam-frame-nix)"; continue
+    fi
+    # Firefox stored the values the file set in prefs.js; take them out too.
+    # shellcheck disable=SC2001  # per line
+    pats="$(sed 's/.*/user_pref(&,/' <<<"$keys")"
+    if [[ -n $keys && -f $prof/prefs.js ]] && grep -qF "$pats" "$prof/prefs.js"; then
+      if ff_in_use "$prof"; then
+        c_defer "$u: Firefox is using profile $name; close it and run this again"
+        continue
+      fi
+      left="$(grep -vF "$pats" "$prof/prefs.js" || true)"
+      printf '%s\n' "$left" | c_write "$prof/prefs.js" "values of the $kind: ${keys//$'\n'/ }"
+    fi
+    c_rm "$u" "$kind"
+    c_rmdir "$prof"
+  done
+  return 0
+}
+
+# --- Jellyfin ---
+
+# The override with our entries taken out: LD_PRELOAD of the shim,
+# SFN_MPV_HWDEC, the shim's filesystems entry and, only if one of these was
+# there, devices=all. Prints "devices=<0|1>" (devices=all removed), then the
+# result; exit 3 if nothing of ours was found.
+jf_strip() {
+  awk '
+    function trim(s) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", s); return s }
+    function drop(list, pat,   n, a, i, out) {
+      n = split(list, a, ";"); out = ""
+      for (i = 1; i <= n; i++) { a[i] = trim(a[i]); if (a[i] == "") continue
+        if (a[i] ~ pat) { hit = 1; continue } out = out a[i] ";" }
+      return out }
+    FNR == 1 { pass++; sec = "" }
+    /^[[:space:]]*\[/ { sec = trim($0); if (pass == 2) { hdr[++nh] = sec; body[nh] = "" } next }
+    {
+      line = $0; key = trim(substr(line, 1, index(line, "=") - 1)); val = substr(line, index(line, "=") + 1)
+      hit = 0
+      if (sec == "[Environment]" && key == "LD_PRELOAD" && val ~ /^\/nix\/store\/[^\/]*mpv-hwdec-shim[^\/]*\/lib\/mpv-hwdec-shim\.so$/) { hit = 1; line = "" }
+      else if (sec == "[Environment]" && key == "SFN_MPV_HWDEC") { hit = 1; line = "" }
+      else if (sec == "[Context]" && key == "filesystems") {
+        v = drop(val, "^/nix/store/[^/]*mpv-hwdec-shim[^/]*(:ro)?$"); line = (v == "" ? "" : key "=" v) }
+      else if (sec == "[Context]" && key == "devices" && pass == 2 && ours) {
+        v = drop(val, "^all$"); if (hit) devs = 1; line = (v == "" ? "" : key "=" v); hit = 0 }
+      if (pass == 1) { if (hit) ours = 1; next }
+      if (trim(line) == "") next
+      body[nh] = body[nh] line "\n"
+    }
+    END {
+      if (!ours) exit 3
+      print "devices=" (devs ? 1 : 0)
+      for (i = 0; i <= nh; i++) if (body[i] != "") { if (i) printf "%s\n", hdr[i]; printf "%s\n", body[i] }
+    }
+  ' "$1" "$1"
+}
+
+clean_jellyfin() {
+  local out rc t
+  if [[ -L $JF_OVERRIDE ]]; then
+    t="$(readlink "$JF_OVERRIDE")"
+    [[ $t == *-home-manager-files/* ]] || c_left "$JF_OVERRIDE (link to $t)"
+  elif [[ -f $JF_OVERRIDE ]]; then
+    if [[ -z $(tr -d '[:space:]' <"$JF_OVERRIDE") ]]; then
+      c_rm "$JF_OVERRIDE" "empty Flatpak override"
+    else
+      rc=0; out="$(jf_strip "$JF_OVERRIDE")" || rc=$?
+      if (( rc == 0 )); then
+        [[ ${out%%$'\n'*} == devices=1 ]] && info "devices=all goes too (it came with the hwdec shim entries)"
+        out=${out#*$'\n'}; [[ $out == devices=? ]] && out=''
+        if [[ -z $(tr -d '[:space:]' <<<"$out") ]]; then
+          c_rm "$JF_OVERRIDE" "Flatpak override with only the hwdec shim entries"
+        else
+          printf '%s\n' "$out" | c_write "$JF_OVERRIDE" "hwdec shim entries"
+          warn "$JF_OVERRIDE keeps entries of its own: $(grep -v '^\[' <<<"$out" | grep . | tr '\n' ' ')"
+        fi
+      elif (( rc == 3 )); then
+        c_left "$JF_OVERRIDE (no hwdec shim entries)"
+      else
+        warn "could not read $JF_OVERRIDE; left as is"
+      fi
+    fi
+  fi
+  if [[ -e $JF_SHIM_MARKER ]]; then
+    [[ -e $JF_SHIM_COPY || -L $JF_SHIM_COPY ]] && c_rm "$JF_SHIM_COPY" "hwdec shim copy of an older version"
+    c_rm "$JF_SHIM_MARKER" "its marker"
+  elif [[ -e $JF_SHIM_COPY ]]; then
+    c_left "$JF_SHIM_COPY (no marker $JF_SHIM_MARKER)"
+  fi
+  return 0
+}
+
+# --- dashboard patch state ---
+
+clean_ui_state() { # all
+  local f n age=(-mmin +1)   # --orphans: not one being written right now
+  [[ -d $UI_STATE ]] || return 0
+  (( $1 )) && age=()
+  while IFS= read -r -d '' f; do
+    c_rm "$f" "unfinished write of the dashboard patch state"
+  done < <(find "$UI_STATE" -maxdepth 1 -type f -name '*.json.tmp' "${age[@]}" -print0)
+  if (( $1 )); then
+    for f in "$UI_STATE"/*.json; do
+      [[ -f $f ]] || continue
+      n=${f##*/}; c_rm "$f" "saved choices of the dashboard patch ${n%.json}"
+    done
+  fi
+  c_rmdir "$UI_STATE"
+  return 0
+}
+
+cmd_cleanup() {
+  local mode='' keep_debugger=0 keep_ff='' keeps=0 k
+  while (( $# )); do
+    case $1 in
+      --all) mode=all; shift ;;
+      --orphans) mode=orphans; shift ;;
+      --dry-run|-n) CLEAN_DRY=1; shift ;;
+      --keep)
+        [[ $# -ge 2 ]] || die "--keep needs an artifact"
+        k=$2; shift 2; keeps=$((keeps + 1))
+        case $k in
+          debugger) keep_debugger=1 ;;
+          firefox-desktop-userjs=?*) keep_ff=${k#*=} ;;
+          *) die "cleanup: unknown artifact '$k' for --keep (debugger, firefox-desktop-userjs=<profile>)" ;;
+        esac ;;
+      -h|--help) usage; exit 0 ;;
+      *) die "cleanup: unknown option '$1' (see --help)" ;;
+    esac
+  done
+  [[ -n $mode ]] || die "cleanup: --all or --orphans is required (see --help)"
+  [[ $mode == all && $keeps -gt 0 ]] && die "cleanup: --keep only goes with --orphans"
+  need_not_root
+
+  CLEAN_ACTIONS=0; CLEAN_DEFERRED=(); CLEAN_GONE=()
+  step "steam-frame-nix: cleaning up files outside Nix ($mode$( (( CLEAN_DRY )) && echo ', dry run'))"
+  clean_debugger "$keep_debugger"
+  clean_icons
+  clean_firefox "$keep_ff"
+  clean_jellyfin
+  clean_ui_state "$([[ $mode == all ]] && echo 1 || echo 0)"
+  c_rmdir "$SFN_STATE"
+  if [[ $mode == all ]]; then c_rmdir "$SFN_RUNTIME"; fi
+  (( CLEAN_ACTIONS || ${#CLEAN_DEFERRED[@]} )) || info "nothing to clean up"
+  return 0
+}
+
 # --- uninstall --------------------------------------------------------------
 
 # User units installed by Home Manager (unit files resolving into /nix/store).
@@ -471,10 +937,6 @@ remove_leftovers() { # keep_nix
     fi
   fi
   remove_path "$state/home-manager"
-  # Saved state of the dashboard UI patches (steam-ui-patches, state = true).
-  # Only this subdirectory: the directory's other files have their own rules.
-  remove_path "$state/steam-frame-nix/ui-patches"
-  rmdir "$state/steam-frame-nix" 2>/dev/null || true
   if [[ -L $HM_CONFIG_LINK ]]; then
     info "$HM_CONFIG_LINK pointed to $(readlink "$HM_CONFIG_LINK")"
     remove_path "$HM_CONFIG_LINK"
@@ -512,6 +974,7 @@ cmd_uninstall() {
 
   load_nix
   stop_hm_services
+  cmd_cleanup --all
   remove_hm
 
   if (( ! keep_nix )); then
@@ -534,9 +997,13 @@ cmd_uninstall() {
 Intentionally left in place:
   - your configuration (e.g. $DEFAULT_CONFIG_DIR)
   - files Home Manager renamed to *.hm-backup-<time>
-  - app data, e.g. ~/.local/share/docker, and Flatpak apps
+  - app data, e.g. ~/.local/share/docker, Firefox profiles, and Flatpak apps
 Log out or reboot so running sessions drop the removed tweaks.
 EOF
+  if (( ${#CLEAN_DEFERRED[@]} )); then
+    printf '\nNot done yet:\n'
+    printf '  - %s\n' "${CLEAN_DEFERRED[@]}"
+  fi
 }
 
 # --- status -----------------------------------------------------------------
@@ -595,6 +1062,8 @@ cmd_status() {
     info "user manager not reachable at $OUTER_RUNTIME_DIR"
   fi
   info "$(printf '%-30s %s' clipboard-sync "$(pgrep -u "$USER_ID" -x clipboard-sync >/dev/null && echo running || echo 'not running')")"
+
+  cmd_cleanup --dry-run --all
 }
 
 # --- main -------------------------------------------------------------------
@@ -606,6 +1075,7 @@ main() {
     install) cmd_install "$@" ;;
     uninstall) cmd_uninstall "$@" ;;
     status) cmd_status "$@" ;;
+    cleanup) cmd_cleanup "$@" ;;
     -h|--help|help) usage ;;
     '') usage >&2; exit 2 ;;
     *) printf 'unknown command: %s\n\n' "$cmd" >&2; usage >&2; exit 2 ;;
