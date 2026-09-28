@@ -149,7 +149,7 @@ in {
           row.
         '';
       };
-      count = mkOption { type = types.ints.between 1 8; default = 5; description = "Suggestions shown."; };
+      count = mkOption { type = types.ints.between 1 8; default = 6; description = "Suggestions shown."; };
     };
 
     autocorrect = {
