@@ -156,6 +156,7 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq ]; } ''
   echo absent > $S/steamvr-debugger.armed
   mkdir -p $F/desktop $F/x.default
   ln -s /app/etc/firefox/steam-frame-nix-desktop-user.js $F/desktop/user.js
+  touch $F/desktop/.parentlock; exec 8< $F/desktop/.parentlock   # the launcher's, Firefox running
   ln -s /app/etc/firefox/steam-frame-nix-desktop-user.js $F/x.default/user.js
   printf '[Context]\ndevices=all;\nfilesystems=/nix/store/00000000000000000000000000000000-mpv-hwdec-shim:ro;\n\n[Environment]\nLD_PRELOAD=/nix/store/00000000000000000000000000000000-mpv-hwdec-shim/lib/mpv-hwdec-shim.so\nSFN_MPV_HWDEC=x\n' > $O/org.jellyfin.JellyfinDesktop
   mkdir -p $HOME/.var/app/org.jellyfin.JellyfinDesktop
@@ -164,25 +165,28 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq ]; } ''
   echo '{' > $S/ui-patches/x.json.tmp; touch -d '-1 hour' $S/ui-patches/x.json.tmp
   echo '{' > $S/ui-patches/y.json.tmp                # being written: kept
   echo active > $STUB/state
-  res=$(steam-frame-nix-cleanup --orphans --keep debugger --keep firefox-desktop-userjs=desktop); echo "$res"
+  res=$(steam-frame-nix-cleanup --orphans --keep debugger); echo "$res"
   hasnt "$res" "deferred"                             # kept: the next start re-arms it
   there $root/run/systemd/user/steamvr.service.d/50-steam-frame-nix-debugger.conf $S/steamvr-debugger.armed
   there $F/desktop/user.js $S/ui-patches/frame-controls.json $S/ui-patches/vr-cat.json $S/ui-patches/y.json.tmp
   gone $F/x.default/user.js $O/org.jellyfin.JellyfinDesktop $S/ui-patches/x.json.tmp
   there $HOME/.var/app/org.jellyfin.JellyfinDesktop/mpv-hwdec-shim.so
   has "$res" "left alone: $HOME/.var/app/org.jellyfin.JellyfinDesktop/mpv-hwdec-shim.so"
-  noop --orphans --keep debugger --keep firefox-desktop-userjs=desktop
+  noop --orphans --keep debugger
   # SteamVR stopped (e.g. after a power loss): the key is restored, hook kept
   echo inactive > $STUB/state
-  res=$(steam-frame-nix-cleanup --orphans --keep debugger --keep firefox-desktop-userjs=desktop)
+  res=$(steam-frame-nix-cleanup --orphans --keep debugger)
   [ "$(jq -c . $V)" = '{}' ] || fail "orphans restore: $(cat $V)"
   gone $S/steamvr-debugger.armed
   there $root/run/systemd/user/steamvr.service.d/50-steam-frame-nix-debugger.conf
   # debugger no longer kept: runtime pieces go
-  res=$(steam-frame-nix-cleanup --orphans --keep firefox-desktop-userjs=desktop)
+  res=$(steam-frame-nix-cleanup --orphans)
   gone $root/run/steam-frame-nix $root/run/systemd
-  noop --orphans --keep firefox-desktop-userjs=desktop
+  noop --orphans
   there $S/ui-patches/frame-controls.json $HOME/.local/share/icons/hicolor/scalable/apps  # not ours
+  exec 8<&-                                            # Firefox closed
+  res=$(steam-frame-nix-cleanup --orphans)
+  gone $F/desktop/user.js
   ! steam-frame-nix-cleanup --all --keep debugger 2>/dev/null || fail "--all --keep accepted"
   ! steam-frame-nix-cleanup --orphans --keep bogus 2>/dev/null || fail "unknown --keep accepted"
   echo "C ok"

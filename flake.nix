@@ -56,10 +56,11 @@
     }) self.packages;
 
     # Tests of the VR keyboard (text model, corrector, swipe decoder on the
-    # default German + English dictionary), the Jellyfin mpv shim and
-    # install.sh cleanup: nix flake check
+    # default German + English dictionary), the Jellyfin mpv shim, the
+    # Firefox launcher and install.sh cleanup: nix flake check
     checks = forSystems (pkgs: {
       cleanup = import ./modules/cleanup/check.nix { inherit pkgs; };
+      firefox = import ./modules/firefox/check.nix { inherit pkgs; };
       jellyfin = import ./modules/jellyfin/check.nix { inherit pkgs; };
       vr-keyboard = (import ./modules/vr-keyboard/build.nix {
         inherit pkgs;

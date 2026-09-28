@@ -74,8 +74,7 @@ Commands:
                      or before removing it.
         --orphans    what the configuration no longer uses (run by the Home
                      Manager module on every switch); keeps saved choices.
-        --keep       still in use (with --orphans): debugger,
-                     firefox-desktop-userjs=<profile>
+        --keep       still in use (with --orphans): debugger
         --dry-run    only print what would be done
         --quiet      print only actions, deferrals and warnings
       SteamVR's VRWebHelper.DebuggerEnabled can't be changed while SteamVR
@@ -396,10 +395,12 @@ EOF
 #   icons      links hicolor/scalable/apps/<name>.svg -> Breeze in the store
 #              (the icon-fallbacks script of 2026-09; manifest
 #              $SFN_STATE/icon-fallbacks).
-#   firefox    user.js in Firefox profiles: links to the desktop profile's
-#              /app/etc/firefox/steam-frame-nix-desktop-user.js, older links
-#              to *-firefox-*user.js and copies starting with FF_MARKER, and
-#              the values they left in prefs.js (only with Firefox closed).
+#   firefox    user.js in Firefox profiles: links to
+#              /app/etc/firefox/steam-frame-nix-desktop-user.js (the
+#              launcher's, while the desktop profile runs; left alone while
+#              the profile is in use), older links to *-firefox-*user.js and
+#              copies starting with FF_MARKER, and the values they left in
+#              prefs.js (only with Firefox closed).
 #   jellyfin   the hwdec shim entries in the Jellyfin Flatpak's user override
 #              (nix-flatpak), an empty override file, and the shim copy of
 #              earlier versions (marker $SFN_STATE/jellyfin-hwdec-shim).
@@ -714,8 +715,8 @@ clean_icons() {
 ff_keys() { sed -n 's/^[[:space:]]*user_pref(\("[^"]*"\),.*/\1/p' "$1" 2>/dev/null || true; }
 ff_in_use() { find /proc/[0-9]*/fd -lname "$1/.parentlock" -print -quit 2>/dev/null | grep -q .; }
 
-clean_firefox() { # keep_profile ('' = none)
-  local keep=$1 prof name u t kind keys pats left
+clean_firefox() { # all
+  local all=$1 prof name u t kind keys pats left
   [[ -d $FF_DIR ]] || return 0
   for prof in "$FF_DIR"/*/; do
     prof=${prof%/}; name=${prof##*/}; u=$prof/user.js
@@ -725,7 +726,11 @@ clean_firefox() { # keep_profile ('' = none)
       t="$(readlink "$u")"
       case $t in
         "$FF_DESKTOP_JS")
-          [[ $name == "$keep" ]] && continue
+          # The launcher's, while Firefox runs in the desktop profile.
+          if ff_in_use "$prof"; then
+            (( all )) && c_defer "$u: Firefox is using profile $name; close it and run this again"
+            continue
+          fi
           kind="desktop profile user.js link"; keys='"full-screen-api.ignore-widgets"' ;;
         /nix/store/*-firefox-user.js|/nix/store/*-firefox-desktop-user.js)
           kind="user.js link of an older version"; keys="$(ff_keys "$u")"
@@ -846,7 +851,7 @@ clean_ui_state() { # all
 }
 
 cmd_cleanup() {
-  local mode='' keep_debugger=0 keep_ff='' keeps=0 k
+  local mode='' keep_debugger=0 keeps=0 k
   while (( $# )); do
     case $1 in
       --all) mode=all; shift ;;
@@ -858,8 +863,7 @@ cmd_cleanup() {
         k=$2; shift 2; keeps=$((keeps + 1))
         case $k in
           debugger) keep_debugger=1 ;;
-          firefox-desktop-userjs=?*) keep_ff=${k#*=} ;;
-          *) die "cleanup: unknown artifact '$k' for --keep (debugger, firefox-desktop-userjs=<profile>)" ;;
+          *) die "cleanup: unknown artifact '$k' for --keep (debugger)" ;;
         esac ;;
       -h|--help) usage; exit 0 ;;
       *) die "cleanup: unknown option '$1' (see --help)" ;;
@@ -875,7 +879,7 @@ cmd_cleanup() {
   if (( ! CLEAN_QUIET )); then step "$CLEAN_HEADER"; CLEAN_HEADER=''; fi
   clean_debugger "$keep_debugger"
   clean_icons
-  clean_firefox "$keep_ff"
+  clean_firefox "$([[ $mode == all ]] && echo 1 || echo 0)"
   clean_jellyfin
   clean_ui_state "$([[ $mode == all ]] && echo 1 || echo 0)"
   c_rmdir "$SFN_STATE"
