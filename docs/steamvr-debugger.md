@@ -1,18 +1,37 @@
-# SteamVR debugger: how it works
+# SteamVR debugger
 
-`steamvrDebugger.enable` (module `steamvr-debugger`). What it is for and
-what you need to do: README,
-[SteamVR debugger](../README.md#steamvr-debugger-steamvrdebuggerenable).
+`steamvrDebugger.enable`, module `steamvr-debugger`. Automatic; nothing to
+set. Options: [README, Options](../README.md#options).
 
-Enabled automatically when any patch in `steamFrame.uiPatches.patches` has
-an `endpoint` on port 8087 (all [dashboard](dashboard.md) patches and the VR
-keyboard's strip below/above the keyboard).
+## Problem
 
-SteamVR opens its DevTools port only with `VRWebHelper/DebuggerEnabled`
-(port `VRWebHelper/DebuggerPort`, default 8087). SteamVR rewrites
-`~/.config/openvr/config/steamvr.vrsettings` from memory, so the key can't
-be a link and can't be edited while SteamVR runs. It is set only while
-SteamVR runs:
+The [dashboard patches](ui-patches.md#steamvr-dashboard-patches) (and the
+[VR keyboard](keyboard.md#swipe-and-suggestions)'s strip below/above the
+keyboard) need SteamVR's DevTools port, which SteamVR opens only with its
+setting `VRWebHelper/DebuggerEnabled`. That setting lives in
+`~/.config/openvr/config/steamvr.vrsettings`, which SteamVR rewrites from
+memory, so it can't be a Nix link and can't be edited while SteamVR runs.
+
+## What you get
+
+The port, enabled automatically when any patch in
+`steamFrame.uiPatches.patches` has an `endpoint` on port 8087. The setting
+is **set only while SteamVR runs**: set before every SteamVR start, put back
+to its previous value when SteamVR stops, also after a rollback or uninstall
+(without Nix). A value you set to `true` yourself is never touched.
+
+**The first time, restart SteamVR once** (e.g. reboot); until then the
+dashboard patches wait. Turned off, the setting is restored at the switch
+(or when SteamVR stops, if it runs).
+
+## Security
+
+The port listens on `127.0.0.1` only; keep Developer Mode off (see
+[DevTools on the LAN](ui-patches.md#devtools-on-the-lan)).
+
+## How it works
+
+Port: `VRWebHelper/DebuggerPort`, default 8087.
 
 - before every SteamVR start, the `steamvr-webhelper-debugger` oneshot
   (a drop-in on `steamvr.service`, running `install.sh steamvr-debugger-arm`)
@@ -25,12 +44,12 @@ SteamVR runs:
 - when SteamVR stops, the key goes back to its previous value (removed if
   it wasn't there) and `.armed` is removed.
 
-The runtime files don't need Nix, so this also works after a rollback or
-uninstall; they are gone at reboot, and `.armed` (the only trace after a
+The runtime files don't need Nix, which is why rollback and uninstall are
+covered; they are gone at reboot, and `.armed` (the only trace after a
 power loss) is resolved by the next SteamVR start or
-`steam-frame-nix-cleanup`. A key set to `true` by the user is never touched.
-Disabled, there is no unit; the switch (cleanup) restores the key if SteamVR
-is stopped, otherwise the runtime drop-in does when it stops.
+`steam-frame-nix-cleanup`. Disabled, there is no unit; the switch (cleanup)
+restores the key if SteamVR is stopped, otherwise the runtime drop-in does
+when it stops.
 
 Until SteamVR has been restarted once with the drop-in, the port is closed
 and `steam-ui-patches` keeps polling it.

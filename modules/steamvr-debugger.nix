@@ -20,7 +20,7 @@
 #   trace after a power loss) is resolved by the next start or
 #   steam-frame-nix-cleanup.
 # Off: no unit and no drop-in; cleanup restores the key once SteamVR is
-# stopped. Developer Mode forwards the port to 0.0.0.0:8088 (README,
+# stopped. Developer Mode forwards the port to 0.0.0.0:8088 (docs/ui-patches.md,
 # "DevTools on the LAN"); our patches use 127.0.0.1 only.
 { config, lib, pkgs, ... }:
 let
