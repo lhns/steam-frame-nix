@@ -59,7 +59,7 @@
 // setPlacement(name or "icon:N", 'bar' | 'menu' | null), reset().
 ((find, sigs, opts) => {
   const NAME = 'frame-controls';
-  const VERSION = 2;
+  const VERSION = 3;
   const T_SPACER = 1, T_ACTION = 2;
   const LS_KEY = 'sfui.frameControls.v1';
   // Action icon enums (sigs.controls anchors them): names for the options.
@@ -144,7 +144,15 @@
 
   // ---- controls ----------------------------------------------------------------------
   const protoOf = (aid) => { try { return actions.GetAction(aid)?.protoForSteam; } catch { return undefined; } };
-  const iconOf = (aid) => { const p = protoOf(aid); return p?.icon?.enum ?? p?.icon_active?.enum; };
+  // protoForSteam is a MobX computed, recomputed on every read outside a
+  // reaction; during onSet each action's icon is read once (iconMemo).
+  let iconMemo = null;
+  const iconOf = (aid) => {
+    if (iconMemo?.has(aid)) return iconMemo.get(aid);
+    const p = protoOf(aid), e = p?.icon?.enum ?? p?.icon_active?.enum;
+    iconMemo?.set(aid, e);
+    return e;
+  };
   const keyOf = (aid) => { const e = iconOf(aid); return e ? `icon:${e}` : null; };
   const isMore = (frame, it) => it?.action_id != null &&
     (it.action_id === frame.m_unControlAdditionalOptionsActionID || iconOf(it.action_id) === ICON.more);
@@ -222,14 +230,32 @@
 
   // SetControlsItems wrapper: one per page, version independent (looks the
   // current state up per call, inert once it is gone; found anywhere in the
-  // chain, so a wrapper on top of it doesn't make us re-wrap).
+  // chain, so a wrapper on top of it doesn't make us re-wrap). onSet returns
+  // true when the resulting lists equal the frame's current ones, and the
+  // wrapper then skips the stock setter: stock calls it once per control on
+  // every re-render of a window's controls (~12 identical calls per window),
+  // and each call replaces three MobX arrays, which re-renders the bar.
   const stock = new WeakMap();                    // frame -> [bottom, tab, additional] as passed by React
+  const sameItem = (a, b) => {
+    if (a === b) return true;
+    if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+    const ka = Object.keys(a), kb = Object.keys(b);
+    return ka.length === kb.length && ka.every((k) => a[k] === b[k]);
+  };
+  const sameList = (a, b) => Array.isArray(a) && b != null && typeof b.length === 'number' && a.length === b.length &&
+    a.every((it, i) => sameItem(it, b[i]));
   const onSet = (frame, args) => {
     stock.set(frame, [args[0], args[1], args[2]]);
-    const bottom = withFloat(frame, args[0]);
-    const r = partition(frame, bottom, args[2]);
-    if (r) [args[0], args[2]] = r;
-    else args[0] = bottom;
+    iconMemo = new Map();
+    try {
+      const bottom = withFloat(frame, args[0]);
+      const r = partition(frame, bottom, args[2]);
+      if (r) [args[0], args[2]] = r;
+      else args[0] = bottom;
+    } finally { iconMemo = null; }
+    return sameList(args[0], frame.m_rgControlsItems_BottomFrameControls) &&
+      sameList(args[1], frame.m_rgControlsItems_TabHoverControls) &&
+      sameList(args[2], frame.m_rgControlsItems_AdditionalOptions);
   };
   const findOurs = () => {
     for (let f = P.SetControlsItems, i = 0; f && i < 20; f = f.__sfuiOrig, i++) if (f.__sfuiPatch === NAME) return f;
@@ -241,7 +267,7 @@
     P.SetControlsItems = Object.assign(function SetControlsItems(...args) {
       const st = window.__sfuiFrameControls;
       if (st?.onSet) {
-        try { st.onSet(this, args); } catch (e) { st.addLog?.('partition error', String(e)); }
+        try { if (st.onSet(this, args) === true) return undefined; } catch (e) { st.addLog?.('partition error', String(e)); }
       }
       return orig.apply(this, args);
     }, { __sfuiPatch: NAME, __sfuiOrig: orig, isMobxAction: orig.isMobxAction });
