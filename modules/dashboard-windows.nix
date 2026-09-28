@@ -1,10 +1,10 @@
-# Resize and grab-distance limits of SteamVR dashboard windows. Dashboard patch
-# (dashboard-windows/patch.js; "systemui" on 127.0.0.1:8087), registered only
-# when an option is set; enables steamvr-debugger.nix (one SteamVR restart the
-# first time). Unsetting all options reverts to stock.
+# Resize and grab-distance limits of SteamVR dashboard windows. SteamVR
+# dashboard patch (dashboard-windows/patch.js; "systemui" on 127.0.0.1:8087),
+# registered only when an option is set; enables steamvr-debugger.nix (one
+# SteamVR restart the first time). Unsetting all options reverts to stock.
 { config, lib, pkgs, ... }:
 let
-  cfg = config.steamFrame.dashboard;
+  cfg = config.steamFrame.dashboard.windows;
   inherit (lib) mkOption types;
   inherit (import ./lib { inherit pkgs; }) mkPatch;
 
@@ -17,7 +17,7 @@ let
 
   rangeOption = kind: what: {
     min = mkOption {
-      type = types.nullOr types.number;
+      type = types.nullOr types.numbers.positive;
       default = null;
       description = ''
         Closest distance (m) ${what} can be pulled in to while grabbed; null =
@@ -25,7 +25,7 @@ let
       '';
     };
     max = mkOption {
-      type = types.nullOr types.number;
+      type = types.nullOr types.numbers.positive;
       default = null;
       example = stockDistance.${kind}.max * 2;
       description = ''
@@ -36,43 +36,49 @@ let
   };
 
   effective = kind: {
-    min = if cfg.windowDistance.${kind}.min != null then cfg.windowDistance.${kind}.min else stockDistance.${kind}.min;
-    max = if cfg.windowDistance.${kind}.max != null then cfg.windowDistance.${kind}.max else stockDistance.${kind}.max;
+    min = if cfg.distance.${kind}.min != null then cfg.distance.${kind}.min else stockDistance.${kind}.min;
+    max = if cfg.distance.${kind}.max != null then cfg.distance.${kind}.max else stockDistance.${kind}.max;
   };
 
-  distanceSet = lib.any (r: r.min != null || r.max != null) (lib.attrValues cfg.windowDistance);
-  enabled = cfg.windowMaxScale != null || distanceSet;
-in {
-  imports = [ ./steam-ui-patches.nix ./steamvr-debugger.nix ];
+  distanceSet = lib.any (r: r.min != null || r.max != null) (lib.attrValues cfg.distance);
+  enabled = cfg.maxScale != null || distanceSet;
 
-  options.steamFrame.dashboard = {
-    windowMaxScale = mkOption {
-      type = types.nullOr types.number;
+  old = [ "steamFrame" "dashboard" ];
+  new = [ "steamFrame" "dashboard" "windows" ];
+in {
+  imports = [
+    ./steam-ui-patches.nix ./steamvr-debugger.nix
+    (lib.mkRenamedOptionModule (old ++ [ "windowMaxScale" ]) (new ++ [ "maxScale" ]))
+  ] ++ lib.concatMap (kind: map (bound:
+    lib.mkRenamedOptionModule
+      (old ++ [ "windowDistance" kind bound ]) (new ++ [ "distance" kind bound ]))
+    [ "min" "max" ]) (lib.attrNames stockDistance);
+
+  options.steamFrame.dashboard.windows = {
+    maxScale = mkOption {
+      type = types.nullOr types.numbers.positive;
       default = null;
       example = 4.0;
       description = ''
         Largest resize factor of SteamVR dashboard windows, relative to their
         default size; null = stock (2). The theater screen starts 2.8x larger,
-        so its limit is 2.8x this. Dashboard patch, applied immediately.
+        so its limit is 2.8x this. SteamVR dashboard patch, applied
+        immediately.
       '';
     };
-    windowDistance = {
-      world = rangeOption "world" "windows placed in the world (not attached to the dashboard)";
+    distance = {
+      world = rangeOption "world"
+        "windows placed in the world (not attached to the dashboard)";
       theater = rangeOption "theater" "the theater-mode screen";
       dashboard = rangeOption "dashboard" "the dashboard itself";
     };
   };
 
   config = lib.mkIf enabled {
-    assertions =
-      [ {
-        assertion = cfg.windowMaxScale == null || cfg.windowMaxScale > 0;
-        message = "steamFrame.dashboard.windowMaxScale must be positive.";
-      } ]
-      ++ map (kind: let r = effective kind; in {
-        assertion = r.min > 0 && r.max >= r.min;
-        message = "steamFrame.dashboard.windowDistance.${kind}: need 0 < min <= max (stock values fill in unset ones), got ${toString r.min}-${toString r.max}.";
-      }) (lib.attrNames stockDistance);
+    assertions = map (kind: let r = effective kind; in {
+      assertion = r.max >= r.min;
+      message = "steamFrame.dashboard.windows.distance.${kind}: need min <= max (stock values fill in unset ones), got ${toString r.min}-${toString r.max}.";
+    }) (lib.attrNames stockDistance);
 
     steamFrame.uiPatches.patches = [ {
       name = "dashboard-windows";
@@ -81,10 +87,7 @@ in {
       patch = mkPatch {
         name = "dashboard-windows";
         src = ./dashboard-windows/patch.js;
-        opts = {
-          maxScale = cfg.windowMaxScale;
-          distance = cfg.windowDistance;
-        };
+        opts = { inherit (cfg) maxScale distance; };
       };
       unpatch = ./dashboard-windows/unpatch.js;
     } ];

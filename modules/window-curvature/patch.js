@@ -6,8 +6,8 @@
 // curve); dragging up/down with the laser sets the curvature live.
 //
 // Target: SteamVR dashboard (vrwebhelper, DevTools 127.0.0.1:8087, title
-// "systemui"). mkPatch patch (see lib/default.nix); opts: { default, max,
-// step, snapPixels, snapPoints, dragThreshold, dragPixelsPerUnit,
+// "systemui"). mkPatch patch (see lib/default.nix); opts: { initial, max,
+// step, detentPixels, detentPoints, dragThresholdPixels, dragPixelsPerUnit,
 // barDragPixelsPerUnit, haptics }.
 //
 // Stock curvature (frame.curvature, systemui's `curvature` component):
@@ -26,7 +26,7 @@
 // Values per window (key: first overlay key) in
 // window.__sfuiWindowCurvatureState (schema 1: { values, log }); kept across
 // re-patch and unpatch, not across a dashboard reload. Without a stored value:
-// opts.default in the world or on a hand, 1 when docked in the dashboard or
+// opts.initial in the world or on a hand, 1 when docked in the dashboard or
 // theater (so the Steam window stays concentric with the dashboard bar).
 //
 // Bar button: the bar panel (#legacy-frame-controls-<frameID>) is one button
@@ -36,18 +36,18 @@
 // origin reach the compositor at different times).
 //
 // Dragging: value = start value + drag distance / px per unit, rounded to
-// step. Snap points are detents in drag distance: the value holds there for
-// opts.snapPixels of travel, then continues, so no value is skipped.
+// step. Detent points hold in drag distance: the value stays there for
+// opts.detentPixels of travel, then continues, so no value is skipped.
 //
 // Haptics (opts.haptics): VROverlay.TriggerOverlayHapticEffect with stock
-// EOverlayHapticEffect values: SlidingEdge at 0/max, Snap at snap points,
+// EOverlayHapticEffect values: SlidingEdge at 0/max, Snap at detent points,
 // Sliding per step (at most every 30 ms). During a drag the dashboard's own
 // haptics (hover clicks on buttons the laser passes) are muted.
 //
 // Contract with other patches (e.g. frame-controls' long press); this patch
 // owns press-and-drag on its controls:
 //   - Every element it drives has the class `sfui-curv-ctl`.
-//   - When a press becomes a drag (opts.dragThreshold px vertical) it
+//   - When a press becomes a drag (opts.dragThresholdPixels px vertical) it
 //     dispatches a bubbling CustomEvent `sfui-curv-dragstart` on the element
 //     (detail { frameID, where: 'menu' | 'bar' }); when that drag ends
 //     (release or cancelPress), `sfui-curv-dragend`.
@@ -64,18 +64,18 @@
 // dragValue(v0, dy, ppu, cur).
 ((find, sigs, opts, hooks) => {
   const NAME = 'window-curvature';
-  const VERSION = 18;
+  const VERSION = 19;
   const FLAT = 999;                               // origin distances >= this are "flat"
   const ICON_OFF = 40, ICON_ON = 39;              // Toggle Curvature action icons (sigs.curvatureAction)
   const HAPTIC = { Snap: 3, Sliding: 4, SlidingEdge: 5 };   // EOverlayHapticEffect (sigs.hapticEffects)
 
   const o = {
-    default: 1, max: 3, step: 0.05, snapPixels: 24, snapPoints: [0, 1], dragThreshold: 8, dragPixelsPerUnit: 120,
+    initial: 1, max: 3, step: 0.05, detentPixels: 24, detentPoints: [0, 1], dragThresholdPixels: 8, dragPixelsPerUnit: 120,
     barDragPixelsPerUnit: 60, haptics: true, ...opts,
   };
-  if (!(o.max > 0 && o.step > 0 && o.step <= o.max && o.default >= 0 && o.default <= o.max && o.snapPixels >= 0 &&
-      Array.isArray(o.snapPoints) && o.snapPoints.every((p) => p >= 0 && p <= o.max) &&
-      o.dragThreshold >= 0 && o.dragPixelsPerUnit > 0 && o.barDragPixelsPerUnit > 0 &&
+  if (!(o.max > 0 && o.step > 0 && o.step <= o.max && o.initial >= 0 && o.initial <= o.max && o.detentPixels >= 0 &&
+      Array.isArray(o.detentPoints) && o.detentPoints.every((p) => p >= 0 && p <= o.max) &&
+      o.dragThresholdPixels >= 0 && o.dragPixelsPerUnit > 0 && o.barDragPixelsPerUnit > 0 &&
       typeof o.haptics === 'boolean'))
     return `invalid options ${JSON.stringify(opts)}`;
   const id = JSON.stringify([VERSION, o]);
@@ -120,26 +120,26 @@
   const keyOf = (f) => f.associatedSummonOverlayKeys?.[0] ?? `frame:${f.frameID}`;
   const dockOf = (f) => f.docking?.visualDockLocation ?? f.docking?.dockLocation;
   const strength = (f) => S.values[keyOf(f)] ??
-    ([DOCK.LeftHand, DOCK.RightHand, DOCK.World].includes(dockOf(f)) ? o.default : 1);
+    ([DOCK.LeftHand, DOCK.RightHand, DOCK.World].includes(dockOf(f)) ? o.initial : 1);
   const curved = (f) => !!curvatureOf(f)?.shouldCurve;
   const shown = (f) => (curved(f) ? strength(f) : 0);
 
   // Value for a drag of dy px (up = positive) from v0 at ppu px per unit, or
-  // null to keep cur. Snap points are detents in drag distance: reaching one
-  // (or starting on it) holds the value there for snapPixels of travel, then
-  // it continues from the point, so no values are skipped. Off a snap point
+  // null to keep cur. Detent points hold in drag distance: reaching one
+  // (or starting on it) holds the value there for detentPixels of travel,
+  // then it continues from the point, so no values are skipped. Off a point
   // the value is rounded to step; a change of less than 0.6 steps away from
   // cur is ignored (laser jitter at a step boundary).
   const dragValue = (v0, dy, ppu, cur) => {
     const dir = Math.sign(dy);
     let v = v0, rest = Math.abs(dy), held = null;
-    const points = o.snapPoints.filter((p) => (dir > 0 ? p >= v0 : p <= v0)).sort((a, b) => dir * (a - b));
+    const points = o.detentPoints.filter((p) => (dir > 0 ? p >= v0 : p <= v0)).sort((a, b) => dir * (a - b));
     for (const p of points) {
       const dist = Math.abs(p - v) * ppu;
       if (rest <= dist) break;
       rest -= dist; v = p;
-      if (rest <= o.snapPixels) { held = p; rest = 0; break; }
-      rest -= o.snapPixels;
+      if (rest <= o.detentPixels) { held = p; rest = 0; break; }
+      rest -= o.detentPixels;
     }
     const target = held ?? v + dir * rest / ppu;
     const nv = clamp(held ?? round(target));
@@ -169,7 +169,7 @@
     try { stockHaptic.call(ov, ov.ThisOverlayHandle(), effect); hits.haptics++; } catch (e) { log('haptic failed', String(e)); }
   };
   const hapticFor = (v) => haptic(v <= 0 || v >= o.max ? HAPTIC.SlidingEdge
-    : o.snapPoints.includes(v) ? HAPTIC.Snap : HAPTIC.Sliding);
+    : o.detentPoints.includes(v) ? HAPTIC.Snap : HAPTIC.Sliding);
 
   // ---- scene graph ---------------------------------------------------------------------
   // Origin node ids may carry a "<prefix>::" (sub-scene); match the suffix.
@@ -338,7 +338,7 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
   // Presses/clicks are stopped at the element so React (root listener) never
   // runs the stock onClick; a press that never became a drag is a click on
   // mouseup. Drag is vertical and relative (the cylinder bends horizontally,
-  // so y barely moves as curvature changes); after dragThreshold px it
+  // so y barely moves as curvature changes); after dragThresholdPixels px it
   // re-bases (no jump). One press at a time, window capture listeners.
   const stop = (e) => e.stopPropagation();
   const STOPPED = ['click', 'dblclick', 'mouseup', 'pointerdown', 'pointerup', 'contextmenu'];
@@ -359,7 +359,7 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
     const y = e.clientY;
     p.last = y;
     if (!p.moved) {
-      if (Math.abs(y - p.y0) < o.dragThreshold) return;
+      if (Math.abs(y - p.y0) < o.dragThresholdPixels) return;
       p.moved = true;
       muteStock = true;
       p.c.el?.classList.add('sfui-dragging');
@@ -543,6 +543,6 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
   log('patched', { version: VERSION, opts: o });
   resend();
   queueSync();
-  return `patched (default ${o.default}, max ${o.max}, step ${o.step}, snap ${o.snapPixels} px at ${o.snapPoints.join('/')}, ` +
+  return `patched (initial ${o.initial}, max ${o.max}, step ${o.step}, detent ${o.detentPixels} px at ${o.detentPoints.join('/')}, ` +
     `haptics ${o.haptics ? 'on' : 'off'})`;
 })

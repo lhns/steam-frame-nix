@@ -59,7 +59,7 @@
 // setPlacement(name or "icon:N", 'bar' | 'menu' | null), reset().
 ((find, sigs, opts) => {
   const NAME = 'frame-controls';
-  const VERSION = 1;
+  const VERSION = 2;
   const T_SPACER = 1, T_ACTION = 2;
   const LS_KEY = 'sfui.frameControls.v1';
   // Action icon enums (sigs.controls anchors them): names for the options.
@@ -70,7 +70,7 @@
   const TOOLTIP_OFFSET = '0 0.15 0.06';           // stock tooltip / menu offset (y 0.15, z 0.05), in front
 
   const o = { inBar: [], inMenu: [], longPressMs: 1500, floatInTheater: false, ...opts };
-  if (!(o.longPressMs >= 200)) return `invalid options ${JSON.stringify(opts)}`;
+  if (!(o.longPressMs >= 300)) return `invalid options ${JSON.stringify(opts)}`;
   const toKey = (x) => (typeof x === 'number' ? `icon:${x}` : NAMES[x] != null ? `icon:${NAMES[x]}` : /^icon:\d+$/.test(x) ? x : null);
   const optMap = {};                              // key -> 'bar' | 'menu' from the options
   for (const [list, where] of [[o.inBar, 'bar'], [o.inMenu, 'menu']]) {

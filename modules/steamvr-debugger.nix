@@ -58,11 +58,14 @@ in {
   options.steamFrame.steamvrDebugger.enable = lib.mkOption {
     type = lib.types.bool;
     default = false;
-    defaultText = lib.literalMD "on automatically when a dashboard patch (a `steamFrame.uiPatches.patches` entry on port 8087) is enabled";
+    defaultText = lib.literalMD ''
+      on automatically when a SteamVR dashboard patch (a
+      `steamFrame.uiPatches.patches` entry on port 8087) is enabled
+    '';
     description = ''
       SteamVR's web helper debugger (dashboard DevTools on 127.0.0.1:8087,
-      VRWebHelper/DebuggerEnabled in steamvr.vrsettings), needed by dashboard
-      patches, which turn it on automatically. Takes effect after one SteamVR
+      VRWebHelper/DebuggerEnabled in steamvr.vrsettings), needed by SteamVR
+      dashboard patches, which turn it on automatically. Takes effect after one SteamVR
       restart; off resets the key at the next start. Developer Mode also
       forwards the port to the LAN (0.0.0.0:8088).
     '';

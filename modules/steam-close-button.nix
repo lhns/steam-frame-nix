@@ -1,4 +1,4 @@
-# Close (X) button on the dashboard's Steam window. Dashboard patch
+# Close (X) button on the dashboard's Steam window. SteamVR dashboard patch
 # (steam-close-button/patch.js; "systemui" on 127.0.0.1:8087), registered only
 # when enabled; enables steamvr-debugger.nix (one SteamVR restart the first time).
 { config, lib, pkgs, ... }:
@@ -11,7 +11,7 @@ in {
   options.steamFrame.dashboard.steamCloseButton.enable = lib.mkEnableOption ''
     a Close (X) button on the dashboard's Steam window. It hides Steam
     (previous window or just the bar) until shown explicitly, e.g. via the
-    Steam tab. Dashboard patch; off removes it (next switch)'';
+    Steam tab. SteamVR dashboard patch; off removes it (next switch)'';
 
   config = lib.mkIf cfg.enable {
     steamFrame.uiPatches.patches = [ {
