@@ -205,7 +205,7 @@ without it.
 | `steamFrame.keyboard.vr.dictionary.extraWordsFrequency` | number | `5.0` | Zipf frequency of extra words. |
 | `steamFrame.keyboard.vr.dictionary.extraWordFiles` | list of paths | `[ ]` | Word lists, `word` or `word<TAB>zipf` per line. |
 | `steamFrame.keyboard.vr.dictionary.excludeWords` | list of str | `[ ]` | Words never suggested. |
-| `steamFrame.keyboard.vr.text.bufferChars` | int | `64` | Characters of typed text the keyboard remembers. |
+| `steamFrame.keyboard.vr.text.bufferChars` | int | `128` | Characters of typed text the keyboard remembers. |
 | `steamFrame.keyboard.vr.text.resetAfterIdleSeconds` | int | `30` | Forget it after this long without typing (`0`: never). |
 | `steamFrame.keyboard.vr.text.autoSpace` | bool | `true` | Space before a swiped word after a known non-space character. |
 | `steamFrame.keyboard.vr.suggestions.position` | `"below"`, `"above"`, `"inside"` | `"below"` | Suggestion strip: SteamVR panel below/above the keyboard, or over its number row. |

@@ -126,7 +126,7 @@ in {
     };
 
     text = {
-      bufferChars = mkOption { type = types.ints.between 8 1024; default = 64; description = "Characters of typed text remembered."; };
+      bufferChars = mkOption { type = types.ints.between 8 1024; default = 128; description = "Characters of typed text remembered."; };
       resetAfterIdleSeconds = mkOption {
         type = types.ints.unsigned;
         default = 30;
