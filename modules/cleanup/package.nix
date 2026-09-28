@@ -1,10 +1,12 @@
 # steam-frame-nix-cleanup: `install.sh cleanup` (see there) with its tools
 # from nixpkgs. `nix run github:lhns/steam-frame-nix#cleanup -- --all`.
-{ writeShellApplication, bash, coreutils, findutils, jq, gnugrep, gnused, gawk, procps }:
+# Other install.sh commands the modules run: name + command.
+{ writeShellApplication, bash, coreutils, findutils, jq, gnugrep, gnused, gawk, procps
+, name ? "steam-frame-nix-cleanup", command ? "cleanup" }:
 writeShellApplication {
-  name = "steam-frame-nix-cleanup";
+  inherit name;
   runtimeInputs = [ bash coreutils findutils jq gnugrep gnused gawk procps ];
   text = ''
-    exec bash ${../../install.sh} cleanup "$@"
+    exec bash ${../../install.sh} ${command} "$@"
   '';
 }

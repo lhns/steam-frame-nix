@@ -86,6 +86,10 @@ Commands:
       Show Nix, Home Manager and user service state, and what
       'cleanup --all' would remove.
 
+  steamvr-debugger-arm
+      Internal (run before each SteamVR start by steamFrame.steamvrDebugger):
+      set VRWebHelper.DebuggerEnabled until SteamVR stops.
+
 Options:
   --yes, -y      Don't ask; answer yes to every question.
   --help, -h     Show this help.
@@ -575,6 +579,53 @@ debugger_remove_hook() {
   c_rmdir "$OUTER_RUNTIME_DIR/systemd"
   (( CLEAN_DRY )) || c_systemctl daemon-reload || true
   return 0
+}
+
+# Before each SteamVR start (the steamvr-webhelper-debugger oneshot of
+# steamFrame.steamvrDebugger): remember the key's value in
+# steamvr-debugger.armed, set it to true and make sure the runtime drop-in
+# puts it back when SteamVR stops. A key that is already true (without
+# .armed) is the user's own and never touched.
+cmd_debugger_arm() {
+  local cur tmp
+  need_not_root
+  command -v jq >/dev/null 2>&1 || die "jq not found"
+  if [[ -f $DEBUGGER_MARKER_V1 ]]; then   # marker of older versions: key was absent
+    mkdir -p "$SFN_STATE"
+    [[ -f $DEBUGGER_ARMED ]] || printf 'absent\n' >"$DEBUGGER_ARMED"
+    rm -f -- "$DEBUGGER_MARKER_V1"
+    info "migrated $DEBUGGER_MARKER_V1 to $DEBUGGER_ARMED"
+  fi
+  if [[ ! -f $DEBUGGER_ARMED ]]; then
+    if [[ -f $VRSETTINGS ]]; then
+      cur="$(jq -r 'if (.VRWebHelper | type) == "object" and (.VRWebHelper | has("DebuggerEnabled"))
+                    then .VRWebHelper.DebuggerEnabled | tostring else "absent" end' "$VRSETTINGS")" \
+        || die "can't read $VRSETTINGS"
+    else
+      cur=nofile
+    fi
+    case $cur in
+      true) info "VRWebHelper.DebuggerEnabled is already true (not set by steam-frame-nix): left as is"; return 0 ;;
+      false|absent|nofile) ;;
+      *) warn "VRWebHelper.DebuggerEnabled is $cur; left as is"; return 0 ;;
+    esac
+    mkdir -p "$SFN_STATE"
+    printf '%s\n' "$cur" >"$DEBUGGER_ARMED"
+  fi
+  if [[ ! -f $VRSETTINGS ]]; then
+    mkdir -p "${VRSETTINGS%/*}"
+    printf '{}\n' >"$VRSETTINGS"
+  fi
+  if [[ $(jq '.VRWebHelper.DebuggerEnabled' "$VRSETTINGS") != true ]]; then
+    tmp="$(mktemp "$VRSETTINGS.XXXXXX")"
+    jq --indent 3 '.VRWebHelper.DebuggerEnabled = true' "$VRSETTINGS" >"$tmp" || { rm -f "$tmp"; die "can't write $VRSETTINGS"; }
+    chmod --reference="$VRSETTINGS" "$tmp"
+    mv -f "$tmp" "$VRSETTINGS"
+    info "VRWebHelper.DebuggerEnabled set to true until SteamVR stops (before: $(<"$DEBUGGER_ARMED"))"
+  else
+    info "VRWebHelper.DebuggerEnabled already true (set by steam-frame-nix)"
+  fi
+  debugger_ensure_hook || true
 }
 
 clean_debugger() { # keep
@@ -1085,6 +1136,7 @@ main() {
     uninstall) cmd_uninstall "$@" ;;
     status) cmd_status "$@" ;;
     cleanup) cmd_cleanup "$@" ;;
+    steamvr-debugger-arm) cmd_debugger_arm "$@" ;;
     -h|--help|help) usage ;;
     '') usage >&2; exit 2 ;;
     *) printf 'unknown command: %s\n\n' "$cmd" >&2; usage >&2; exit 2 ;;

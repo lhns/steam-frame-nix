@@ -194,5 +194,37 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq ]; } ''
   has "$res" "left alone: VRWebHelper.DebuggerEnabled = true"
   [ "$(jq -c . $V)" = '{"VRWebHelper":{"DebuggerEnabled":true}}' ] || fail "user's key changed"
   echo "D ok"
+
+  # --- E: steamvr-debugger-arm (before each SteamVR start) ---
+  arm() { bash ${../../install.sh} steamvr-debugger-arm; }
+  fresh e
+  printf '{\n   "steamvr" : {}\n}\n' > $V
+  touch $S/steamvr-debugger                          # old marker: migrated
+  echo activating > $STUB/state
+  res=$(arm); echo "$res"
+  [ "$(cat $S/steamvr-debugger.armed)" = absent ] || fail "armed"
+  gone $S/steamvr-debugger
+  [ "$(jq -c .VRWebHelper $V)" = '{"DebuggerEnabled":true}' ] || fail "arm: $(cat $V)"
+  there $root/run/steam-frame-nix/steamvr-debugger-restore
+  [ "$(grep -c daemon-reload $STUB/log)" = 1 ] || fail "arm reload"
+  before=$(snap); res=$(arm)
+  [ "$(snap)" = "$before" ] || fail "second arm changed files"
+  [ "$(grep -c daemon-reload $STUB/log)" = 1 ] || fail "second arm reloaded"
+  bash $root/run/steam-frame-nix/steamvr-debugger-restore   # SteamVR stops
+  [ "$(jq -c . $V)" = '{"steamvr":{}}' ] || fail "arm restore: $(cat $V)"
+  gone $S/steamvr-debugger.armed
+  res=$(arm)                                          # restart: armed again
+  [ "$(cat $S/steamvr-debugger.armed)" = absent ] || fail "re-arm"
+  bash $root/run/steam-frame-nix/steamvr-debugger-restore
+  # the user's own true: never armed, never restored
+  printf '{"VRWebHelper":{"DebuggerEnabled":true}}\n' > $V
+  res=$(arm); has "$res" "not set by steam-frame-nix"
+  gone $S/steamvr-debugger.armed
+  # no file yet: created, and removed again if nothing else was added
+  rm $V; res=$(arm)
+  [ "$(cat $S/steamvr-debugger.armed)" = nofile ] || fail "nofile"
+  bash $root/run/steam-frame-nix/steamvr-debugger-restore
+  gone $V $S/steamvr-debugger.armed
+  echo "E ok"
   touch $out
 ''
