@@ -203,11 +203,9 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq ]; } ''
   arm() { bash ${../../install.sh} steamvr-debugger-arm; }
   fresh e
   printf '{\n   "steamvr" : {}\n}\n' > $V
-  touch $S/steamvr-debugger                          # old marker: migrated
   echo activating > $STUB/state
   res=$(arm); echo "$res"
   [ "$(cat $S/steamvr-debugger.armed)" = absent ] || fail "armed"
-  gone $S/steamvr-debugger
   [ "$(jq -c .VRWebHelper $V)" = '{"DebuggerEnabled":true}' ] || fail "arm: $(cat $V)"
   there $root/run/steam-frame-nix/steamvr-debugger-restore
   [ "$(grep -c daemon-reload $STUB/log)" = 1 ] || fail "arm reload"

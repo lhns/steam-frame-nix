@@ -26,14 +26,15 @@ writeShellScript "firefox-launcher" (''
 '' + lib.optionalString desktopFix ''
   js=${lib.escapeShellArg desktopJs}
   u=$prof/user.js
+  pats=${lib.escapeShellArg (lib.concatMapStringsSep "\n" (k: "user_pref(${builtins.toJSON k},") desktopKeys)}
   # Firefox holds .parentlock open while it uses a profile (the sandbox sees
   # the profile at the same path).
   inUse() { find /proc/[0-9]*/fd -lname "$prof/.parentlock" -print -quit 2>/dev/null | grep -q .; }
   ours() { [ -L "$u" ] && [ "$(readlink "$u")" = "$js" ]; }
   sfn_unlink() {
     ours && ! inUse || return 0
-    if [ -f "$prof/prefs.js" ] && grep -qF -f <(printf '%s\n' ${lib.escapeShellArgs (map (k: "user_pref(${builtins.toJSON k},") desktopKeys)}) "$prof/prefs.js"; then
-      grep -vF -f <(printf '%s\n' ${lib.escapeShellArgs (map (k: "user_pref(${builtins.toJSON k},") desktopKeys)}) "$prof/prefs.js" > "$prof/prefs.js.sfn" || true
+    if [ -f "$prof/prefs.js" ] && grep -qF "$pats" "$prof/prefs.js"; then
+      grep -vF "$pats" "$prof/prefs.js" > "$prof/prefs.js.sfn" || true
       cat "$prof/prefs.js.sfn" > "$prof/prefs.js"
       rm -f "$prof/prefs.js.sfn"
     fi

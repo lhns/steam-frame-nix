@@ -4,9 +4,9 @@
 Valve Steam Frame (SteamOS, `aarch64-linux`, standalone home-manager). They
 work around quirks of the Frame's [two graphical sessions](#two-sessions)
 (portal, keyboard layout, clipboard, KDE wallet, Firefox), enable hardware
-video decoding in Jellyfin, run rootless Docker, and extend Steam's and SteamVR's UIs at runtime (VR keyboard,
-"+" menu, dashboard windows, Steam close button, window curvature, window
-controls).
+video decoding in Jellyfin, run rootless Docker, and extend Steam's and
+SteamVR's UIs at runtime (VR keyboard, "+" menu, dashboard windows, Steam
+close button, window curvature, window controls).
 
 Everything is declarative: files are links into the Nix store, UI patches
 live in memory. The few things that have to be written elsewhere at runtime
@@ -253,7 +253,13 @@ Every module imports `cleanup` (see
 | `steamFrame.keyboard.vr.backspaceDrag.wordDetentPixels` | int | `90` | Extra travel across a word border (`0`: none). |
 | `steamFrame.keyboard.vr.haptics` | bool | `true` | Haptic ticks for drag steps, word detents and picks. |
 | `steamFrame.keyboard.vr.checks` | package, read-only | | The tests, built with the configured dictionary. |
-| `steamFrame.uiPatches.patches` | list of submodules | `[ ]` | Runtime patches of Steam's web UIs, see [UI patches](docs/ui-patches.md). |
+| `steamFrame.uiPatches.patches` | list of submodules | `[ ]` | Runtime patches of Steam's web UIs, see [UI patches](docs/ui-patches.md#defining-a-patch). Fields below. |
+| `steamFrame.uiPatches.patches.*.name` | str | required | Unique name (log). |
+| `steamFrame.uiPatches.patches.*.endpoint` | str | `"http://127.0.0.1:8080"` | DevTools base URL, `/json/list` polled every 5 s: Steam 8080, SteamVR 8087. |
+| `steamFrame.uiPatches.patches.*.target.{title,titleRegex,urlRegex}` | null or str | `null` | Pages to patch: exact title, JS regexes; all given ones must match. |
+| `steamFrame.uiPatches.patches.*.patch` | path | required | JS evaluated (awaited) in every matching page. |
+| `steamFrame.uiPatches.patches.*.unpatch` | null or path | `null` | JS evaluated when the service stops. |
+| `steamFrame.uiPatches.patches.*.state` | bool | `false` | One [persistent JSON value](docs/ui-patches.md#persistent-state) for the patch. |
 | `steamFrame.uiPatches.lib` | attrs, read-only | | Patch helpers (`mkPatch`), see [Finders and signatures](docs/ui-patches.md#mkpatch). |
 | `steamFrame.launcherMenu.sort` | bool | `false` | Sort the "+" menu alphabetically. |
 | `steamFrame.launcherMenu.pinDesktop` | null or `"top"` / `"bottom"` | `null` | Pin "Desktop" above/below the "+" menu's list; `null`: normal entry. |

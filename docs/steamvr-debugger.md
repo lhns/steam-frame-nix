@@ -44,12 +44,6 @@ Port: `VRWebHelper/DebuggerPort`, default 8087.
 - when SteamVR stops, the key goes back to its previous value (removed if
   it wasn't there) and `.armed` is removed.
 
-The runtime files don't need Nix, which is why rollback and uninstall are
-covered; they are gone at reboot, and `.armed` (the only trace after a
-power loss) is resolved by the next SteamVR start or
-`steam-frame-nix-cleanup`. Disabled, there is no unit; the switch (cleanup)
-restores the key if SteamVR is stopped, otherwise the runtime drop-in does
-when it stops.
-
-Until SteamVR has been restarted once with the drop-in, the port is closed
-and `steam-ui-patches` keeps polling it.
+The runtime files need no Nix (rollback, uninstall) and are gone at reboot;
+`.armed`, the only trace after a power loss, is resolved by the next
+SteamVR start or `steam-frame-nix-cleanup`.

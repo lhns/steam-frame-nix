@@ -1,25 +1,18 @@
 # Firefox Flatpak (org.mozilla.firefox) launcher.
-# - prefs and vrFullscreenFix are default prefs (pref(), the default branch:
-#   never written to prefs.js, so removing one leaves nothing behind). Firefox
-#   reads defaults/pref/*.js from its system config dir, /app/etc/firefox in
-#   the Flatpak, the mount point of the org.mozilla.firefox.systemconfig
-#   extension. The user installation's "unmaintained extension" dir
-#   ($XDG_DATA_HOME/flatpak/extension/<id>/<arch>/<branch>) provides it: a
-#   home-manager link to a store dir, which Flatpak mounts itself (the
-#   sandbox needn't see /nix).
+# - prefs and vrFullscreenFix are default prefs (pref(): never written to
+#   prefs.js, so removing one leaves nothing behind) in defaults/pref/ of the
+#   org.mozilla.firefox.systemconfig extension (/app/etc/firefox), provided
+#   as the user installation's "unmaintained extension"
+#   ($XDG_DATA_HOME/flatpak/extension/<id>/<arch>/<branch>): a Home Manager
+#   link to a store dir, which Flatpak mounts itself (the sandbox needn't see
+#   /nix).
 # - vrFullscreenFix: in the Steam session gamescope focuses a fullscreen X11
 #   window but never shows it (Firefox looks frozen). ignore-widgets keeps
 #   fullscreen inside the window.
 # - desktopProfile: the sessions have separate buses/displays, so a second
 #   Firefox can't reach the running one and hits the profile lock; the nested
-#   desktop gets its own profile (a normal Firefox profile: browser data).
-#   Fullscreen works there, so the launcher undoes the fix in that profile
-#   only while its Firefox runs: a user.js link to the extension's
-#   steam-frame-nix-desktop-user.js (a sandbox path; dangling on the host),
-#   made right before Firefox starts and removed, with the value Firefox
-#   stored from it in prefs.js, once it has exited (firefox/launcher.nix).
-#   Leftovers (a crash) and what older versions wrote into profiles (user.js
-#   copies and links) are removed by steam-frame-nix-cleanup (on switch).
+#   desktop gets its own profile, where fullscreen works: the launcher undoes
+#   the fix there while its Firefox runs (firefox/launcher.nix).
 # The entry shadows the Flatpak's (same ID), keeping MIME associations, and is
 # seen by the "+" menu (which reads only ~/.local/share/applications).
 # defaultBrowser: without a default the portal picks the first installed
@@ -122,7 +115,7 @@ in {
 
     # stable: the branch the launcher runs (the extension point has no
     # version, so it takes the app's branch).
-    xdg.dataFile = lib.optionalAttrs (defaultPrefs != { } || desktopFix) {
+    xdg.dataFile = lib.optionalAttrs (defaultPrefs != { }) {   # desktopFix implies a pref
       "flatpak/extension/org.mozilla.firefox.systemconfig/aarch64/stable".source = sysconfig;
     } // {
     "applications/org.mozilla.firefox.desktop".text = ''

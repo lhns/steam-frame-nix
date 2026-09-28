@@ -70,15 +70,10 @@ let
         default = false;
         description = ''
           Give the patch one persistent JSON value (e.g. choices made in its
-          UI), kept by the service in
-          $XDG_STATE_HOME/steam-frame-nix/ui-patches/<name>.json across
-          SteamVR restarts and reboots: the page reads it with
-          `window.__sfuiStore.get(name)` and writes it with
-          `window.__sfuiStore.set(name, value)` (see injector.mjs). The file
-          is kept when the patch is disabled or removed (the choices come
-          back when it is enabled again) and removed by
-          `steam-frame-nix-cleanup --all` (also run by `install.sh
-          uninstall`).
+          UI): `window.__sfuiStore.get(name)` / `.set(name, value)` in the
+          page, kept in $XDG_STATE_HOME/steam-frame-nix/ui-patches/<name>.json
+          across SteamVR restarts, reboots and disabling the patch; removed
+          by `steam-frame-nix-cleanup --all`.
         '';
       };
     };
@@ -106,9 +101,9 @@ in {
     defaultText = lib.literalMD "the helpers of `modules/lib`";
     description = ''
       Patch helpers from modules/lib/default.nix: `mkPatch { name, src,
-      signatures ? …, opts ? { } }` (calls `src` as
-      `(find, sigs, opts, hooks) => …`; see there), plus `finders`, `hooks`
-      (paths) and `signatures` (parsed signatures.json).
+      signatures ? …, opts ? { }, extraArgs ? [ ] }` (calls `src` as
+      `(find, sigs, opts, hooks, ...extraArgs) => …`; see there), plus
+      `finders`, `hooks` (paths) and `signatures` (parsed signatures.json).
     '';
   };
 

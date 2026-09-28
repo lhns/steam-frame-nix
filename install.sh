@@ -591,12 +591,6 @@ cmd_debugger_arm() {
   local cur tmp
   need_not_root
   command -v jq >/dev/null 2>&1 || die "jq not found"
-  if [[ -f $DEBUGGER_MARKER_V1 ]]; then   # marker of older versions: key was absent
-    mkdir -p "$SFN_STATE"
-    [[ -f $DEBUGGER_ARMED ]] || printf 'absent\n' >"$DEBUGGER_ARMED"
-    rm -f -- "$DEBUGGER_MARKER_V1"
-    info "migrated $DEBUGGER_MARKER_V1 to $DEBUGGER_ARMED"
-  fi
   if [[ ! -f $DEBUGGER_ARMED ]]; then
     if [[ -f $VRSETTINGS ]]; then
       cur="$(jq -r 'if (.VRWebHelper | type) == "object" and (.VRWebHelper | has("DebuggerEnabled"))

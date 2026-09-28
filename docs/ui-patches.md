@@ -65,16 +65,8 @@ it runs. What they have in common:
 
 ## Defining a patch
 
-`steamFrame.uiPatches.patches` entries:
-
-| Attribute | Default | Description |
-|---|---|---|
-| `name` | | Unique name (log). |
-| `endpoint` | `"http://127.0.0.1:8080"` | DevTools base URL; `/json/list` is polled every 5 s. |
-| `target.title` / `target.titleRegex` / `target.urlRegex` | `null` | Pages to patch; all given criteria must match (JS regexes). |
-| `patch` | | JS file evaluated in every matching page (awaited). |
-| `unpatch` | `null` | JS file evaluated when the service stops. |
-| `state` | `false` | Give the patch one [persistent JSON value](#persistent-state). |
+A `steamFrame.uiPatches.patches` entry (fields:
+[README, Options](../README.md#options)):
 
 ```nix
 steamFrame.uiPatches.patches = [ {
@@ -128,9 +120,11 @@ patches never use them. `modules/lib/finders.js` (like Decky Loader's
   `findInReactTree`).
 
 Every signature must match exactly once, otherwise the patch changes nothing
-and reports it (e.g. `signature not found, Steam left unpatched:
-layouts.currentLayout (module 40222): ambiguous export, candidates r_, xy`).
-Results are cached per page.
+and reports it: `resolvePatch` returns e.g. `signature not found, Steam left
+unpatched: layouts.currentLayout (module 40222): ambiguous export,
+candidates r_, xy` as the patch's result. Results are cached per page. The
+library also has `ensureStyle(doc, id, css)` and `logger(buffer)` (a capped
+debug log).
 
 Signatures live in `modules/lib/signatures.json`, shared by patches and the
 offline checker. An entry can also list `expects` (strings the patch relies
@@ -164,10 +158,9 @@ steamFrame.uiPatches.patches = [ {
 
 ```js
 ((find, sigs, opts, hooks) => {
-  let mods;
-  try { mods = find.resolveAll(find.getWebpackRequire('webpackChunksteamui'), sigs); }
-  catch (e) { return `not patched: ${e.message}`; }
-  const Thing = mods.thing.exports.Thing;   // SteamVR dashboard: 'webpackChunkvrwebui'
+  const mods = find.resolvePatch('webpackChunksteamui', sigs);   // SteamVR dashboard: 'webpackChunkvrwebui'
+  if (typeof mods === 'string') return mods;                     // signature not found
+  const Thing = mods.thing.exports.Thing;
   …
 })
 ```
