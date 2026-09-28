@@ -3,8 +3,8 @@
 [Home Manager](https://github.com/nix-community/home-manager) modules for the
 Valve Steam Frame (SteamOS, `aarch64-linux`, standalone home-manager). They
 work around quirks of the Frame's [two graphical sessions](#two-sessions)
-(portal, keyboard layout, clipboard, Firefox), enable hardware video decoding
-in Jellyfin, and extend Steam's and SteamVR's UIs at runtime (VR keyboard,
+(portal, keyboard layout, clipboard, KDE wallet, Firefox), enable hardware
+video decoding in Jellyfin, run rootless Docker, and extend Steam's and SteamVR's UIs at runtime (VR keyboard,
 "+" menu, dashboard windows, Steam close button, window curvature, window
 controls).
 
@@ -50,8 +50,10 @@ configuration, limitations and how it works.
 
 **Apps:**
 
-- [Firefox](docs/firefox.md) (`firefox`): launcher for the Flatpak with a VR fullscreen fix, optional AV1 off, a separate desktop profile.
+- [Firefox](docs/firefox.md) (`firefox`): launcher for the Flatpak with a VR fullscreen fix, optional AV1 off, a separate desktop profile, optionally the default browser.
 - [Jellyfin](docs/jellyfin.md) (`jellyfin.hardwareDecoding`): hardware video decoding in the Jellyfin Desktop Flatpak.
+- [Keyring launchers](docs/keyring.md) (`keyring.flatpaks`, `keyring.programs`): apps (Flatpak or Nix, Electron too) keep their KDE wallet logins in both sessions.
+- [Docker](docs/docker.md) (`docker`): rootless Docker as a user service, CLI working in both sessions.
 
 **Your own patches** of Steam's UI, and fixing patches after a Steam update: [UI patches](docs/ui-patches.md).
 
@@ -111,8 +113,7 @@ What this means for you:
   ([session settings](docs/session.md#session-settings-and-services)).
 - **Wallet:** there should be one `kwalletd6`, on the outer bus; apps started
   from the desktop would otherwise start a second one whose secrets VR can't
-  see. Prefix such launchers' `Exec=` with `steamFrame.session.busEnv`
-  ([example](docs/session.md#session-settings-and-services)).
+  see. List such apps in [keyring](docs/keyring.md).
 - **Launchers:** the "+" menu only sees `~/.local/share/applications` (not
   `~/.nix-profile/share`), so entries are written there, shadowing
   Flatpak/package entries with the same ID.
@@ -190,7 +191,14 @@ these two files ([`template/`](template), with more comments):
     };
     firefox.enable = true;
     firefox.disableAv1 = true;
+    firefox.defaultBrowser = true;
     jellyfin.hardwareDecoding.enable = true;  # install the Flatpak yourself
+    keyring.flatpaks."im.riot.Riot" = {       # Element: logins in both sessions
+      name = "Element";
+      electron = true;
+      schemeHandlers = [ "element" "io.element.desktop" ];
+    };
+    docker.enable = true;                     # rootless
   };
 }
 ```
@@ -205,7 +213,7 @@ home-manager switch --flake .#steamos  # manual setup, from the flake's director
 In your own flake, add the input as above and
 `steam-frame-nix.homeManagerModules.default` to the modules. `default`
 imports all modules; single ones:
-`homeManagerModules.{session,portal,keyboard-layout,steam-keyboard-patch,vr-keyboard,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,cleanup,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox,jellyfin}`.
+`homeManagerModules.{session,portal,keyboard-layout,steam-keyboard-patch,vr-keyboard,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,cleanup,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox,jellyfin,keyring,docker}`.
 Every module imports `cleanup` (see
 [Changes outside Nix](#changes-outside-nix-exceptions)).
 
@@ -284,9 +292,29 @@ Every module imports `cleanup` (see
 | `steamFrame.firefox.disableAv1` | bool | `false` | Default `media.av1.enabled` to `false`: the Frame's decoder driver has no AV1, so sites send VP9/H.264, decoded in hardware. |
 | `steamFrame.firefox.prefs` | attrs of bool, int or str | `{ }` | Further `about:config` default values for every profile (override the fixes too). |
 | `steamFrame.firefox.desktopProfile` | null or str | `"desktop"` | Separate profile (directory name) for the nested desktop; `null`: the default profile in both sessions. |
+| `steamFrame.firefox.defaultBrowser` | bool | `false` | Default for `http`, `https`, `text/html` (`xdg.mimeApps`). |
 | `steamFrame.jellyfin.hardwareDecoding.enable` | bool | `false` | Hardware video decoding in the Jellyfin Desktop Flatpak, see [Jellyfin](docs/jellyfin.md). |
 | `steamFrame.jellyfin.hardwareDecoding.hwdec` | str | `"v4l2m2m-copy,auto-copy"` | mpv `hwdec` used instead of Jellyfin's automatic one. |
 | `steamFrame.jellyfin.hardwareDecoding.command` | str, read-only | | The `flatpak run …` command line of the desktop entry, for a terminal. |
+| `steamFrame.keyring.flatpaks` | attrs of submodules | `{ }` | Flatpaks by app ID getting a wallet launcher (outer bus, wallet D-Bus names), see [Keyring launchers](docs/keyring.md). Fields below. |
+| `steamFrame.keyring.programs` | attrs of submodules | `{ }` | Other programs by desktop ID (without `.desktop`) getting a wallet launcher (outer bus). Fields below. |
+| `steamFrame.keyring.{flatpaks,programs}.<id>.name` | str | required | `Name=`. |
+| `steamFrame.keyring.{flatpaks,programs}.<id>.genericName`, `.comment`, `.startupWMClass` | null or str | `null` | `GenericName=`, `Comment=`, `StartupWMClass=`. |
+| `steamFrame.keyring.{flatpaks,programs}.<id>.icon` | null or str | flatpaks: the app ID; programs: `null` | `Icon=`. |
+| `steamFrame.keyring.{flatpaks,programs}.<id>.categories` | list of str | `[ ]` | `Categories=`. |
+| `steamFrame.keyring.{flatpaks,programs}.<id>.schemeHandlers` | list of str | `[ ]` | URL schemes (e.g. login callbacks) the app handles and is made the default and recommended handler for. |
+| `steamFrame.keyring.{flatpaks,programs}.<id>.mimeTypes` | list of str | `[ ]` | Further `MimeType=` entries, not made default. |
+| `steamFrame.keyring.{flatpaks,programs}.<id>.electron` | bool | `false` | Pass `--password-store=kwallet6` (Electron apps). |
+| `steamFrame.keyring.{flatpaks,programs}.<id>.args` | list of str | `[ ]` | Further app arguments (desktop entry syntax). |
+| `steamFrame.keyring.{flatpaks,programs}.<id>.fieldCode` | `"%U"`, `"%u"`, `"%F"`, `"%f"`, `""` | `"%U"` | How the entry passes URLs/files. |
+| `steamFrame.keyring.{flatpaks,programs}.<id>.actions` | attrs of `{ name; args; }` | `{ }` | Desktop actions, each running the command with its args. |
+| `steamFrame.keyring.{flatpaks,programs}.<id>.settings` | attrs of str | `{ }` | Further `[Desktop Entry]` keys. |
+| `steamFrame.keyring.{flatpaks,programs}.<id>.command` | str, read-only | | The command line without args, for a terminal. |
+| `steamFrame.keyring.flatpaks.<id>.flatpakArgs` | list of str | `[ ]` | Further `flatpak run` options. |
+| `steamFrame.keyring.programs.<id>.executable` | str | required | The program to run, e.g. `"${pkgs.claude-desktop}/bin/claude-desktop"`. |
+| `steamFrame.docker.enable` | bool | `false` | Rootless Docker as a user service, CLI for both sessions, see [Docker](docs/docker.md). |
+| `steamFrame.docker.package` | package | `pkgs.docker` | Docker package (daemon and CLI). |
+| `steamFrame.docker.host` | str, read-only | `"unix://${runtimeDir}/docker.sock"` | The daemon's `DOCKER_HOST` (the CLI's default). |
 | `steamFrame.cleanup.package` | package, read-only | | `steam-frame-nix-cleanup` (on `PATH` too), see [Changes outside Nix](#changes-outside-nix-exceptions). |
 
 Renamed options still work under their old names, with a warning:
@@ -341,8 +369,10 @@ versions left: [docs/cleanup.md](docs/cleanup.md).
 - clipboard-sync runs from KDE autostart (a Home Manager link).
 - Firefox: the desktop profile's `user.js` link exists only while its
   Firefox runs (see [Firefox](docs/firefox.md#how-it-works)).
-- Jellyfin: the hardware decoding permissions are `flatpak run` options of
-  the desktop entry, not a Flatpak override.
+- Jellyfin, keyring launchers: the permissions are `flatpak run` options of
+  the desktop entries, not Flatpak overrides.
+- Docker: the daemon's socket in `/run/user/1000` (tmpfs) exists while
+  `docker.service` runs.
 
 ### Set up by install.sh
 
@@ -369,8 +399,18 @@ versions left: [docs/cleanup.md](docs/cleanup.md).
 
 Not steam-frame-nix's to remove: the Firefox desktop profile
 (`~/.var/app/org.mozilla.firefox/config/mozilla/firefox/desktop`, browser
-data), and whatever apps keep in `~/.var/app/*`, Flatpak apps and their
-runtimes.
+data), secrets apps stored in the KDE wallet, and whatever apps keep in
+`~/.var/app/*`, Flatpak apps and their runtimes.
+
+Docker's images, containers and volumes (`~/.local/share/docker`) are partly
+owned by the subordinate UIDs of your containers, so a plain `rm` fails.
+With the daemon running, then stopped:
+
+```sh
+docker system prune -a --volumes
+systemctl --user stop docker
+nix shell nixpkgs#rootlesskit -c rootlesskit rm -rf ~/.local/share/docker
+```
 
 ## Rollback
 

@@ -7,8 +7,10 @@
 
 In the Steam session gamescope never shows fullscreen windows, so Firefox
 looks frozen when a page goes fullscreen; sites send AV1, which the Frame
-decodes in software; and the two sessions can't see each other's Firefox,
-so a second instance stops at the locked profile.
+decodes in software; the two sessions can't see each other's Firefox,
+so a second instance stops at the locked profile; and without a default
+browser the portal opens links with the first installed `https` handler
+(e.g. Chromium), in both sessions.
 
 ## What you get
 
@@ -26,6 +28,9 @@ ID), so default-browser associations keep working.
 - **`desktopProfile`** (`"desktop"`): in the nested desktop the launcher
   uses this separate profile (a normal Firefox profile with its own browser
   data, created on first use). `null`: the default profile in both sessions.
+- **`defaultBrowser`** (off): the launcher becomes the default for `http`,
+  `https` and `text/html` (Home Manager's `xdg.mimeApps`, which then owns
+  `~/.config/mimeapps.list`).
 
 `prefs` and the fixes are *default* values, not user values: `about:config`
 can still change them per profile, and removing one leaves nothing behind.
@@ -37,6 +42,7 @@ Changes take effect at the next start of Firefox.
 steamFrame.firefox = {
   enable = true;
   disableAv1 = true;
+  defaultBrowser = true;
   prefs."browser.startup.page" = 3;   # restore the previous session
 };
 ```

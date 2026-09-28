@@ -56,8 +56,17 @@
   #   firefox.enable = true;             # launcher for the Firefox Flatpak
   #   # the Frame has no AV1 decoder: sites send VP9/H.264 (hardware):
   #   firefox.disableAv1 = true;
+  #   firefox.defaultBrowser = true;     # default for http/https links
   #   # Hardware video decoding in the Jellyfin Desktop Flatpak (install
   #   # org.jellyfin.JellyfinDesktop yourself); gives it devices=all:
   #   jellyfin.hardwareDecoding.enable = true;
+  #   # Apps that keep logins in the KDE wallet: one wallet for both
+  #   # sessions (Element: install im.riot.Riot yourself):
+  #   keyring.flatpaks."im.riot.Riot" = {
+  #     name = "Element";
+  #     electron = true;
+  #     schemeHandlers = [ "element" "io.element.desktop" ];  # SSO callback
+  #   };
+  #   docker.enable = true;              # rootless Docker, user service
   # };
 }

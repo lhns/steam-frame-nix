@@ -34,6 +34,8 @@
       };
       firefox = ./modules/firefox.nix;
       jellyfin = ./modules/jellyfin.nix;
+      keyring = ./modules/keyring.nix;
+      docker = ./modules/docker.nix;
     };
     systems = [ "aarch64-linux" "x86_64-linux" ];
     forSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});

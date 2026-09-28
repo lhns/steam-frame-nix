@@ -22,6 +22,8 @@
 #   copies and links) are removed by steam-frame-nix-cleanup (on switch).
 # The entry shadows the Flatpak's (same ID), keeping MIME associations, and is
 # seen by the "+" menu (which reads only ~/.local/share/applications).
+# defaultBrowser: without a default the portal picks the first installed
+# https handler (e.g. Chromium) in both sessions.
 { config, pkgs, lib, ... }:
 let
   cfg = config.steamFrame.firefox;
@@ -98,9 +100,26 @@ in {
         default profile in both sessions.
       '';
     };
+    defaultBrowser = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Make the launcher the default for http, https and text/html (in
+        Home Manager's ~/.config/mimeapps.list). Without a default the
+        portal opens links with the first installed https handler, in both
+        sessions.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
+    xdg.mimeApps = lib.mkIf cfg.defaultBrowser {
+      enable = true;
+      defaultApplications = lib.genAttrs
+        [ "x-scheme-handler/http" "x-scheme-handler/https" "text/html" ]
+        (_: "org.mozilla.firefox.desktop");
+    };
+
     # stable: the branch the launcher runs (the extension point has no
     # version, so it takes the app's branch).
     xdg.dataFile = lib.optionalAttrs (defaultPrefs != { } || desktopFix) {

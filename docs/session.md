@@ -23,8 +23,9 @@ running") and skips `reloadSystemd`.
   and applies `session.services.start` / `stop` / `restart`, which other
   modules fill (you can add your own units).
 
-**Configuration:** a launcher for an app that must use the single wallet on
-the outer bus (see [Two sessions](../README.md#two-sessions)):
+**Configuration:** apps that keep secrets in the wallet get launchers from
+[keyring](keyring.md). Another launcher that must reach the outer session
+(its bus, services or wallet) uses the prefix:
 
 ```nix
 { config, ... }: {
