@@ -8,7 +8,7 @@
 // Target: SteamVR dashboard (vrwebhelper, DevTools 127.0.0.1:8087, title
 // "systemui"). mkPatch patch (see lib/default.nix); opts: { default, max,
 // step, snapPixels, snapPoints, dragThreshold, dragPixelsPerUnit,
-// barDragPixelsPerUnit, barDragRoom, haptics }.
+// barDragPixelsPerUnit, haptics }.
 //
 // Stock curvature (frame.curvature, systemui's `curvature` component):
 // shouldCurve = m_bCurveOverride (set by ToggleCurvature(), cleared on dock
@@ -29,12 +29,11 @@
 // opts.default in the world or on a hand, 1 when docked in the dashboard or
 // theater (so the Steam window stays concentric with the dashboard bar).
 //
-// Bar button: the bar panel (#legacy-frame-controls-<frameID>, origin
-// TopCenter) is one button high and the laser stops at the pressed panel's
-// edge. During a bar drag the panel gets opts.barDragRoom px of transparent
-// padding above and below (window.forceLayoutUpdate() re-measures) and its
-// origin is compensated in outgoing scene graphs so the bar stays put in VR.
-// Laser events still mapped with the old layout are detected and shifted.
+// Bar button: the bar panel (#legacy-frame-controls-<frameID>) is one button
+// high, but while the trigger is held SteamVR keeps sending the pressed
+// panel's coordinates past its edge, so the drag uses them as they come. The
+// bar panel is never resized or moved (padding it made it flicker: size and
+// origin reach the compositor at different times).
 //
 // Dragging: value = start value + drag distance / px per unit, rounded to
 // step. Snap points are detents in drag distance: the value holds there for
@@ -65,19 +64,19 @@
 // dragValue(v0, dy, ppu, cur).
 ((find, sigs, opts, hooks) => {
   const NAME = 'window-curvature';
-  const VERSION = 16;
+  const VERSION = 18;
   const FLAT = 999;                               // origin distances >= this are "flat"
   const ICON_OFF = 40, ICON_ON = 39;              // Toggle Curvature action icons (sigs.curvatureAction)
   const HAPTIC = { Snap: 3, Sliding: 4, SlidingEdge: 5 };   // EOverlayHapticEffect (sigs.hapticEffects)
 
   const o = {
     default: 1, max: 3, step: 0.05, snapPixels: 24, snapPoints: [0, 1], dragThreshold: 8, dragPixelsPerUnit: 120,
-    barDragPixelsPerUnit: 60, barDragRoom: 160, haptics: true, ...opts,
+    barDragPixelsPerUnit: 60, haptics: true, ...opts,
   };
   if (!(o.max > 0 && o.step > 0 && o.step <= o.max && o.default >= 0 && o.default <= o.max && o.snapPixels >= 0 &&
       Array.isArray(o.snapPoints) && o.snapPoints.every((p) => p >= 0 && p <= o.max) &&
       o.dragThreshold >= 0 && o.dragPixelsPerUnit > 0 && o.barDragPixelsPerUnit > 0 &&
-      Number.isInteger(o.barDragRoom) && o.barDragRoom >= 0 && typeof o.haptics === 'boolean'))
+      typeof o.haptics === 'boolean'))
     return `invalid options ${JSON.stringify(opts)}`;
   const id = JSON.stringify([VERSION, o]);
 
@@ -111,7 +110,7 @@
     logBuf.push({ t: new Date().toISOString().slice(11, 23), msg, ...(data ? { data } : {}) });
     if (logBuf.length > 200) logBuf.splice(0, logBuf.length - 200);
   };
-  const hits = { sends: 0, origins: 0, scaled: 0, roomOrigins: 0, haptics: 0 };
+  const hits = { sends: 0, origins: 0, scaled: 0, haptics: 0 };
 
   // ---- values ------------------------------------------------------------------------
   const round = (v) => +(Math.round(v / o.step) * o.step).toFixed(6);
@@ -173,20 +172,6 @@
     : o.snapPoints.includes(v) ? HAPTIC.Snap : HAPTIC.Sliding);
 
   // ---- scene graph ---------------------------------------------------------------------
-  // Bar panels with drag room: frameID -> { node, pad, saved }.
-  const rooms = new Map();
-  // Keeps a padded bar panel's content where it was: the stock origin (x, y
-  // in -1..1 of the panel, y = 1 top) is re-expressed for the taller panel.
-  const fixOrigin = (p) => {
-    const m = /^legacy-frame-controls-(\d+)$/.exec(p.debug_name ?? '');
-    const r = m && rooms.get(Number(m[1]));
-    if (!r || !Array.isArray(p.origin) || p.origin.length < 2) return;
-    const h = r.node.getBoundingClientRect().height, inner = h - 2 * r.pad;
-    if (!(inner > 0)) return;
-    const fromTop = r.pad + ((1 - p.origin[1]) / 2) * inner;
-    p.origin = [p.origin[0], 1 - (2 * fromTop) / h, ...p.origin.slice(2)];
-    hits.roomOrigins++;
-  };
   // Origin node ids may carry a "<prefix>::" (sub-scene); match the suffix.
   const rewrite = (sg) => {
     const byOrigin = new Map();
@@ -194,7 +179,7 @@
       const c = curvatureOf(f);
       if (c?.shouldCurve) byOrigin.set(c.curvatureTransformOriginID, f);
     }
-    if (!byOrigin.size && !rooms.size) return;
+    if (!byOrigin.size) return;
     const walk = (n) => {
       if (!n || typeof n !== 'object') return;
       if (Array.isArray(n)) { n.forEach(walk); return; }
@@ -209,7 +194,6 @@
           hits.scaled++;
         }
       }
-      if (rooms.size && n.type === 'panel' && p) fixOrigin(p);
       if (n.children) walk(n.children);
     };
     walk(sg);
@@ -229,12 +213,6 @@
       resendTimer = null; lastResend = performance.now();
       try { resendStock(); } catch (e) { log('resend failed', String(e)); }
     }, Math.max(0, lastResend + 40 - performance.now()));
-  };
-  // Panel bounds are re-measured on the stock forced layout update (a
-  // padding change doesn't trigger the panels' ResizeObserver).
-  const relayout = () => {
-    try { window.forceLayoutUpdate?.(); } catch (e) { log('forceLayoutUpdate failed', String(e)); }
-    resend();
   };
 
   // 0 = off, > 0 = on with that strength. On/off via stock ToggleCurvature so
@@ -364,7 +342,7 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
   // re-bases (no jump). One press at a time, window capture listeners.
   const stop = (e) => e.stopPropagation();
   const STOPPED = ['click', 'dblclick', 'mouseup', 'pointerdown', 'pointerup', 'contextmenu'];
-  let press = null;                               // { c, y0, v0, last, moved, shift, stale }
+  let press = null;                               // { c, y0, v0, last, moved }
 
   const emit = (c, type) => {
     try {
@@ -372,36 +350,13 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
     } catch (e) { log(`${type} listener failed`, String(e)); }
   };
 
-  const addRoom = (p) => {
-    const node = p.c.panel;
-    if (!o.barDragRoom || !node?.isConnected || rooms.has(p.c.fid)) return;
-    const before = p.c.el.getBoundingClientRect().top;
-    rooms.set(p.c.fid, { node, pad: o.barDragRoom, saved: [node.style.paddingTop, node.style.paddingBottom] });
-    node.style.paddingTop = node.style.paddingBottom = `${o.barDragRoom}px`;
-    const shift = p.c.el.getBoundingClientRect().top - before;
-    p.shift = shift; p.stale = shift !== 0; p.last += shift; p.y0 += shift;
-    relayout();
-  };
-  const removeRoom = (fid) => {
-    const r = rooms.get(fid);
-    if (!r) return;
-    rooms.delete(fid);
-    [r.node.style.paddingTop, r.node.style.paddingBottom] = r.saved;
-    relayout();
-  };
 
   const onMove = (e) => {
     const p = press;
     if (!p) return;
     const f = FS.GetFrame(p.c.fid);
     if (!f) { endPress('frame gone'); return; }
-    let y = e.clientY;
-    // After the bar got its room, events the compositor still maps with the
-    // old layout are off by `shift`: take the reading closer to the last one.
-    if (p.stale) {
-      if (Math.abs(y + p.shift - p.last) < Math.abs(y - p.last)) y += p.shift;
-      else p.stale = false;
-    }
+    const y = e.clientY;
     p.last = y;
     if (!p.moved) {
       if (Math.abs(y - p.y0) < o.dragThreshold) return;
@@ -411,7 +366,6 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
       log('drag', { frame: p.c.fid, where: p.c.where });
       emit(p.c, 'sfui-curv-dragstart');
       if (press !== p) return;                    // a listener cancelled the press
-      if (p.c.where === 'bar') addRoom(p);
       p.y0 = p.last;
       return;
     }
@@ -433,7 +387,6 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
     window.removeEventListener('mousemove', onMove, true);
     window.removeEventListener('mouseup', onUp, true);
     p.c.el?.classList.remove('sfui-dragging');
-    removeRoom(p.c.fid);
     if (p.moved) emit(p.c, 'sfui-curv-dragend');
     const f = FS.GetFrame(p.c.fid);
     if (why === 'release') {
@@ -448,7 +401,7 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
     const f = FS.GetFrame(c.fid);
     if (e.button !== 0 || !f) return;
     endPress('new press');
-    press = { c, y0: e.clientY, last: e.clientY, v0: shown(f), moved: false, shift: 0, stale: false };
+    press = { c, y0: e.clientY, last: e.clientY, v0: shown(f), moved: false };
     window.addEventListener('mousemove', onMove, true);
     window.addEventListener('mouseup', onUp, true);
   };
@@ -560,7 +513,6 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
     for (const d of disposers.splice(0)) d();
     clearTimeout(syncTimer); clearTimeout(resendTimer);
     for (const key of [...controls.keys()]) removeControl(key);
-    for (const fid of [...rooms.keys()]) removeRoom(fid);
     document.getElementById(STYLE_ID)?.remove();
     hooks.remove(proto, 'SendMessage', NAME);
     if (window.__sfuiWindowCurvature === state) delete window.__sfuiWindowCurvature;

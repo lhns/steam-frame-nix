@@ -331,11 +331,6 @@
           "expects": ["properties.origin=", "properties.debug_name=this.props.debug_name", ".TopCenter:return{x:0,y:1}",
             "this.m_Rect=this.getCurrentRootElement().getBoundingClientRect()", "new ResizeObserver("]
         },
-        "sgApp": {
-          "checkOnly": true,
-          "module": { "includes": ["forceLayoutUpdate(){", "s_bPanelsAreDirty"] },
-          "expects": ["forceLayoutUpdate=this.forceLayoutUpdate", "updateLayoutValues()"]
-        },
         "hapticEffects": {
           "checkOnly": true,
           "module": { "includes": ["e[e.Snap=3]=\"Snap\",e[e.Sliding=4]=\"Sliding\",e[e.SlidingEdge=5]=\"SlidingEdge\""] }

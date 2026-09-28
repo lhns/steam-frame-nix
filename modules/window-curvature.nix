@@ -14,6 +14,8 @@ let
 in {
   imports = [
     ./steam-ui-patches.nix ./steamvr-debugger.nix
+    (lib.mkRemovedOptionModule [ "steamFrame" "dashboard" "windowCurvature" "barDragRoom" ]
+      "Not needed: SteamVR keeps sending the bar's coordinates past its edge during a drag.")
     (lib.mkRemovedOptionModule [ "steamFrame" "dashboard" "windowCurvature" "snap" ]
       "Snapping is a detent in drag pixels now: use steamFrame.dashboard.windowCurvature.snapPixels.")
   ];
@@ -61,14 +63,6 @@ in {
     barDragPixelsPerUnit = value 60 ''
       Bar pixels per 1.0 of curvature on the bottom-bar button.
     '';
-    barDragRoom = mkOption {
-      type = types.ints.unsigned;
-      default = 160;
-      description = ''
-        Transparent room (px) added above and below the bar while its button
-        is dragged, so the laser stays on the panel; 0 = none.
-      '';
-    };
     haptics = mkOption {
       type = types.bool;
       default = true;
@@ -105,7 +99,7 @@ in {
       patch = mkPatch {
         name = "window-curvature";
         src = ./window-curvature/patch.js;
-        opts = removeAttrs cfg [ "enable" "snap" ];
+        opts = removeAttrs cfg [ "enable" "snap" "barDragRoom" ];
       };
       unpatch = ./window-curvature/unpatch.js;
     } ];

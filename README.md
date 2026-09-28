@@ -219,7 +219,6 @@ without it.
 | `steamFrame.dashboard.windowCurvature.dragThreshold` | unsigned int (px) | `8` | Vertical travel before a press becomes a drag. |
 | `steamFrame.dashboard.windowCurvature.dragPixelsPerUnit` | number (px) | `120` | Drag distance per 1.0 in the menu (6 px per 0.05 step). |
 | `steamFrame.dashboard.windowCurvature.barDragPixelsPerUnit` | number (px) | `60` | Drag distance per 1.0 on the bar button. |
-| `steamFrame.dashboard.windowCurvature.barDragRoom` | unsigned int (px) | `160` | Room added above/below the bar while dragging; `0`: none. |
 | `steamFrame.dashboard.windowCurvature.haptics` | bool | `true` | Controller haptics while dragging (steps, detents, edges); the dashboard's hover clicks are muted during a drag. |
 | `steamFrame.dashboard.frameControls.enable` | bool | `false` | Move window controls between bar and three-dot menu, see [Window control bar](#window-control-bar-dashboardframecontrols). |
 | `steamFrame.dashboard.frameControls.longPressMs` | int, 300-10000 (ms) | `1500` | Long-press duration. |
