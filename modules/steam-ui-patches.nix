@@ -23,7 +23,8 @@ let
         default = "http://127.0.0.1:8080";
         example = "http://127.0.0.1:8087";
         description = ''
-          DevTools base URL (its /json/list is polled): Steam 8080, SteamVR 8087.
+          DevTools base URL (its /json/list is polled): Steam 8080, SteamVR
+          8087.
         '';
       };
       target = {
@@ -134,11 +135,11 @@ in {
 
     # Restart on switch: re-inject changed patches; the old instance reverts
     # removed ones.
-    steamFrame.userServices.restart = [ "steam-ui-patches.service" ];
+    steamFrame.session.services.restart = [ "steam-ui-patches.service" ];
   })
   # No patches: stopping the injector reverts them right away.
   (lib.mkIf (cfg.patches == [ ]) {
-    steamFrame.userServices.stop = [ "steam-ui-patches.service" ];
+    steamFrame.session.services.stop = [ "steam-ui-patches.service" ];
   })
   ];
 }

@@ -1,11 +1,11 @@
 // launch: what activating a program in the VR dashboard's "+" menu does.
-// mkPatch patch (see lib/default.nix); opts: { closeOnLaunch, debounceSeconds }.
+// mkPatch patch (see lib/default.nix); opts: { closeOnLaunch, launchDebounceSeconds }.
 //
 // Stock, an item only calls SteamClient.Apps.LaunchNonSteamApp(cmdline) and
 // the popup stays open until the new window appears, so users click twice.
 // That call is its only UI use and is looked up at call time, so it is wrapped
 // here in SharedJSContext:
-// - debounceSeconds > 0: the same command line within that many seconds of
+// - launchDebounceSeconds > 0: the same command line within that many seconds of
 //   the last accepted launch is ignored (console.info; reported in the
 //   steam-ui-patches journal on the next re-injection);
 // - closeOnLaunch: afterwards the "+" popup is closed via the bar button's
@@ -16,10 +16,10 @@
 // Covers every activation path (pointer, controller, pinned Desktop copy).
 // Original kept as __sfuiOrig for unpatch.js; bump VERSION on changes.
 ((find, sigs, opts) => {
-  const VERSION = 2;
+  const VERSION = 3;
   const NAME = 'launcher-menu-launch';
   const CLOSE = opts.closeOnLaunch === true;
-  const DEBOUNCE_MS = Math.max(0, Number(opts.debounceSeconds) || 0) * 1000;
+  const DEBOUNCE_MS = Math.max(0, Number(opts.launchDebounceSeconds) || 0) * 1000;
   const Apps = window.SteamClient?.Apps;
   const cur = Apps?.LaunchNonSteamApp;
   if (typeof cur !== 'function') return 'SteamClient.Apps.LaunchNonSteamApp missing';

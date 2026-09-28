@@ -13,16 +13,22 @@ let
     name = "steam-keyboard-patch";
     src = ./steam-keyboard-patch/patch.js;
   };
+  cfg = config.steamFrame.keyboard.vr.extraKeys;
 in {
-  imports = [ ./session.nix ];
+  imports = [
+    ./session.nix
+    (lib.mkRenamedOptionModule
+      [ "steamFrame" "steamKeyboardPatch" "enable" ]
+      [ "steamFrame" "keyboard" "vr" "extraKeys" "enable" ])
+  ];
 
-  options.steamFrame.steamKeyboardPatch.enable = lib.mkEnableOption ''
+  options.steamFrame.keyboard.vr.extraKeys.enable = lib.mkEnableOption ''
     Esc/Ctrl/Alt, arrow keys, Ctrl/Alt chords (held while toggled) and
-    AltGr/non-ASCII characters on Steam's VR keyboard (runtime patch plus an
+    AltGr/non-ASCII characters on Steam's VR keyboard (Steam UI patch plus an
     xdotool helper service); off reverts it on the next switch'';
 
   config = lib.mkMerge [
-  (lib.mkIf config.steamFrame.steamKeyboardPatch.enable {
+  (lib.mkIf cfg.enable {
     systemd.user.services.steam-keyboard-patch = {
       Unit.Description = "Modifier keys for Steam's VR keyboard (CEF patch + xdotool)";
       Service = {
@@ -41,11 +47,11 @@ in {
     };
 
     # Restart on switch to re-inject a changed patch.
-    steamFrame.userServices.restart = [ "steam-keyboard-patch.service" ];
+    steamFrame.session.services.restart = [ "steam-keyboard-patch.service" ];
   })
   # Disabled: stopping the helper reverts the patch right away.
-  (lib.mkIf (!config.steamFrame.steamKeyboardPatch.enable) {
-    steamFrame.userServices.stop = [ "steam-keyboard-patch.service" ];
+  (lib.mkIf (!cfg.enable) {
+    steamFrame.session.services.stop = [ "steam-keyboard-patch.service" ];
   })
   ];
 }

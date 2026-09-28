@@ -5,66 +5,98 @@
 # and private bus. `switch` usually runs from the nested desktop, where
 # home-manager's reloadSystemd is skipped ("User systemd daemon not running"),
 # so `steamFrameUserServices` does it against the outer session: always
-# daemon-reload, then start/stop/restart the units in `userServices`.
+# daemon-reload, then start/stop/restart the units in `session.services`.
 { config, lib, ... }:
 let
-  cfg = config.steamFrame;
+  cfg = config.steamFrame.session;
   units = lib.escapeShellArgs;
+  rename = from: to: lib.mkRenamedOptionModule ([ "steamFrame" ] ++ from) [ "steamFrame" "session" to ];
 in {
-  options.steamFrame = {
+  imports = [
+    (rename [ "runtimeDir" ] "runtimeDir")
+    (rename [ "userBus" ] "bus")
+  ] ++ map (n: lib.mkRenamedOptionModule
+    [ "steamFrame" "userServices" n ] [ "steamFrame" "session" "services" n ])
+    [ "start" "restart" "stop" ];
+
+  # Read-only, so no mkRenamedOptionModule (its alias definition would be a
+  # second one); reading the old name warns.
+  options.steamFrame.outerBusEnv = lib.mkOption {
+    type = lib.types.str;
+    readOnly = true;
+    visible = false;
+    default = lib.warn
+      "The option `steamFrame.outerBusEnv' has been renamed to `steamFrame.session.busEnv'."
+      cfg.busEnv;
+    defaultText = lib.literalExpression "config.steamFrame.session.busEnv";
+    description = "Alias of {option}`steamFrame.session.busEnv`.";
+  };
+
+  options.steamFrame.session = {
     runtimeDir = lib.mkOption {
       type = lib.types.str;
       default = "/run/user/1000";
       description = "XDG_RUNTIME_DIR of the outer (Steam/VR) session.";
     };
-    userBus = lib.mkOption {
+    bus = lib.mkOption {
       type = lib.types.str;
       default = "unix:path=${cfg.runtimeDir}/bus";
-      defaultText = lib.literalExpression ''"unix:path=''${config.steamFrame.runtimeDir}/bus"'';
+      defaultText = lib.literalExpression
+        ''"unix:path=''${config.steamFrame.session.runtimeDir}/bus"'';
       description = ''
         Outer session D-Bus address; the only bus that reaches the user
         systemd manager and the running kwalletd6.
       '';
     };
-    outerBusEnv = lib.mkOption {
+    busEnv = lib.mkOption {
       type = lib.types.str;
       readOnly = true;
-      default = "env DBUS_SESSION_BUS_ADDRESS=${cfg.userBus}";
-      defaultText = lib.literalExpression ''"env DBUS_SESSION_BUS_ADDRESS=''${config.steamFrame.userBus}"'';
+      default = "env DBUS_SESSION_BUS_ADDRESS=${cfg.bus}";
+      defaultText = lib.literalExpression
+        ''"env DBUS_SESSION_BUS_ADDRESS=''${config.steamFrame.session.bus}"'';
       description = ''
         Exec= prefix for launchers that must use the outer bus, e.g. so apps
-        in the nested desktop use the running kwalletd6 instead of a second one.
+        in the nested desktop use the running kwalletd6 instead of a second
+        one.
       '';
     };
-    userServices = {
+    services = {
       start = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         default = [ ];
         example = [ "docker.service" ];
-        description = "User units started on switch if not already running (outer user manager).";
+        description = ''
+          User units started on switch if not already running (outer user
+          manager).
+        '';
       };
       restart = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         default = [ ];
         example = [ "steam-keyboard-patch.service" ];
-        description = "User units restarted on every switch (outer user manager).";
+        description = ''
+          User units restarted on every switch (outer user manager).
+        '';
       };
       stop = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         default = [ ];
-        description = "User units stopped on switch if running (e.g. of a just-disabled feature).";
+        description = ''
+          User units stopped on switch if running (e.g. of a just-disabled
+          feature).
+        '';
       };
     };
   };
 
   config.home.activation.steamFrameUserServices = lib.hm.dag.entryAfter [ "reloadSystemd" ] (''
-    export XDG_RUNTIME_DIR=${lib.escapeShellArg cfg.runtimeDir} DBUS_SESSION_BUS_ADDRESS=${lib.escapeShellArg cfg.userBus}
+    export XDG_RUNTIME_DIR=${lib.escapeShellArg cfg.runtimeDir} DBUS_SESSION_BUS_ADDRESS=${lib.escapeShellArg cfg.bus}
     run /usr/bin/systemctl --user daemon-reload
-  '' + lib.optionalString (cfg.userServices.start != [ ]) ''
-    run /usr/bin/systemctl --user start ${units cfg.userServices.start}
-  '' + lib.optionalString (cfg.userServices.stop != [ ]) ''
-    run /usr/bin/systemctl --user stop ${units cfg.userServices.stop} || true
-  '' + lib.optionalString (cfg.userServices.restart != [ ]) ''
-    run /usr/bin/systemctl --user restart ${units cfg.userServices.restart}
+  '' + lib.optionalString (cfg.services.start != [ ]) ''
+    run /usr/bin/systemctl --user start ${units cfg.services.start}
+  '' + lib.optionalString (cfg.services.stop != [ ]) ''
+    run /usr/bin/systemctl --user stop ${units cfg.services.stop} || true
+  '' + lib.optionalString (cfg.services.restart != [ ]) ''
+    run /usr/bin/systemctl --user restart ${units cfg.services.restart}
   '');
 }

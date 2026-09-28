@@ -8,7 +8,13 @@ let
   sys = "/usr/share/xdg-desktop-portal/gamescope-portals";
   dir = "xdg-desktop-portal/gamescope-portals";
 in {
-  options.steamFrame.portalFix.enable = lib.mkOption {
+  imports = [
+    (lib.mkRenamedOptionModule
+      [ "steamFrame" "portalFix" "enable" ]
+      [ "steamFrame" "session" "portalFix" "enable" ])
+  ];
+
+  options.steamFrame.session.portalFix.enable = lib.mkOption {
     type = lib.types.bool;
     default = true;
     description = ''
@@ -17,7 +23,7 @@ in {
     '';
   };
 
-  config = lib.mkIf config.steamFrame.portalFix.enable {
+  config = lib.mkIf config.steamFrame.session.portalFix.enable {
     xdg.dataFile."${dir}/holo.portal".source =
       config.lib.file.mkOutOfStoreSymlink "${sys}/holo.portal";
     xdg.dataFile."${dir}/gamescope.portal".source =

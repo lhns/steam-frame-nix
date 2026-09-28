@@ -4,10 +4,15 @@
 # (next session start).
 { config, lib, ... }:
 let
-  cfg = config.steamFrame;
+  cfg = config.steamFrame.keyboard;
 in {
-  options.steamFrame = {
-    keyboardLayout = lib.mkOption {
+  imports = [
+    (lib.mkRenamedOptionModule [ "steamFrame" "keyboardLayout" ] [ "steamFrame" "keyboard" "layout" ])
+    (lib.mkRenamedOptionModule [ "steamFrame" "keyboardVariant" ] [ "steamFrame" "keyboard" "variant" ])
+  ];
+
+  options.steamFrame.keyboard = {
+    layout = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
       example = "de";
@@ -15,7 +20,7 @@ in {
         XKB layout for the Steam session (XKB_DEFAULT_LAYOUT); null = US.
       '';
     };
-    keyboardVariant = lib.mkOption {
+    variant = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
       example = "nodeadkeys";
@@ -23,12 +28,12 @@ in {
     };
   };
 
-  config = lib.mkIf (cfg.keyboardLayout != null || cfg.keyboardVariant != null) {
+  config = lib.mkIf (cfg.layout != null || cfg.variant != null) {
     xdg.configFile."systemd/user/gamescope-session.service.d/keyboard.conf".text =
       "[Service]\n"
-      + lib.optionalString (cfg.keyboardLayout != null)
-        "Environment=XKB_DEFAULT_LAYOUT=${cfg.keyboardLayout}\n"
-      + lib.optionalString (cfg.keyboardVariant != null)
-        "Environment=XKB_DEFAULT_VARIANT=${cfg.keyboardVariant}\n";
+      + lib.optionalString (cfg.layout != null)
+        "Environment=XKB_DEFAULT_LAYOUT=${cfg.layout}\n"
+      + lib.optionalString (cfg.variant != null)
+        "Environment=XKB_DEFAULT_VARIANT=${cfg.variant}\n";
   };
 }

@@ -1,5 +1,5 @@
 # The VR dashboard's "+" menu (non-Steam programs). Steam lists them in GLib
-# hash-table order (random-looking). Runtime patches in SharedJSContext, each
+# hash-table order (random-looking). Steam UI patches in SharedJSContext, each
 # registered only when its option is set, reverted when unset (next switch):
 # - order/: sorts ScanForInstalledNonSteamApps() by name;
 # - pinned-desktop/: hides Desktop in the list, pins a proxy above/below it;
@@ -26,14 +26,19 @@ let
     text = builtins.readFile ./launcher-menu/icon-fallbacks.sh;
   };
 in {
-  imports = [ ./steam-ui-patches.nix ];
+  imports = [
+    ./steam-ui-patches.nix
+    (lib.mkRenamedOptionModule
+      [ "steamFrame" "launcherMenu" "launchDebounce" ]
+      [ "steamFrame" "launcherMenu" "launchDebounceSeconds" ])
+  ];
 
   options.steamFrame.launcherMenu = {
     sort = lib.mkOption {
       type = lib.types.bool;
       default = false;
       description = ''
-        Sort the "+" menu (non-Steam programs) by name. Runtime patch.
+        Sort the "+" menu (non-Steam programs) by name. Steam UI patch.
       '';
     };
     pinDesktop = lib.mkOption {
@@ -43,7 +48,7 @@ in {
       description = ''
         Pin "Desktop" (the nested Plasma session) above ("top") or below
         ("bottom") the "+" menu's scrolling list, so it is always visible;
-        null = normal list entry. Runtime patch.
+        null = normal list entry. Steam UI patch.
       '';
     };
     closeOnLaunch = lib.mkOption {
@@ -51,23 +56,24 @@ in {
       default = false;
       description = ''
         Close the "+" menu as soon as a program is launched (stock: it stays
-        open until the window appears, inviting double launches). Runtime patch.
+        open until the window appears, inviting double launches). Steam UI
+        patch.
       '';
     };
-    launchDebounce = lib.mkOption {
+    launchDebounceSeconds = lib.mkOption {
       type = lib.types.ints.unsigned;
       default = 0;
       example = 10;
       description = ''
         Ignore another "+" menu launch of the same command line within this
         many seconds of the last one that went through (logged); 0 = off.
-        Runtime patch.
+        Steam UI patch.
       '';
     };
     grid = {
       enable = lib.mkEnableOption ''
         the "+" menu's programs as a grid of tiles (icon, name below) instead
-        of a list. Runtime patch'';
+        of a list. Steam UI patch'';
       columns = lib.mkOption {
         type = lib.types.ints.between 1 8;
         default = 4;
@@ -93,8 +99,8 @@ in {
         List all programs in the "+" menu without Developer Mode (Steam
         otherwise hides konsole, systemsettings, dolphin, plasma-discover, vlc,
         firewall-config, cmake-gui, qrenderdoc, lxterminal, sh). Developer Mode
-        itself is untouched; hide single programs with steamFrame.hiddenApps.
-        Runtime patch.
+        itself is untouched; hide single programs with
+        steamFrame.launcherMenu.hiddenApps. Steam UI patch.
       '';
     };
     iconFallbacks = lib.mkOption {
@@ -179,16 +185,13 @@ in {
       };
       unpatch = ./launcher-menu/pinned-desktop/unpatch.js;
     }
-    ++ lib.optional (cfg.closeOnLaunch || cfg.launchDebounce > 0) {
+    ++ lib.optional (cfg.closeOnLaunch || cfg.launchDebounceSeconds > 0) {
       name = "launcher-menu-launch";
       target = sharedJSContext;
       patch = mkPatch {
         name = "launcher-menu-launch";
         src = ./launcher-menu/launch/patch.js;
-        opts = {
-          inherit (cfg) closeOnLaunch;
-          debounceSeconds = cfg.launchDebounce;
-        };
+        opts = { inherit (cfg) closeOnLaunch launchDebounceSeconds; };
       };
       unpatch = ./launcher-menu/launch/unpatch.js;
     }
