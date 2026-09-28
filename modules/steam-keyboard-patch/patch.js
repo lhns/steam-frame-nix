@@ -21,7 +21,7 @@
 // mkPatch patch (see lib/default.nix); no options. On a signature mismatch
 // it returns an error and changes nothing. Idempotent.
 ((find, sigs) => {
-  const VERSION = 11;
+  const VERSION = 14;
   const send = (msg) => window.__vrkbdKey && window.__vrkbdKey(msg);
   let mods;
   try {
@@ -80,24 +80,33 @@
   // is active, the key left of Backspace becomes Delete if it has no AltGr
   // character (German ´/`, US =/+; Steam would draw it empty). Also while a
   // Delete hold repeats: its first Delete releases a one-shot AltGr, like any
-  // key, but the held key stays until release.
+  // key, but the held key stays until release. It gets Backspace's key type
+  // (the dark special-key face and label style); the stylesheet gives it
+  // back the replaced key's flexible width.
   const DEL = 'VKX_Delete';
   const delLabel = () => {                         // Steam's own: Entf, Suppr, Canc, Del; English "Delete" -> Del
     let l = null;
     try { l = window.LocalizationManager?.LocalizeString?.('#Key_Delete'); } catch { /* not loaded */ }
     return typeof l === 'string' && l && l.length <= 5 ? l : 'Del';
   };
-  const freeOnAltGr = (x) => (Array.isArray(x) ? !x[2] : (typeof x === 'string' ? x : x?.key)?.length === 1);
+  const freeOnAltGr = (x) => first(x)?.type == null && (Array.isArray(x) ? !x[2] : (typeof x === 'string' ? x : x?.key)?.length === 1);
+  // Steam draws an [normal, shifted] entry as a bare empty key on AltGr,
+  // dropping its key type: German ^ (a Half key) grows to a full key. Keep
+  // its type with an empty AltGr entry.
+  const keepSize = (x) => (Array.isArray(x) && x.length < 3 && first(x)?.type != null
+    ? [x[0], x[1] ?? null, { key: '', label: '', type: first(x).type }] : x);
   const withDelete = (rows) => {
     const kb = window.__vrkbdRendering;
-    if (!kb || !(active(kb.state?.toggleStates?.AltGr) || kb.__vrkbdDelHold)) return rows;
+    const altGr = active(kb?.state?.toggleStates?.AltGr);
+    if (!kb || !(altGr || kb.__vrkbdDelHold)) return rows;
+    if (altGr) rows = rows.map((row) => row.map(keepSize));
     let done = false;
     return rows.map((row) => {
       const i = done ? -1 : row.findIndex((x) => !Array.isArray(x) && x?.key === 'Backspace');
       if (i < 0) return row;
       done = true;
       if (i < 1 || !freeOnAltGr(row[i - 1])) return row;
-      return [...row.slice(0, i - 1), { key: DEL, label: delLabel(), type: first(row[i - 1])?.type }, ...row.slice(i)];
+      return [...row.slice(0, i - 1), { key: DEL, label: delLabel(), type: row[i].type }, ...row.slice(i)];
     });
   };
   window.__vrkbdLayouts ??= new Set();             // for unpatch.js, incl. layouts disabled since
@@ -192,7 +201,12 @@
     // Arrow keys: smaller (still centered) icon and a small hint at the bottom edge.
     '[data-key^="Arrow"] span ~ span { font-size: 7px !important; top: auto !important; bottom: 3px !important; line-height: 1 !important; }',
     '[data-key^="Arrow"] span:first-child svg { height: 18px !important; }',
-    `${sel([...ALTGR_ARROWS.map((x) => x.key), DEL], ' span')} { font-size: 13px !important; }`,
+    `${sel(ALTGR_ARROWS.map((x) => x.key), ' span')} { font-size: 13px !important; }`,
+    // Delete: Backspace's look, the replaced character key's size (Steam: width 0,
+    // flex-grow 1), its label centred.
+    `[data-key="${DEL}"] { width: 0 !important; flex-grow: 1 !important; }`,
+    `[data-key="${DEL}"] > div { justify-content: center !important; text-align: center !important; }`,
+    `[data-key="${DEL}"] > div > span { margin: 0 !important; }`,
   ].join('\n');
 
   // ---- key handling ----------------------------------------------------------
