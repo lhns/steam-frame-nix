@@ -11,6 +11,7 @@ const [, , patchPath, unpatchPath, xdotool = 'xdotool'] = process.argv;
 const PATCH = readFileSync(patchPath, 'utf8');
 const UNPATCH = readFileSync(unpatchPath, 'utf8');
 let current = null;                               // CDP `call` of the live session, if any
+let stopping = false;
 const CDP = 'http://127.0.0.1:8080/json/list';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // :0 is the Steam session's Xwayland, where the VR app windows live.
@@ -64,7 +65,7 @@ function handle(msg) {
 }
 
 async function session() {
-  const list = await (await fetch(CDP)).json();
+  const list = await (await fetch(CDP, { signal: AbortSignal.timeout(3000) })).json();
   const t = list.find((x) => x.title === 'SharedJSContext');
   if (!t) throw new Error('SharedJSContext not found');
   const ws = new WebSocket(t.webSocketDebuggerUrl);
@@ -75,6 +76,7 @@ async function session() {
   });
   let last;                                       // logged when it changes (e.g. a signature error once, not every 15 s)
   const inject = async () => {
+    if (stopping) return;                         // never re-patch after the unpatch started
     const r = await call('Runtime.evaluate', { expression: PATCH, returnByValue: true });
     const v = r.result?.result?.value ?? r.result?.exceptionDetails?.exception?.description;
     if (v !== last || process.env.VRKBD_VERBOSE) console.log('inject:', v);
@@ -114,6 +116,8 @@ async function session() {
 }
 
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, async () => {
+  if (stopping) return;
+  stopping = true;
   releaseAll();
   if (current) {
     const r = await Promise.race([current('Runtime.evaluate', { expression: UNPATCH, returnByValue: true }), sleep(2000)]);

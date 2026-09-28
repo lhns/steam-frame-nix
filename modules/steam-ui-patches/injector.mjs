@@ -20,7 +20,8 @@
 // Patches must be idempotent expressions; their (awaited) result value is
 // logged when it changes, e.g. "patched" once, then "unchanged" silently.
 // On SIGTERM/SIGINT every live session evaluates its patches' unpatch
-// expressions (if any) (each with a timeout), then the process exits.
+// expressions (if any, each with a timeout) and injects nothing after that,
+// then the process exits.
 //
 // Persistent state ("state": true): one JSON value per patch, kept in
 // $XDG_STATE_HOME/steam-frame-nix/ui-patches/<name>.json (default
@@ -118,6 +119,7 @@ function open(endpoint, target, list) {
   const evaluate = (expression) => call('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
   const inject = async () => {
     for (const p of list) {
+      if (stopping) return;                       // never re-patch after the unpatch started
       if (p.state) await evaluate(prelude(p.name));
       const v = String(value(await evaluate(p.patch)));
       if (last.get(p.name) !== v && v !== 'unchanged') console.log(`${tag} ${p.name}: ${v}`);
