@@ -446,6 +446,46 @@
           "expects": ["SetDockLocation(e){", "SetJustFloatedFromDashboard("]
         }
       }
+    },
+    "vr-keyboard": {
+      "bundle": "steamui",
+      "modules": {
+        "vrStatus": {
+          "module": { "includes": ["get VRKeyboardStatus()"] },
+          "exports": { "holder": { "type": "object", "getters": ["VRKeyboardStatus"] } },
+          "expects": ["bIsOpen:", "sOverlayKey", "unAppID"]
+        },
+        "keyboardManager": {
+          "module": { "includes": ["SendClientPasteCommand(){", "HandleVirtualKeyDown(", "GetEnterKeyLabel("] },
+          "exports": { "VirtualKeyboardManager": { "type": "class", "protoMethods": ["HandleVirtualKeyDown"] } },
+          "expects": ["m_ActiveElementProps", "m_strDeadKeyPending"]
+        },
+        "keyboardComponent": {
+          "checkOnly": true,
+          "module": { "includes": ["TypeKeyInternal(", "m_mapTouched", "CancelLongPressTimer(){", "DismissLongPress(){", "ClearHoldTarget(){",
+            "toggleStates"] },
+          "expects": ["\"data-key\"", "\"data-key-row\"", "OnCommitText(", "OnForwardKeyEvent(", "HandleTouchEnd(", "ElementFromTouch("]
+        }
+      }
+    },
+    "vr-keyboard-panel": {
+      "bundle": "vrwebui-systemui",
+      "modules": {
+        "sgApp": {
+          "checkOnly": true,
+          "module": { "includes": ["window.SGApp=this", "addEmbeddedPanelUVs("] },
+          "expects": ["removeEmbeddedPanelUVs(", "t.forceLayoutUpdate=this.forceLayoutUpdate", "getEmbeddedIndex()"]
+        },
+        "keyboardMount": {
+          "checkOnly": true,
+          "module": { "includes": ["m_sKeyboardOverlayKey", "GrabHandleTint", "k_nKeyboardGrabTransformOffset"] },
+          "expects": ["mountedId", "m_nKeyboardFlags"]
+        },
+        "overlayKeys": {
+          "checkOnly": true,
+          "module": { "includes": ["\"valve.steam.gamepadui.keyboard\""] }
+        }
+      }
     }
   }
 }

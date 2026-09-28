@@ -16,6 +16,7 @@
       portal = ./modules/portal.nix;
       keyboard-layout = ./modules/keyboard-layout.nix;
       steam-keyboard-patch = ./modules/steam-keyboard-patch.nix;
+      vr-keyboard = ./modules/vr-keyboard.nix;
       hidden-apps = ./modules/hidden-apps.nix;
       steam-ui-patches = ./modules/steam-ui-patches.nix;
       launcher-menu = ./modules/launcher-menu.nix;
@@ -36,6 +37,21 @@
     homeManagerModules = modules // {
       default = { imports = builtins.attrValues modules; };
     };
+
+    # Tests of the VR keyboard (text model, corrector, swipe decoder on the
+    # default German + English dictionary): nix flake check
+    checks = nixpkgs.lib.genAttrs [ "aarch64-linux" "x86_64-linux" ] (system: {
+      vr-keyboard = (import ./modules/vr-keyboard/build.nix {
+        pkgs = nixpkgs.legacyPackages.${system};
+        dictionary = {
+          languages = map (l: l // { keepFrequentAbove = 4.0; }) [
+            { language = "de"; hunspell = "de_DE"; words = 60000; frequencyOffset = 0.0; }
+            { language = "en"; hunspell = "en_US"; words = 40000; frequencyOffset = -0.3; }
+          ];
+          contractions = true; extraWords = [ ]; extraWordsFrequency = 5.0; extraWordFiles = [ ]; excludeWords = [ ];
+        };
+      }).checks;
+    });
 
     # nix flake init -t github:lhns/steam-frame-nix
     templates.default = {
