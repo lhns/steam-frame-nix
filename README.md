@@ -208,7 +208,7 @@ without it.
 | `steamFrame.keyboard.vr.text.bufferChars` | int | `128` | Characters of typed text the keyboard remembers. |
 | `steamFrame.keyboard.vr.text.resetAfterIdleSeconds` | int | `30` | Forget it after this long without typing (`0`: never). |
 | `steamFrame.keyboard.vr.text.autoSpace` | bool | `true` | Space before a swiped word after a known non-space character. |
-| `steamFrame.keyboard.vr.suggestions.position` | `"below"`, `"above"`, `"inside"` | `"below"` | Suggestion strip: SteamVR panel below/above the keyboard, or over its number row. |
+| `steamFrame.keyboard.vr.suggestions.position` | `"below"`, `"above"`, `"inside"` | `"above"` | Suggestion strip: SteamVR panel below/above the keyboard, or over its number row. |
 | `steamFrame.keyboard.vr.suggestions.count` | int | `5` | Suggestions shown. |
 | `steamFrame.keyboard.vr.autocorrect.enable` | bool | `true` | Correction suggestions for finished tapped words not in the dictionary. |
 | `steamFrame.keyboard.vr.autocorrect.maxEditDistance` | int | `2` | Largest edit distance (neighbouring keys and swaps count 0.5). |

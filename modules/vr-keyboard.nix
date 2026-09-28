@@ -142,7 +142,7 @@ in {
     suggestions = {
       position = mkOption {
         type = types.enum [ "below" "inside" "above" ];
-        default = "below";
+        default = "above";
         description = ''
           Suggestion strip: a SteamVR dashboard panel "below" or "above" the
           keyboard, moving with it, or "inside" the keyboard over the number
