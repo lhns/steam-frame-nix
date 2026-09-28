@@ -28,7 +28,9 @@ let
   ffDir = "$HOME/.var/app/org.mozilla.firefox/config/mozilla/firefox";
   profileDir = "${ffDir}/${cfg.desktopProfile}";
 
-  defaultPrefs = cfg.prefs // lib.optionalAttrs cfg.vrFullscreenFix { "full-screen-api.ignore-widgets" = true; };
+  defaultPrefs = lib.optionalAttrs cfg.disableAv1 { "media.av1.enabled" = false; }
+    // lib.optionalAttrs cfg.vrFullscreenFix { "full-screen-api.ignore-widgets" = true; }
+    // cfg.prefs;
   desktopFix = cfg.enable && cfg.vrFullscreenFix && cfg.desktopProfile != null;
   # Only ever this one pref (profileSync relies on it).
   desktopKeys = [ "full-screen-api.ignore-widgets" ];
@@ -130,17 +132,24 @@ in {
         Steam session.
       '';
     };
+    disableAv1 = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Default media.av1.enabled to false: the Frame's decoder driver has no
+        AV1 (H.264, HEVC, VP9 only), so sites like YouTube send VP9/H.264,
+        decoded in hardware, instead of software-decoded AV1.
+      '';
+    };
     prefs = lib.mkOption {
       type = with lib.types; attrsOf (oneOf [ bool int str ]);
       default = { };
-      example = { "media.av1.enabled" = false; };
+      example = { "media.autoplay.default" = 5; };
       description = ''
-        about:config preferences for every profile (desktop one included),
-        as default values: about:config can still change them for a profile,
-        and removing one here leaves nothing behind. E.g. media.av1.enabled =
-        false: the Frame's decoder has no AV1, so sites like YouTube fall back
-        to VP9/H.264, which it decodes in hardware. Take effect at the next
-        start of Firefox.
+        Further about:config preferences for every profile (desktop one
+        included), as default values: about:config can still change them for
+        a profile, and removing one here leaves nothing behind. Override the
+        fixes above too. Take effect at the next start of Firefox.
       '';
     };
     desktopProfile = lib.mkOption {

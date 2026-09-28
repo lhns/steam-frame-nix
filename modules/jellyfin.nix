@@ -32,12 +32,19 @@ let
     override));
 in {
   options.steamFrame.jellyfin.hardwareDecoding = {
-    enable = lib.mkEnableOption ''
-      hardware video decoding (the Frame's V4L2 decoder) in the Jellyfin
-      Desktop Flatpak: device access for the sandbox (devices=all) and an
-      LD_PRELOAD shim that makes mpv try hwdec's value below. Without
-      nix-flatpak, home-manager owns the app's Flatpak override file. Takes
-      effect at the next start of Jellyfin'';
+    enable = lib.mkOption {
+      type = lib.types.bool;
+      default = lib.any (p: (if builtins.isString p then p else p.appId or null) == app)
+        (config.services.flatpak.packages or [ ]);
+      defaultText = lib.literalMD "`true` if nix-flatpak installs `org.jellyfin.JellyfinDesktop` (`services.flatpak.packages`), else `false`";
+      description = ''
+        Hardware video decoding (the Frame's V4L2 decoder) in the Jellyfin
+        Desktop Flatpak: device access for the sandbox (devices=all) and an
+        LD_PRELOAD shim that makes mpv try hwdec's value below. Without
+        nix-flatpak, home-manager owns the app's Flatpak override file. Takes
+        effect at the next start of Jellyfin.
+      '';
+    };
     hwdec = lib.mkOption {
       type = lib.types.strMatching "[^[:space:]]+";
       default = "v4l2m2m-copy,auto-copy";
