@@ -34,9 +34,13 @@
 // swallowed so its stock action doesn't run.
 // Contract with window-curvature (whose controls own press-and-drag): its
 // elements carry class sfui-curv-ctl; a drag there dispatches a bubbling
-// CustomEvent 'sfui-curv-dragstart' (cancels the long press before the ring
-// shows); once the ring shows, the long press takes over the press via
-// window.__sfuiWindowCurvature.cancelPress(). Neither reads the other's
+// CustomEvent 'sfui-curv-dragstart', which cancels the long press (a drag
+// always wins). When the ring shows, the press's drag threshold is raised to
+// CURV_RING_THRESHOLD x its own via
+// window.__sfuiWindowCurvature.scalePressDragThreshold(), still measured from
+// the press start: laser drift keeps the long press, a deliberate drag still
+// cancels it. On completion the long press takes the press over via
+// cancelPress() (no curvature click on release). Neither reads the other's
 // thresholds.
 //
 // Popup: its own scene-graph panel so the bar/menu panels don't change. The
@@ -59,7 +63,7 @@
 // setPlacement(name or "icon:N", 'bar' | 'menu' | null), reset().
 ((find, sigs, opts) => {
   const NAME = 'frame-controls';
-  const VERSION = 3;
+  const VERSION = 4;
   const T_SPACER = 1, T_ACTION = 2;
   const LS_KEY = 'sfui.frameControls.v1';
   // Action icon enums (sigs.controls anchors them): names for the options.
@@ -494,6 +498,7 @@
   // ---- long press --------------------------------------------------------------------
   const SVGNS = 'http://www.w3.org/2000/svg';
   const RING_DELAY = Math.min(1000, o.longPressMs / 2);
+  const CURV_RING_THRESHOLD = 3;                  // x window-curvature's drag threshold once the ring shows
   const curvApi = () => window.__sfuiWindowCurvature;
   let press = null;                               // { hit, t0, timer, ringTimer, ring, done, curv }
   let swallow = null;                             // { until, button }: the click after a completed long press
@@ -575,7 +580,7 @@
       hit.button.classList.add('sfui-fc-pressing');   // positioning context for the ring
       p.ringTimer = setTimeout(() => {
         if (press !== p || p.done) return;
-        if (p.curv) curvApi()?.cancelPress?.();       // the long press takes the press over
+        if (p.curv) curvApi()?.scalePressDragThreshold?.(CURV_RING_THRESHOLD);   // drift keeps the hold, a drag still wins
         p.ring = showRing(p);
       }, RING_DELAY);
       return;

@@ -47,24 +47,31 @@
 // Contract with other patches (e.g. frame-controls' long press); this patch
 // owns press-and-drag on its controls:
 //   - Every element it drives has the class `sfui-curv-ctl`.
-//   - When a press becomes a drag (opts.dragThresholdPixels px vertical) it
-//     dispatches a bubbling CustomEvent `sfui-curv-dragstart` on the element
-//     (detail { frameID, where: 'menu' | 'bar' }); when that drag ends
-//     (release or cancelPress), `sfui-curv-dragend`.
+//   - When a press becomes a drag (opts.dragThresholdPixels px vertical from
+//     where the press started) it dispatches a bubbling CustomEvent
+//     `sfui-curv-dragstart` on the element (detail { frameID, where: 'menu' |
+//     'bar' }); when that drag ends (release or cancelPress),
+//     `sfui-curv-dragend`.
+//   - window.__sfuiWindowCurvature.scalePressDragThreshold(factor) sets the
+//     current press's threshold to factor x opts.dragThresholdPixels, still
+//     measured from the press start, so small laser drift doesn't start a
+//     drag while a deliberate one still does; returns whether it applied
+//     (a press that is not yet a drag). The next press starts at 1x.
 //   - window.__sfuiWindowCurvature.cancelPress() ends the current press
 //     without its click (a drag keeps its value); returns whether a press
 //     was active.
 // A patch with its own gesture on these elements lets mousemove through while
-// undecided, drops its gesture on `sfui-curv-dragstart`, and calls
-// cancelPress() when it takes the press over. Neither side reads the other's
-// thresholds or restores the other's state.
+// undecided, drops its gesture on `sfui-curv-dragstart`, may raise the
+// threshold with scalePressDragThreshold() while its gesture is under way,
+// and calls cancelPress() when it takes the press over. Neither side reads
+// the other's thresholds or restores the other's state.
 //
 // Debugging: window.__sfuiWindowCurvature: dump(), hits (rewrite/haptic
 // counters), log, setValue(frameID, v), controls(), cancelPress(),
-// dragValue(v0, dy, ppu, cur).
+// scalePressDragThreshold(factor), pressing, dragValue(v0, dy, ppu, cur).
 ((find, sigs, opts, hooks) => {
   const NAME = 'window-curvature';
-  const VERSION = 19;
+  const VERSION = 20;
   const FLAT = 999;                               // origin distances >= this are "flat"
   const ICON_OFF = 40, ICON_ON = 39;              // Toggle Curvature action icons (sigs.curvatureAction)
   const HAPTIC = { Snap: 3, Sliding: 4, SlidingEdge: 5 };   // EOverlayHapticEffect (sigs.hapticEffects)
@@ -338,11 +345,12 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
   // Presses/clicks are stopped at the element so React (root listener) never
   // runs the stock onClick; a press that never became a drag is a click on
   // mouseup. Drag is vertical and relative (the cylinder bends horizontally,
-  // so y barely moves as curvature changes); after dragThresholdPixels px it
+  // so y barely moves as curvature changes); past the press's threshold
+  // (dragThresholdPixels, or as scaled by scalePressDragThreshold) it
   // re-bases (no jump). One press at a time, window capture listeners.
   const stop = (e) => e.stopPropagation();
   const STOPPED = ['click', 'dblclick', 'mouseup', 'pointerdown', 'pointerup', 'contextmenu'];
-  let press = null;                               // { c, y0, v0, last, moved }
+  let press = null;                               // { c, y0, v0, last, moved, threshold }
 
   const emit = (c, type) => {
     try {
@@ -359,7 +367,7 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
     const y = e.clientY;
     p.last = y;
     if (!p.moved) {
-      if (Math.abs(y - p.y0) < o.dragThresholdPixels) return;
+      if (Math.abs(y - p.y0) < p.threshold) return;
       p.moved = true;
       muteStock = true;
       p.c.el?.classList.add('sfui-dragging');
@@ -401,7 +409,7 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
     const f = FS.GetFrame(c.fid);
     if (e.button !== 0 || !f) return;
     endPress('new press');
-    press = { c, y0: e.clientY, last: e.clientY, v0: shown(f), moved: false };
+    press = { c, y0: e.clientY, last: e.clientY, v0: shown(f), moved: false, threshold: o.dragThresholdPixels };
     window.addEventListener('mousemove', onMove, true);
     window.addEventListener('mouseup', onUp, true);
   };
@@ -536,8 +544,15 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
     version: VERSION, id, opts: o, hits, log: logBuf, state: S, teardown, check, dump, dragValue,
     setValue: (fid, v) => { const f = FS.GetFrame(fid); if (f) setValue(f, v, 'api'); return f ? shown(f) : 'no frame'; },
     cancelPress: () => endPress('cancelled'),
+    scalePressDragThreshold: (factor) => {
+      const p = press;
+      if (!p || p.moved || !(factor >= 0 && Number.isFinite(factor))) return false;
+      p.threshold = factor * o.dragThresholdPixels;
+      log('press drag threshold', { frame: p.c.fid, where: p.c.where, px: p.threshold });
+      return true;
+    },
     controls: () => [...controls.values()].map((c) => ({ frame: c.fid, where: c.where, connected: !!c.el?.isConnected })),
-    get pressing() { return press && { frame: press.c.fid, where: press.c.where, dragging: press.moved }; },
+    get pressing() { return press && { frame: press.c.fid, where: press.c.where, dragging: press.moved, threshold: press.threshold }; },
   };
   window.__sfuiWindowCurvature = state;
   log('patched', { version: VERSION, opts: o });

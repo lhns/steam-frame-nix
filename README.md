@@ -706,11 +706,15 @@ window until SteamVR restarts. Debugging: `window.__sfuiWindowCurvature.dump()`
 every element the patch drives has class `sfui-curv-ctl`; when a press
 becomes a drag, a bubbling `CustomEvent` `sfui-curv-dragstart` (detail
 `{ frameID, where: 'menu' | 'bar' }`) is dispatched on it, and
-`sfui-curv-dragend` when it ends; `window.__sfuiWindowCurvature.cancelPress()`
-ends a press without its click. A patch with its own gesture lets
-`mousemove` through while undecided, drops its gesture on
-`sfui-curv-dragstart`, and calls `cancelPress()` when it takes the press
-over.
+`sfui-curv-dragend` when it ends;
+`window.__sfuiWindowCurvature.scalePressDragThreshold(factor)` sets the
+current press's drag threshold to `factor` × `dragThresholdPixels` (from the
+press start; returns whether it applied, i.e. a press that is not yet a
+drag); `window.__sfuiWindowCurvature.cancelPress()` ends a press without its
+click. A patch with its own gesture lets `mousemove` through while
+undecided, drops its gesture on `sfui-curv-dragstart`, may raise the
+threshold while its gesture is under way, and calls `cancelPress()` when it
+takes the press over.
 
 **Caveats:** found by signature (`window-curvature` in `signatures.json`);
 on mismatch the dashboard stays stock. Tested with SteamVR build 11008059.
@@ -742,8 +746,10 @@ steamFrame.dashboard.frameControls = {
 ```
 
 With [window curvature](#window-curvature-dashboardwindowcurvature), a drag
-before the ring shows adjusts curvature; once the ring shows, the long press
-wins. Debugging: `window.__sfuiFrameControls.dump()`, `.placement()`,
+on the curvature control adjusts curvature and cancels the long press, also
+after the ring shows; once the ring shows, the drag needs 3× the usual travel
+(`dragThresholdPixels`, counted from where the press started), so laser
+drift during the hold doesn't cancel it. Debugging: `window.__sfuiFrameControls.dump()`, `.placement()`,
 `.reset()` (forget choices), `.log`.
 
 **Limitations:** laser only (no right-click or thumbstick click reaches the
