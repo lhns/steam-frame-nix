@@ -2,7 +2,8 @@
 # - vrFullscreenFix: in the Steam session gamescope focuses a fullscreen X11
 #   window but never shows it (Firefox looks frozen). ignore-widgets keeps
 #   fullscreen inside the window. Profile names are random and $HOME isn't
-#   readable at eval time, so user.js is linked into each profile on switch.
+#   readable at eval time, so user.js is written into each profile on switch
+#   (a copy: /nix isn't visible in the Flatpak sandbox, a store link dangles).
 # - desktopProfile: the sessions have separate buses/displays, so a second
 #   Firefox can't reach the running one and hits the profile lock; the nested
 #   desktop gets its own profile (no fullscreen fix: fullscreen works there).
@@ -12,7 +13,8 @@
 { config, pkgs, lib, ... }:
 let
   cfg = config.steamFrame.firefox;
-  toUserJs = name: prefs: pkgs.writeText name (lib.concatStrings (lib.mapAttrsToList
+  marker = "// Managed by steam-frame-nix (steamFrame.firefox); rewritten on switch.";
+  toUserJs = name: prefs: pkgs.writeText name (marker + "\n" + lib.concatStrings (lib.mapAttrsToList
     (k: v: "user_pref(${builtins.toJSON k}, ${builtins.toJSON v});\n") prefs));
   vrPrefs = cfg.prefs // lib.optionalAttrs cfg.vrFullscreenFix { "full-screen-api.ignore-widgets" = true; };
   userJs = toUserJs "firefox-user.js" vrPrefs;
@@ -73,19 +75,22 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    # Linked into every existing profile (profile names are random); an empty
-    # user.js is harmless and keeps turning prefs off revertible.
+    # Written into every existing profile (profile names are random); a
+    # user.js with no prefs is harmless and keeps turning prefs off revertible.
+    # Ours: a symlink (older versions) or a file starting with the marker.
     home.activation.firefoxUserJs =
       (lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         for prof in "${ffDir}"/*/; do
           [ -f "$prof/prefs.js" ] || continue            # only real profiles
           ${pickUserJs}
           target="$prof/user.js"
-          if [ -e "$target" ] && [ ! -L "$target" ]; then
+          if [ -e "$target" ] && [ ! -L "$target" ] && [ "$(head -n1 "$target")" != ${lib.escapeShellArg marker} ]; then
             echo "firefox: skipping $target (not managed by us, move it away to adopt)"
             continue
           fi
-          run ln -sfn "$js" "$target"
+          cmp -s "$js" "$target" && [ ! -L "$target" ] && continue
+          run rm -f "$target"
+          run install -m644 "$js" "$target"
         done
       '');
 
