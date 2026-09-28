@@ -10,21 +10,39 @@
 # Tested with Steam client 1790377368.
 #
 # iconFallbacks (not a patch): Steam resolves Icon= names only in hicolor (and
-# pixmaps), so Breeze-only icons (Konsole, KDE System Settings) are missing;
-# icon-fallbacks.sh links them from nixpkgs' Breeze into
-# ~/.local/share/icons/hicolor on switch. It was a list of names until 2026-09;
-# a list now fails with a pointer to enable/extra.
+# pixmaps), so Breeze-only icons (Konsole, KDE System Settings) are missing.
+# Home Manager links a fixed list of them from nixpkgs' Breeze into
+# ~/.local/share/icons/hicolor/scalable/apps (a missing name fails the
+# build); on switch, icon-fallbacks.sh --suggest only prints hints (names to
+# add, names no longer needed), and hicolor's mtime is bumped when the list
+# changed so a running Steam rescans. Until 2026-09 a script made the links
+# on switch (removed by steam-frame-nix-cleanup, or before checkLinkTargets
+# where Home Manager takes over). iconFallbacks was a list of names until
+# 2026-09; a list fails with a pointer to enable/extra (until ~2026-12).
 { config, lib, pkgs, ... }:
 let
   cfg = config.steamFrame.launcherMenu;
   inherit (import ./lib { inherit pkgs; }) mkPatch;
   sharedJSContext = { title = "SharedJSContext"; };
 
-  iconFallbacks = pkgs.writeShellApplication {
+  iconSuggest = pkgs.writeShellApplication {
     name = "steam-frame-icon-fallbacks";
     runtimeInputs = [ pkgs.coreutils pkgs.findutils pkgs.gawk ];
     text = builtins.readFile ./launcher-menu/icon-fallbacks.sh;
   };
+
+  breezeApps = "${pkgs.kdePackages.breeze-icons}/share/icons/breeze/apps";
+  defaultIcons = [ "utilities-terminal" "preferences-system" ];
+  icons = lib.optionals cfg.iconFallbacks.enable (lib.unique (defaultIcons ++ cfg.iconFallbacks.extra));
+  # The largest Breeze app icon (all SVG); fails the build if there is none.
+  breezeIcon = name: pkgs.runCommand "icon-fallback-${name}.svg" { } ''
+    for size in 64 48 32 24 22 16; do
+      if [ -e ${breezeApps}/$size/${name}.svg ]; then ln -s ${breezeApps}/$size/${name}.svg $out; exit 0; fi
+    done
+    echo "steamFrame.launcherMenu.iconFallbacks: Breeze has no app icon \"${name}\" (${breezeApps}/<size>/${name}.svg)" >&2
+    exit 1
+  '';
+  iconDir = "${lib.removePrefix "${config.home.homeDirectory}/" config.xdg.dataHome}/icons/hicolor";
 in {
   imports = [
     ./cleanup.nix
@@ -119,12 +137,12 @@ in {
               type = lib.types.bool;
               default = true;
               description = ''
-                On switch, for each Icon= of the desktop entries Steam sees
-                that hicolor lacks but nixpkgs' Breeze has (SteamOS:
-                utilities-terminal, preferences-system), link the Breeze SVG
-                into ~/.local/share/icons/hicolor/scalable/apps. Only its own
-                links (listed in ~/.local/state/steam-frame-nix/icon-fallbacks)
-                are touched; stale ones are removed; false removes all.
+                Link nixpkgs' Breeze SVGs of utilities-terminal and
+                preferences-system (SteamOS' Konsole and KDE System
+                Settings) and of `extra` into
+                ~/.local/share/icons/hicolor/scalable/apps (Home Manager
+                links). Each switch prints hints: icons Steam can't find
+                that Breeze has, and fallbacks hicolor has anyway.
               '';
             };
             extra = lib.mkOption {
@@ -132,8 +150,8 @@ in {
               default = [ ];
               example = [ "system-file-manager" ];
               description = ''
-                Extra icon names to provide (if hicolor lacks them); names
-                Breeze doesn't have are reported and skipped.
+                Further Breeze app icon names to provide; a name Breeze
+                doesn't have fails the build.
               '';
             };
             legacyList = lib.mkOption {
@@ -158,16 +176,30 @@ in {
     '';
   } ];
 
-  # After installPackages so the new profile counts; without BREEZE_APPS the
-  # script removes its links.
+  config.xdg.dataFile = lib.listToAttrs (map (name: {
+    name = "icons/hicolor/scalable/apps/${name}.svg";
+    value.source = breezeIcon name;
+  }) icons);
+
+  # The script's links of 2026-09 where Home Manager links now.
+  config.steamFrame.cleanup.migrateLinks = map (name: {
+    path = "${iconDir}/scalable/apps/${name}.svg";
+    target = "/nix/store/*-breeze-icons-*/share/icons/breeze/apps/*";
+  }) icons;
+
+  # GTK (Steam) rescans an icon theme only when a theme dir's mtime changes:
+  # bump hicolor's when the links changed. After installPackages so the new
+  # profile counts for the hints.
   config.home.activation.steamFrameIconFallbacks =
-    lib.hm.dag.entryAfter [ "writeBoundary" "installPackages" ] (
-      if cfg.iconFallbacks.enable then ''
-        run env BREEZE_APPS=${pkgs.kdePackages.breeze-icons}/share/icons/breeze/apps \
-          ${lib.getExe iconFallbacks} ${lib.escapeShellArgs cfg.iconFallbacks.extra}
-      '' else ''
-        run ${lib.getExe iconFallbacks}
-      '');
+    lib.hm.dag.entryAfter [ "writeBoundary" "linkGeneration" "installPackages" ] (''
+      apps=${lib.escapeShellArg "${iconDir}/scalable/apps"}
+      if [[ -d $HOME/${lib.escapeShellArg iconDir} ]] &&
+         [[ "$(ls "''${oldGenPath:-/nonexistent}/home-files/$apps" 2>/dev/null)" != "$(ls "$newGenPath/home-files/$apps" 2>/dev/null)" ]]; then
+        run touch "$HOME"/${lib.escapeShellArg iconDir}
+      fi
+    '' + lib.optionalString cfg.iconFallbacks.enable ''
+      BREEZE_APPS=${breezeApps} ${lib.getExe iconSuggest} --suggest ${lib.escapeShellArgs icons} || true
+    '');
 
   config.steamFrame.uiPatches.patches =
     lib.optional cfg.sort {

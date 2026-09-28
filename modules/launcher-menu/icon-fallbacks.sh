@@ -1,16 +1,19 @@
 # shellcheck shell=bash
-# Hicolor fallbacks for desktop entry icons that only Breeze has.
-# Usage: steam-frame-icon-fallbacks [EXTRA_NAME...]
-#   BREEZE_APPS=<breeze-icons>/share/icons/breeze/apps: link each Icon= name
-#     (of the entries Steam sees, plus EXTRA_NAMEs) that no hicolor dir has
-#     but Breeze does as $XDG_DATA_HOME/icons/hicolor/scalable/apps/<name>.svg.
-#   BREEZE_APPS unset: remove the links made before.
-# Only links listed in the manifest and still pointing into breeze-icons are
-# ever removed.
+# Hints for launcherMenu.iconFallbacks; read-only.
+# Usage: BREEZE_APPS=<breeze-icons>/share/icons/breeze/apps \
+#          steam-frame-icon-fallbacks --suggest [CONFIGURED_NAME...]
+# Prints
+# - Icon= names of the desktop entries Steam sees that no hicolor dir (nor
+#   pixmaps) has but Breeze does, and that aren't configured: candidates for
+#   iconFallbacks.extra;
+# - configured names that hicolor has anyway (apart from our links): no
+#   longer needed.
+
+[[ ${1:-} == --suggest ]] || { echo "usage: steam-frame-icon-fallbacks --suggest [NAME...]" >&2; exit 2; }
+shift
+: "${BREEZE_APPS:?BREEZE_APPS is not set}"
 
 data_home=${XDG_DATA_HOME:-$HOME/.local/share}
-dest=$data_home/icons/hicolor/scalable/apps
-manifest=${XDG_STATE_HOME:-$HOME/.local/state}/steam-frame-nix/icon-fallbacks
 # Steam's data dirs (XDG_DATA_HOME, then its XDG_DATA_DIRS on SteamOS), not
 # the caller's: switches usually run from the nested desktop session.
 data_dirs=(
@@ -24,29 +27,26 @@ data_dirs=(
 )
 shopt -s nullglob
 
-ours() { [[ -L $1 && $(readlink "$1") == /nix/store/*-breeze-icons-*/* ]]; }
+# Our fallbacks: links that end up in a Breeze store path.
+ours() { [[ -L $1 && $(readlink -f "$1") == /nix/store/*-breeze-icons-*/* ]]; }
 
-# Does Steam already find <name> (hicolor in any data dir, or pixmaps)?
-# Our own links don't count.
+# Where Steam finds <name> (hicolor in any data dir, or pixmaps), ours aside.
 resolves() {
   local d f
   for d in "$HOME/.icons" "${data_dirs[@]/%//icons}"; do
     for f in "$d"/hicolor/*/*/"$1".{png,svg,xpm}; do
-      ours "$f" || return 0
+      ours "$f" || { echo "$f"; return 0; }
     done
   done
   for d in "${data_dirs[@]}"; do
-    for f in "$d"/pixmaps/"$1".{png,svg,xpm}; do [[ ! -e $f ]] || return 0; done
+    for f in "$d"/pixmaps/"$1".{png,svg,xpm}; do [[ ! -e $f ]] || { echo "$f"; return 0; }; done
   done
   return 1
 }
 
-# Largest Breeze app icon for <name> (Breeze's app icons are all SVG).
-breeze() {
+in_breeze() {
   local size
-  for size in 64 48 32 24 22 16; do
-    if [[ -e $BREEZE_APPS/$size/$1.svg ]]; then echo "$BREEZE_APPS/$size/$1.svg"; return; fi
-  done
+  for size in 64 48 32 24 22 16; do [[ -e $BREEZE_APPS/$size/$1.svg ]] && return 0; done
   return 1
 }
 
@@ -64,60 +64,29 @@ entry_icon() {
   ' "$1"
 }
 
-# Wanted: extra names, and the icons of the entries Steam sees (the first
-# entry with a given desktop-file ID wins, like in the menu).
-declare -A wanted=() seen=()
-if [[ -n ${BREEZE_APPS:-} ]]; then
-  for name in "$@"; do wanted[$name]=extra; done
-  for d in "${data_dirs[@]}"; do
-    [[ -d $d/applications ]] || continue
-    while IFS= read -r -d '' f; do
-      id=${f#"$d/applications/"}; id=${id//\//-}
-      [[ -z ${seen[$id]:-} ]] || continue
-      seen[$id]=1
-      icon=$(entry_icon "$f")
-      [[ -z $icon ]] || wanted[$icon]=${wanted[$icon]:-$id}
-    done < <(find -L "$d/applications" -name '*.desktop' -print0 2>/dev/null)
-  done
-fi
+declare -A configured=() seen=() missing=()
+for name in "$@"; do configured[$name]=1; done
 
-changed=
-linked=()
-for name in "${!wanted[@]}"; do
-  resolves "$name" && continue
-  if ! src=$(breeze "$name"); then
-    [[ ${wanted[$name]} != extra ]] || echo "icon fallbacks: Breeze has no app icon \"$name\" (extra)" >&2
-    continue
-  fi
-  link=$dest/$name.svg
-  if [[ -e $link || -L $link ]] && ! ours "$link"; then continue; fi   # not ours
-  linked+=("$name")
-  [[ $(readlink "$link") == "$src" ]] && continue
-  mkdir -p "$dest"
-  ln -sfn "$src" "$link"
-  echo "icon fallbacks: linked $name (${wanted[$name]})"
-  changed=1
+# The entries Steam sees (the first with a given desktop-file ID wins, like
+# in the menu).
+for d in "${data_dirs[@]}"; do
+  [[ -d $d/applications ]] || continue
+  while IFS= read -r -d '' f; do
+    id=${f#"$d/applications/"}; id=${id//\//-}
+    [[ -z ${seen[$id]:-} ]] || continue
+    seen[$id]=1
+    icon=$(entry_icon "$f")
+    [[ -n $icon && -z ${configured[$icon]:-} && -z ${missing[$icon]:-} ]] || continue
+    if ! resolves "$icon" >/dev/null && in_breeze "$icon"; then missing[$icon]=${id%.desktop}; fi
+  done < <(find -L "$d/applications" -name '*.desktop' -print0 2>/dev/null)
 done
 
-# Remove links from earlier runs that are no longer wanted.
-if [[ -f $manifest ]]; then
-  while IFS= read -r name; do
-    [[ -n $name && " ${linked[*]} " != *" $name "* ]] || continue
-    if ours "$dest/$name.svg"; then
-      rm -f "$dest/$name.svg"
-      echo "icon fallbacks: removed $name"
-      changed=1
-    fi
-  done < "$manifest"
-fi
-
-if (( ${#linked[@]} )); then
-  mkdir -p "${manifest%/*}"
-  printf '%s\n' "${linked[@]}" | sort > "$manifest"
-else
-  rm -f "$manifest"
-fi
-
-# GTK rescans an icon theme only when a theme dir's mtime changes; bump it
-# so a running Steam sees the change.
-if [[ -n $changed && -d $data_home/icons/hicolor ]]; then touch "$data_home/icons/hicolor"; fi
+for icon in "${!missing[@]}"; do
+  echo "icon fallbacks: \"$icon\" (${missing[$icon]}) shows without icon in Steam's \"+\" menu; Breeze has it: add it to steamFrame.launcherMenu.iconFallbacks.extra"
+done
+for name in "${!configured[@]}"; do
+  if f=$(resolves "$name"); then
+    echo "icon fallbacks: \"$name\" is in hicolor anyway ($f); the fallback is no longer needed"
+  fi
+done
+exit 0
