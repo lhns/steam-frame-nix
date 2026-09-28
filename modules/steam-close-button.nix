@@ -9,10 +9,9 @@ in {
   imports = [ ./steam-ui-patches.nix ./steamvr-debugger.nix ];
 
   options.steamFrame.dashboard.steamCloseButton.enable = lib.mkEnableOption ''
-    a Close (X) button on the dashboard's Steam window: docks it back if it
-    was in the world, then switches to the last active other window, or
-    leaves only the dashboard bar (until a window is activated, e.g. via the
-    Steam tab). Dashboard patch; off removes it (next switch)'';
+    a Close (X) button on the dashboard's Steam window. It hides Steam
+    (previous window or just the bar) until shown explicitly, e.g. via the
+    Steam tab. Dashboard patch; off removes it (next switch)'';
 
   config = lib.mkIf cfg.enable {
     steamFrame.uiPatches.patches = [ {

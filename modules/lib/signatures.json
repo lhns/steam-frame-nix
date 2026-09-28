@@ -212,7 +212,7 @@
           "checkOnly": true,
           "module": { "includes": ["e[e.Alive=2]=\"Alive\""] },
           "expects": ["this.m_eState=", "this.closing=", "this.docking=", "this.tab=", "get isActiveDashboardFrame()",
-            "this.props="]
+            "this.props=", "get associatedSummonOverlayKeys()"]
         },
         "frameStore": {
           "checkOnly": true,
@@ -223,19 +223,29 @@
           "checkOnly": true,
           "module": { "includes": ["window.DashboardStore="] },
           "expects": ["_setActiveFrame(e,t){", "\"_setActiveFrame\"", "get mainSteamFrame()", "m_unMainSteamFrameID",
-            "get activeFrameID()", "get activeFrame()", "get visibilityState()", "get isFullyVisible()"]
+            "get activeFrameID()", "get activeFrame()", "get isFullyVisible()"]
         },
         "dashboard": {
           "checkOnly": true,
           "module": { "includes": ["window.Dashboard=this", "autoSwitchOverlayIfNeeded(){"] },
-          "expects": ["onShowOverlayRequestFromSteam(e){",
-            "SetImplementation(\"ShowOverlay\",(e=>{this.onShowOverlayRequestFromSteam(e)}))",
-            "this.autoSwitchOverlayIfNeeded()", "switchToFrameInternal(e,t,r){", "\"hideDashboard\"",
-            "visibleInDashboardBar"]
+          "expects": ["this.autoSwitchOverlayIfNeeded()", "switchToFrameInternal(e,t,r){", "\"hideDashboard\"",
+            "visibleInDashboardBar", "this.m_mailbox=",
+            "k_sDashboardOverlayDestroyedMessage=\"dashboard_overlay_destroyed\"",
+            "k_sDashboardOverlayDestroyedMessage,this.onDashboardOverlayDestroyed)",
+            "onDashboardOverlayDestroyed(e){", "&&this.switchToHomeOverlay()}",
+            "RegisterHandler(\"show_dashboard_requested\",(e=>this.showDashboardOverlay(",
+            "RegisterHandler(\"switch_dashboard_overlay_requested\",(e=>this.showDashboardOverlay(",
+            "overlayKey:null==e?void 0:e.overlay_key,sReason:null==e?void 0:e.reason"]
+        },
+        "mailbox": {
+          "checkOnly": true,
+          "module": { "includes": ["RegisterHandler(e,t){this.m_oHandlers[e]=t}"] },
+          "expects": ["this.m_oHandlers[t.type](t)"]
         },
         "docking": {
           "checkOnly": true,
-          "module": { "includes": ["get dockLocation()", "SetDockLocation(e"], "excludes": ["get associatedSummonOverlayKeys()"] }
+          "module": { "includes": ["get dockLocation()", "SetDockLocation(e"], "excludes": ["get associatedSummonOverlayKeys()"] },
+          "expects": ["sReason:\"SetDockLocation\""]
         },
         "overlayKeys": {
           "checkOnly": true,

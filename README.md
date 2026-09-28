@@ -557,29 +557,21 @@ own, and with no other window open the dashboard always shows it.
 
 **Fix:** a UI patch of SteamVR's dashboard (turns on the
 [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable)) gives the Steam
-window an X. Clicking it:
+window an X that hides Steam: it docks the window back if it was in the
+world, theater or on a hand, then shows the most recently active other
+dashboard window, or **just the dashboard bar** if there is none.
 
-- docks the window back into the dashboard if it was in the world, theater
-  or on a hand;
-- if it was active, switches to the most recently active other window with a
-  dashboard tab;
-- with none left, shows **just the dashboard bar** ("bar only").
+Steam stays hidden until you bring it back (Steam tab, a Steam menu pick,
+SteamVR asking for it): closing the active window, or a theater window,
+then goes to the previous window or the bar instead of Steam. This
+survives dashboard reopens and patch-service restarts; a SteamVR restart
+starts with Steam. Debugging: `window.__sfuiSteamClose.plan()` /
+`homePlan()` and `window.__sfuiSteamCloseState` in the `systemui` page.
 
-Bar-only survives closing/reopening the dashboard and patch-service restarts,
-and ends as soon as any window becomes active; after a SteamVR restart the
-dashboard starts with Steam again.
-
-Debugging: `window.__sfuiSteamClose.plan()` in the `systemui` page tells
-what a click would do; state is `window.__sfuiSteamCloseState`.
-
-**Limitations:**
-
-- If Steam doesn't send its automatic show request after a dashboard open,
-  the first Steam menu pick in bar-only is swallowed once.
-- Steam shown via SteamVR's `SwitchToDashboardOverlay` path ends bar-only.
-- No effect with a VRLink remote dashboard.
-- Turning the option off while bar-only leaves no active window until the
-  next tab click or dashboard open.
+**Limitations:** SteamVR's rarer "go home" paths (Now Playing after a game
+quits, message overlays) still show Steam; no effect with a VRLink remote
+dashboard; turning the option off while bar-only leaves no active window
+until the next tab click or dashboard open.
 
 **Caveats:** found by signature (`steam-close-button` in `signatures.json`);
 on mismatch the dashboard stays stock. Tested with SteamVR build 11008059.
