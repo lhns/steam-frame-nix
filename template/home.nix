@@ -30,8 +30,8 @@
   #     # All programs without Steam's Developer Mode (Konsole, KDE System
   #     # Settings, Dolphin, ... are hidden otherwise):
   #     showAllApps = true;
-  #     # Icon fallbacks for programs without an icon in the menu are on by
-  #     # default; names to provide in addition to what the scan finds:
+  #     # Icon fallbacks (Konsole, KDE System Settings) are on by default;
+  #     # further Breeze icon names (each switch suggests some):
   #     # iconFallbacks.extra = [ "system-file-manager" ];
   #     # Hidden from the menu (listed with Developer Mode or showAllApps):
   #     hiddenApps = [ "lxterminal" "cmake-gui" "firewall-config" "renderdoc" ];

@@ -6,8 +6,13 @@ work around quirks of the Frame's two graphical sessions (portal, keyboard
 layout, clipboard, Firefox), enable hardware video decoding in Jellyfin, and
 extend Steam's and SteamVR's UIs at runtime
 (VR keyboard, "+" menu, dashboard windows, Steam close button, window
-curvature, window controls). Everything is declarative and reverts by
-activating an older generation.
+curvature, window controls). Everything is declarative: files are links into
+the Nix store, UI patches live in memory. The few things that have to be
+written elsewhere at runtime are listed under
+[Changes outside Nix](#changes-outside-nix-exceptions), with their lifetime
+and what removes them; `steam-frame-nix-cleanup` removes every one of them
+(on each switch what the configuration no longer uses, `--all` for
+everything).
 
 All options live under `steamFrame.*`. The portal fix and clipboard sync are
 on by default; everything else is opt-in.
@@ -33,7 +38,8 @@ on by default; everything else is opt-in.
   [clipboard sync](#clipboard-sync-clipboardsyncenable),
   [Firefox](#firefox-firefox),
   [Jellyfin hardware decoding](#jellyfin-hardware-decoding-jellyfinhardwaredecoding)
-- [Rollback](#rollback)
+- [Changes outside Nix](#changes-outside-nix-exceptions) ·
+  [Rollback](#rollback) · [Uninstall](#uninstall)
 
 ## Install
 
@@ -68,11 +74,7 @@ curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- status      # Nix, gener
 curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- uninstall   # --keep-nix keeps Nix
 ```
 
-Uninstall stops the Home Manager user services (reverting the Steam keyboard
-patch), runs `home-manager uninstall`, then removes Nix and per-user Nix
-state, and the dashboard patches' saved state (see
-[Changes outside Nix](#changes-outside-nix)). Your configuration,
-`*.hm-backup-*` files, app data and Flatpaks stay.
+See [Uninstall](#uninstall) for what `uninstall` removes and keeps.
 
 Manual setup: `nix flake init -t github:lhns/steam-frame-nix`.
 
@@ -180,8 +182,9 @@ home-manager switch --flake .#steamos
 ```
 
 Individual modules:
-`homeManagerModules.{session,portal,keyboard-layout,steam-keyboard-patch,vr-keyboard,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox,jellyfin}`;
-`default` imports all.
+`homeManagerModules.{session,portal,keyboard-layout,steam-keyboard-patch,vr-keyboard,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,cleanup,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox,jellyfin}`;
+`default` imports all. Every module imports `cleanup` (see
+[Changes outside Nix](#changes-outside-nix-exceptions)).
 
 **Steam Developer Mode** (a Steam setting, not managed here) makes the "+"
 menu list every desktop entry; `launcherMenu.showAllApps` does the same
@@ -233,8 +236,8 @@ without it.
 | `steamFrame.launcherMenu.grid.columns` | int, 1-8 | `4` | Tiles per row (3 ≈ 92 px, 4 ≈ 68 px, 5 ≈ 53 px). |
 | `steamFrame.launcherMenu.grid.maxRows` | null or positive int | `null` | Visible rows, the rest scrolls; `null`: up to 600 px. |
 | `steamFrame.launcherMenu.showAllApps` | bool | `false` | List all programs without Developer Mode, see [Launcher menu](#launcher-menu-launchermenu). |
-| `steamFrame.launcherMenu.iconFallbacks.enable` | bool | `true` | Link Breeze icons into hicolor for entries Steam shows without icon, see [Icon fallbacks](#icon-fallbacks-launchermenuiconfallbacks). |
-| `steamFrame.launcherMenu.iconFallbacks.extra` | list of str | `[ ]` | Extra icon names to provide. |
+| `steamFrame.launcherMenu.iconFallbacks.enable` | bool | `true` | Breeze icons of Konsole and KDE System Settings in hicolor, so the "+" menu shows them, see [Icon fallbacks](#icon-fallbacks-launchermenuiconfallbacks). |
+| `steamFrame.launcherMenu.iconFallbacks.extra` | list of str | `[ ]` | Further Breeze app icon names to provide (a name Breeze lacks fails the build). |
 | `steamFrame.launcherMenu.hiddenApps` | list of str | `[ ]` | Desktop entry ids (no `.desktop`) hidden from the "+" and KDE menus. |
 | `steamFrame.dashboard.windows.maxScale` | null or positive number | `null` | Max resize scale of dashboard windows; `null`: stock (2), see [Dashboard windows](#dashboard-windows-dashboardwindows). |
 | `steamFrame.dashboard.windows.distance.{world,theater,dashboard}.{min,max}` | null or positive number (m) | `null` | Pull-in / push-back limits of grabbed windows; `null`: stock (world 0.25-5, theater 1-6, dashboard 0.3-4 m). |
@@ -254,16 +257,18 @@ without it.
 | `steamFrame.dashboard.frameControls.inBar` | list of control names | `[ ]` | Controls that start in the bar: `keyboard`, `float`, `dashboard`, `theater`, `dockLeft`, `dockRight`, `close`, `curvature`, `"icon:<n>"`. |
 | `steamFrame.dashboard.frameControls.inMenu` | list of control names | `[ ]` | Controls that start in the three-dot menu. |
 | `steamFrame.dashboard.frameControls.floatInTheater` | bool | `false` | "Float" control on theater windows. |
-| `steamFrame.steamvrDebugger.enable` | bool | automatic | SteamVR dashboard DevTools on `127.0.0.1:8087`; on when a dashboard patch is, see [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable). |
+| `steamFrame.steamvrDebugger.enable` | bool | automatic | SteamVR dashboard DevTools on `127.0.0.1:8087` (set only while SteamVR runs); on when a dashboard patch is, see [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable). |
 | `steamFrame.clipboardSync.enable` | bool | `true` | Clipboard bridge between the Steam session and the nested desktop. |
 | `steamFrame.clipboardSync.package` | package | built from `dnut/clipboard-sync` | The clipboard-sync package. |
 | `steamFrame.firefox.enable` | bool | `false` | Launcher for the Flathub Firefox Flatpak with the fixes below. |
 | `steamFrame.firefox.vrFullscreenFix` | bool | `true` | Default `full-screen-api.ignore-widgets` to `true` (not in the desktop profile). |
 | `steamFrame.firefox.disableAv1` | bool | `false` | Default `media.av1.enabled` to `false`: the Frame's decoder driver has no AV1, so sites send VP9/H.264, decoded in hardware. |
 | `steamFrame.firefox.prefs` | attrs of bool, int or str | `{ }` | Further `about:config` default values for every profile (override the fixes too). |
-| `steamFrame.firefox.desktopProfile` | null or str | `"desktop"` | Separate profile for the nested desktop; `null`: none. |
+| `steamFrame.firefox.desktopProfile` | null or str | `"desktop"` | Separate profile (directory name) for the nested desktop; `null`: the default profile in both sessions. |
 | `steamFrame.jellyfin.hardwareDecoding.enable` | bool | `false` | Hardware video decoding in the Jellyfin Desktop Flatpak, see [Jellyfin](#jellyfin-hardware-decoding-jellyfinhardwaredecoding). |
 | `steamFrame.jellyfin.hardwareDecoding.hwdec` | str | `"v4l2m2m-copy,auto-copy"` | mpv `hwdec` used instead of Jellyfin's automatic one. |
+| `steamFrame.jellyfin.hardwareDecoding.command` | str, read-only | | The `flatpak run …` command line of the desktop entry, for a terminal. |
+| `steamFrame.cleanup.package` | package, read-only | | `steam-frame-nix-cleanup` (on `PATH` too), see [Changes outside Nix](#changes-outside-nix-exceptions). |
 
 Renamed options still work under their old names, with a warning:
 
@@ -333,7 +338,7 @@ and the [Steam close button](#steam-close-button-dashboardsteamclosebuttonenable
 The file is user data, not generated by Nix: it is kept when the patch is
 disabled or removed (the choices come back when you enable it again) and
 removed only by `steam-frame-nix-cleanup --all` or `install.sh uninstall`;
-see [Changes outside Nix](#changes-outside-nix).
+see [Changes outside Nix](#changes-outside-nix-exceptions).
 
 **DevTools on the LAN:** Steam's Developer Mode enables
 `steam-web-debug-portforward` (`0.0.0.0:8081` → `8080`) and
@@ -624,16 +629,18 @@ CSS) are verified by the offline checker. Tested with Steam client
 `pixmaps`), so Konsole and KDE System Settings, whose icons only Breeze has,
 show without icon.
 
-**Fix:** on every switch, a script scans the desktop entries Steam sees and,
-for each icon name missing from hicolor but present in nixpkgs' Breeze app
-icons, links the Breeze SVG into
-`~/.local/share/icons/hicolor/scalable/apps/`. `extra` adds names regardless
-of the scan. Links are tracked in
-`~/.local/state/steam-frame-nix/icon-fallbacks`; stale ones are removed,
-`enable = false` removes all, and no other file is touched. A running Steam
-picks them up (the script bumps the icon dir's mtime). New programs get
-their fallback on the next switch.
+**Fix:** Home Manager links nixpkgs' Breeze SVGs of `utilities-terminal`
+and `preferences-system` (plus `extra`) into
+`~/.local/share/icons/hicolor/scalable/apps/`; a name Breeze doesn't have
+fails the build, `enable = false` provides none. When the set of links
+changes, the switch bumps the mtime of `~/.local/share/icons/hicolor`, so a
+running Steam rescans (GTK only rereads a theme whose directory changed).
+Each switch also prints hints: icons of programs Steam can't find that
+Breeze has (add them to `extra`), and fallbacks hicolor has anyway.
 
+Until 2026-09 a script made these links on switch and listed them in
+`~/.local/state/steam-frame-nix/icon-fallbacks`; the first switch replaces
+them with Home Manager's and `steam-frame-nix-cleanup` removes the rest.
 `iconFallbacks` used to be a list; a list now fails with a hint (use
 `extra`, or `enable = false` for `[ ]`).
 
@@ -801,11 +808,26 @@ Dashboard patches need SteamVR's DevTools port, opened only with
 8087). It is enabled automatically when any patch in
 `steamFrame.uiPatches.patches` uses port 8087.
 
-SteamVR rewrites `~/.config/openvr/config/steamvr.vrsettings` itself, so a
-oneshot merges just that key (with `jq`) before every SteamVR start.
-**The first time, restart SteamVR once** (e.g. reboot); until then
-`steam-ui-patches` keeps polling. Disabling resets the key at the next
-SteamVR start, but only if this module set it.
+SteamVR rewrites `~/.config/openvr/config/steamvr.vrsettings` from memory,
+so the key can't be a link and can't be edited while SteamVR runs. It is
+set only while SteamVR runs:
+
+- before every SteamVR start, the `steamvr-webhelper-debugger` oneshot
+  (a drop-in on `steamvr.service`) stores the key's value in
+  `~/.local/state/steam-frame-nix/steamvr-debugger.armed`, sets the key
+  (with `jq`) and writes a runtime drop-in,
+  `/run/user/1000/systemd/user/steamvr.service.d/50-steam-frame-nix-debugger.conf`,
+  whose `ExecStopPost=` runs a restore script next to it
+  (`/run/user/1000/steam-frame-nix/`, `/usr/bin` tools only);
+- when SteamVR stops, the key goes back to its previous value (removed if
+  it wasn't there) and `.armed` is removed.
+
+The runtime files don't need Nix, so this also works after a rollback or
+uninstall; they are gone at reboot. A key you set to `true` yourself is
+never touched. **The first time, restart SteamVR once** (e.g. reboot);
+until then `steam-ui-patches` keeps polling. Disabled, there is no unit;
+the switch restores the key if SteamVR is stopped, otherwise the runtime
+drop-in does when it stops.
 
 **Security:** the port listens on `127.0.0.1` only; keep Developer Mode off
 (see "DevTools on the LAN" in [UI patches](#ui-patches-uipatchespatches)).
@@ -848,7 +870,8 @@ associations keep working.
   also override the fixes above.
 - **`desktopProfile`:** the sessions can't see each other's Firefox, so a
   second instance stops at the locked profile; in the nested desktop the
-  launcher uses this separate profile.
+  launcher uses this separate profile (a normal Firefox profile with its
+  own browser data, created on first use).
 
 `prefs` and the fixes are *default* values (`pref()`), not user
 values: `about:config` can still change them per profile, and nothing is
@@ -859,15 +882,22 @@ the Flatpak is `/app/etc/firefox`, the mount point of the
 extension as a link from
 `~/.local/share/flatpak/extension/org.mozilla.firefox.systemconfig/aarch64/stable`
 to a store directory; Flatpak mounts it itself, so the sandbox doesn't get
-`/nix`. (A systemconfig extension of your own would conflict with it.) The
-desktop profile undoes the fullscreen fix with a `user.js` linked to
-`/app/etc/firefox/steam-frame-nix-desktop-user.js` (a sandbox path).
+`/nix`. (A systemconfig extension of your own would conflict with it.)
 Changes take effect at the next start of Firefox.
 
-Older versions copied a `user.js` into every profile; the copies and the
-values they left in `prefs.js` are removed on switch and before each launch,
-for each profile not in use at that moment. `user.js` files of your own are
-left alone.
+The desktop profile undoes the fullscreen fix only while its Firefox runs:
+the launcher links the profile's `user.js` to
+`/app/etc/firefox/steam-frame-nix-desktop-user.js` (a sandbox path) right
+before starting Firefox, waits for it, and once it has exited and the
+profile is no longer in use removes the link and the value Firefox stored
+from it in `prefs.js`. A second launch that just hands a URL to the running
+Firefox leaves both in place. A `user.js` of your own is never touched (the
+fix then stays on in that profile). After a crash, the next launch or
+`steam-frame-nix-cleanup` (on switch) removes them.
+
+Older versions linked or copied a `user.js` into every profile; those and
+the values they left in `prefs.js` are removed by `steam-frame-nix-cleanup`
+on switch, for each profile not in use at that moment.
 
 ### Jellyfin hardware decoding (`jellyfin.hardwareDecoding.*`)
 
@@ -883,27 +913,37 @@ Frame's hardware decoder is a V4L2 memory-to-memory device (`qcom-iris`,
   probing leaves out V4L2 M2M on purpose (its quality varies by SoC).
   Jellyfin has no way to pass mpv options.
 
-**Fix:** a Flatpak override with `devices=all`, and an `LD_PRELOAD` shim that
+**Fix:** device access (`devices=all`) and an `LD_PRELOAD` shim that
 rewrites an `hwdec` value starting with `auto` (set through libmpv's
-`mpv_set_*` functions) to `$SFN_MPV_HWDEC` (`hwdec`, set in the override);
-explicit values such as `no` stay. mpv tries the listed decoders in order and
+`mpv_set_*` functions) to `$SFN_MPV_HWDEC` (the `hwdec` option); explicit
+values such as `no` stay. mpv tries the listed decoders in order and
 falls back to software decoding per stream. With the default, 1080p H.264
 plays through `v4l2m2m-copy` at ~15-20 % CPU. The shim (a few libmpv
-wrappers, only libc) is preloaded from the Nix store: the override exposes
-its store path (only that one, read-only) to the sandbox. It would work for
-any libmpv app that sets `hwdec=auto*`, but only Jellyfin Desktop is set up
-here.
+wrappers, only libc) is preloaded from the Nix store; only its store path is
+exposed (read-only) to the sandbox. It would work for any libmpv app that
+sets `hwdec=auto*`, but only Jellyfin Desktop is set up here.
 
-The override goes through nix-flatpak's `services.flatpak.overrides` if
-[nix-flatpak](https://github.com/gmodena/nix-flatpak) is imported and
-enabled (merged with your own overrides there). Without it, home-manager
-owns `~/.local/share/flatpak/overrides/org.jellyfin.JellyfinDesktop` (a link
-to the store): overrides of your own for this app belong in Nix then;
-`flatpak override --user org.jellyfin.JellyfinDesktop ...` changes are
-replaced on the next switch.
+These are not written to Flatpak's overrides: a desktop entry shadowing the
+Flatpak's (`~/.local/share/applications/org.jellyfin.JellyfinDesktop.desktop`,
+same ID, so the KDE menu and the "+" menu start it) passes them as
+`flatpak run` options, so they apply to launches from that entry and are
+gone with it. From a terminal:
 
-Changes take effect at the next start of Jellyfin. Log
-(`flatpak run org.jellyfin.JellyfinDesktop` in a terminal):
+```sh
+flatpak run --branch=stable --arch=aarch64 --command=jellyfin-desktop \
+  --device=all --filesystem=<shim>:ro \
+  --env=LD_PRELOAD=<shim>/lib/mpv-hwdec-shim.so \
+  --env=SFN_MPV_HWDEC=v4l2m2m-copy,auto-copy org.jellyfin.JellyfinDesktop
+```
+
+(the exact line with the store path: `grep ^Exec=
+~/.local/share/applications/org.jellyfin.JellyfinDesktop.desktop`, or the
+read-only option `steamFrame.jellyfin.hardwareDecoding.command`). Older
+versions used a Flatpak override (via nix-flatpak or a Home Manager link);
+`steam-frame-nix-cleanup` removes their entries from it.
+
+Changes take effect at the next start of Jellyfin. Log (the command above
+in a terminal):
 `mpv-hwdec-shim: hwdec "auto-copy" -> "v4l2m2m-copy,auto-copy"`, then mpv's
 `Using hardware decoding (v4l2m2m-copy)`.
 
@@ -923,20 +963,110 @@ services.flatpak.packages = [ "org.jellyfin.JellyfinDesktop" ];
   decoder fails; for streams that decode with artifacts, disable the option
   (or set `hwdec = "auto-copy"`, Jellyfin's own value).
 
-## Changes outside Nix
+## Changes outside Nix (exceptions)
 
-Everything else is generated by Nix and linked from the store, or held in
-memory; these files are written at runtime and outlive a switch that turns
-the feature off:
+Everything not listed here is a Home Manager link into the Nix store or
+lives in memory (the UI patches). These are written at runtime:
 
-| Path | What, why | Cleanup |
-|---|---|---|
-| `~/.local/state/steam-frame-nix/ui-patches/<name>.json` | Choices made in the dashboard: window control bar placements (`frame-controls.json`), "Steam hidden" (`steam-close-button.json`). Written by `steam-ui-patches` because SteamOS's `steamvr.service` deletes `~/.cache/SteamVR` (the dashboard's own browser storage) on every SteamVR start. Kept when a feature is disabled (your choices come back when you re-enable it). | `steam-frame-nix-cleanup --all` (also run by `install.sh uninstall`) |
+| Path | Feature | Lifetime | Removed by |
+|---|---|---|---|
+| `VRWebHelper.DebuggerEnabled` in `~/.config/openvr/config/steamvr.vrsettings` | [SteamVR debugger](#steamvr-debugger-steamvrdebuggerenable) | only while SteamVR runs | SteamVR stopping (runtime drop-in below); `steam-frame-nix-cleanup` while SteamVR is stopped |
+| `~/.local/state/steam-frame-nix/steamvr-debugger.armed` | SteamVR debugger: the key's previous value | while SteamVR runs; after a power loss until the next SteamVR start or cleanup | SteamVR stopping; `steam-frame-nix-cleanup` |
+| `/run/user/1000/systemd/user/steamvr.service.d/50-steam-frame-nix-debugger.conf`, `/run/user/1000/steam-frame-nix/steamvr-debugger-restore` | SteamVR debugger: puts the key back when SteamVR stops, without Nix | until reboot (tmpfs) | reboot; `steam-frame-nix-cleanup` while SteamVR is stopped and the debugger is off |
+| `~/.local/state/steam-frame-nix/ui-patches/<name>.json` | [persistent state](#ui-patches-uipatchespatches) of dashboard patches: window control bar placements (`frame-controls`), "Steam hidden" (`steam-close-button`). SteamOS's `steamvr.service` deletes `~/.cache/SteamVR` (the dashboard's own browser storage) on every SteamVR start. | until removed: kept when a patch is disabled (the choices come back when you enable it again) | `steam-frame-nix-cleanup --all`, `install.sh uninstall` |
+| mtime of `~/.local/share/icons/hicolor` | [icon fallbacks](#icon-fallbacks-launchermenuiconfallbacks): a running Steam rescans icons | only the directory's timestamp | nothing to remove |
+
+**`steam-frame-nix-cleanup`** (`install.sh cleanup`) knows everything any
+version of steam-frame-nix wrote outside the store, removes only what is
+provably its own (everything else is reported as "left alone") and can be
+run again safely; `--dry-run` shows what it would do.
+
+- On every switch, `cleanup --orphans` removes what the configuration no
+  longer uses (never the saved patch state).
+- `steam-frame-nix-cleanup --all` removes everything, also the saved patch
+  state. SteamVR's key can't be changed while SteamVR runs: it is then left
+  to the runtime drop-in (restored when SteamVR stops).
+- Without Nix or after a rollback it runs from the script
+  (bash, coreutils, findutils, jq, all in SteamOS' `/usr/bin`):
+  `curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- cleanup --all`.
+- It also removes what older versions left: the icon fallback links and
+  their list (`~/.local/state/steam-frame-nix/icon-fallbacks`), the
+  debugger marker `steamvr-debugger`, Firefox `user.js` copies and links
+  and their `prefs.js` values, the Jellyfin hwdec entries of
+  `~/.local/share/flatpak/overrides/org.jellyfin.JellyfinDesktop` (an empty
+  override file too) and the old shim copy in
+  `~/.var/app/org.jellyfin.JellyfinDesktop`.
+
+### Only while running
+
+- The UI patches (Steam, SteamVR dashboard, VR keyboard) live in the pages'
+  memory; stopping `steam-ui-patches` / `steam-keyboard-patch` reverts them.
+- clipboard-sync runs from KDE autostart (a Home Manager link).
+- Firefox: the desktop profile's `user.js` link exists only while its
+  Firefox runs (see [Firefox](#firefox-firefox)).
+- Jellyfin: the hardware decoding permissions are `flatpak run` options of
+  the desktop entry, not a Flatpak override.
+
+### Set up by install.sh
+
+`install.sh install` (the bootstrap, not the modules) changes more, and
+`install.sh uninstall` undoes it:
+
+- Nix via [nix-installer](https://github.com/NixOS/nix-installer): `/nix`
+  (bind mount of `/home/nix`), files in `/etc` (systemd units, profile
+  scripts, `nix.conf`) and its receipt `/nix/receipt.json`; the read-only
+  root is unlocked only while it installs or uninstalls;
+- `experimental-features = nix-command flakes` in `~/.config/nix/nix.conf`
+  if Nix was already there without flakes;
+- `~/nix-config` (your configuration, a git repository) and the link
+  `~/.config/home-manager` to it; uninstall removes the link, never the
+  configuration;
+- dotfiles Home Manager found in its way, renamed to `*.hm-backup-<time>`
+  (kept by uninstall);
+- `~/.local/state/home-manager` and `~/.local/state/nix` (profiles,
+  generations), `~/.nix-profile`, `~/.nix-defexpr`, `~/.nix-channels`,
+  `~/.cache/nix`.
+
+### App data you create
+
+Not steam-frame-nix's to remove: the Firefox desktop profile
+(`~/.var/app/org.mozilla.firefox/config/mozilla/firefox/desktop`, browser
+data), and whatever apps keep in `~/.var/app/*`, Flatpak apps and their
+runtimes.
 
 ## Rollback
 
 `home-manager generations` lists previous generations; run
-`<store path>/activate` of the one you want.
+`<store path>/activate` of the one you want. Generations with
+steam-frame-nix clean up after themselves on activation (orphans). After
+rolling back to a generation **without** steam-frame-nix, or to one older
+than `steam-frame-nix-cleanup` (2026-09-29), remove what the newer one wrote
+outside the store:
+
+```sh
+curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- cleanup --all
+# or: nix run github:lhns/steam-frame-nix#cleanup -- --all
+```
+
+## Uninstall
+
+```sh
+curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- uninstall   # --keep-nix keeps Nix
+```
+
+stops Home Manager's user services (reverting the UI patches), runs
+`cleanup --all`, runs `home-manager uninstall`, then removes Nix and the
+per-user Nix state (see [Set up by install.sh](#set-up-by-installsh)). If
+SteamVR is running, its key is restored when SteamVR stops (the closing
+message says so). Your configuration, `*.hm-backup-*` files, app data and
+Flatpaks stay.
+
+To drop steam-frame-nix from a Home Manager configuration you keep, first
+run `steam-frame-nix-cleanup --all`, then remove it and switch. Or set Home
+Manager's `uninstall = true;` in the configuration that still imports
+steam-frame-nix and switch: its activation runs `cleanup --all` while Home
+Manager removes its files. (`home-manager uninstall` alone doesn't load
+steam-frame-nix's modules, so it can't clean up after them.)
 
 ## License
 
