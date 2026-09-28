@@ -257,7 +257,8 @@ without it.
 | `steamFrame.clipboardSync.enable` | bool | `true` | Clipboard bridge between the Steam session and the nested desktop. |
 | `steamFrame.clipboardSync.package` | package | built from `dnut/clipboard-sync` | The clipboard-sync package. |
 | `steamFrame.firefox.enable` | bool | `false` | Launcher for the Flathub Firefox Flatpak with the fixes below. |
-| `steamFrame.firefox.vrFullscreenFix` | bool | `true` | Link a `user.js` with `full-screen-api.ignore-widgets` into profiles. |
+| `steamFrame.firefox.vrFullscreenFix` | bool | `true` | Default `full-screen-api.ignore-widgets` to `true` (not in the desktop profile). |
+| `steamFrame.firefox.prefs` | attrs of bool, int or str | `{ }` | `about:config` default values for every profile, e.g. `{ "media.av1.enabled" = false; }`. |
 | `steamFrame.firefox.desktopProfile` | null or str | `"desktop"` | Separate profile for the nested desktop; `null`: none. |
 | `steamFrame.jellyfin.hardwareDecoding.enable` | bool | `false` | Hardware video decoding in the Jellyfin Desktop Flatpak, see [Jellyfin](#jellyfin-hardware-decoding-jellyfinhardwaredecoding). |
 | `steamFrame.jellyfin.hardwareDecoding.hwdec` | str | `"v4l2m2m-copy,auto-copy"` | mpv `hwdec` used instead of Jellyfin's automatic one. |
@@ -807,13 +808,34 @@ launcher shadows the Flatpak's own entry (same ID), so default-browser
 associations keep working.
 
 - **`vrFullscreenFix`:** gamescope never shows fullscreen windows, so
-  Firefox looks frozen. A `user.js` with `full-screen-api.ignore-widgets`
-  makes fullscreen fill just the window; it is linked into every profile
-  (existing non-symlink `user.js` files are left alone). **Remove when**
-  gamescope shows fullscreen X11 windows in VR.
+  Firefox looks frozen. `full-screen-api.ignore-widgets` makes fullscreen
+  fill just the window. **Remove when** gamescope shows fullscreen X11
+  windows in VR.
+- **`prefs`:** `about:config` values for every profile. E.g.
+  `"media.av1.enabled" = false`: the Frame's decoder has no AV1, so YouTube
+  and co. fall back to VP9/H.264, which it decodes in hardware.
 - **`desktopProfile`:** the sessions can't see each other's Firefox, so a
   second instance stops at the locked profile; in the nested desktop the
   launcher uses this separate profile.
+
+`prefs` and the fullscreen fix are *default* values (`pref()`), not user
+values: `about:config` can still change them per profile, and nothing is
+written to `prefs.js`, so removing one leaves nothing behind. Firefox reads
+default prefs from `defaults/pref/*.js` in its system config dir, which in
+the Flatpak is `/app/etc/firefox`, the mount point of the
+`org.mozilla.firefox.systemconfig` extension. home-manager provides that
+extension as a link from
+`~/.local/share/flatpak/extension/org.mozilla.firefox.systemconfig/aarch64/stable`
+to a store directory; Flatpak mounts it itself, so the sandbox doesn't get
+`/nix`. (A systemconfig extension of your own would conflict with it.) The
+desktop profile undoes the fullscreen fix with a `user.js` linked to
+`/app/etc/firefox/steam-frame-nix-desktop-user.js` (a sandbox path).
+Changes take effect at the next start of Firefox.
+
+Older versions copied a `user.js` into every profile; the copies and the
+values they left in `prefs.js` are removed on switch and before each launch,
+for each profile not in use at that moment. `user.js` files of your own are
+left alone.
 
 ### Jellyfin hardware decoding (`jellyfin.hardwareDecoding.*`)
 

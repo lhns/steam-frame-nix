@@ -54,6 +54,8 @@
   #     frameControls.enable = true;
   #   };
   #   firefox.enable = true;             # launcher for the Firefox Flatpak
+  #   # about:config defaults; the Frame decodes VP9/H.264 but not AV1:
+  #   firefox.prefs."media.av1.enabled" = false;
   #   # Hardware video decoding in the Jellyfin Desktop Flatpak (install
   #   # org.jellyfin.JellyfinDesktop yourself); gives it devices=all:
   #   jellyfin.hardwareDecoding.enable = true;
