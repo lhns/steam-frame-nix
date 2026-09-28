@@ -21,7 +21,7 @@
 // mkPatch patch (see lib/default.nix); no options. On a signature mismatch
 // it returns an error and changes nothing. Idempotent.
 ((find, sigs) => {
-  const VERSION = 17;
+  const VERSION = 19;
   const send = (msg) => window.__vrkbdKey && window.__vrkbdKey(msg);
   let mods;
   try {
@@ -97,13 +97,17 @@
     ? [x[0], x[1] ?? null, { key: '', label: '', type: first(x).type }] : x);
   // Without AltGr the free key shows Delete as its AltGr hint, drawn by
   // Steam like the others (e.g. } on 0): a third entry with an empty key
-  // (so it adds nothing to the long-press characters) and the label.
+  // (so it adds nothing to the long-press characters) and the label. The
+  // stylesheet makes it small (the arrow hints' 7px) on the same right edge
+  // and baseline, enabled by the class vrkbd-del-hint on the keyboard
+  // document while the current layout has such a key.
   const withDelete = (rows) => {
     const kb = window.__vrkbdRendering;
     if (!kb) return rows;
     const bsRow = rows.findIndex((row) => row.some((x) => !Array.isArray(x) && x?.key === 'Backspace'));
     const i = bsRow < 0 ? -1 : rows[bsRow].findIndex((x) => !Array.isArray(x) && x?.key === 'Backspace');
     const free = i >= 1 && freeOnAltGr(rows[bsRow][i - 1]);
+    try { kb.m_keyboardDiv?.ownerDocument?.documentElement.classList.toggle('vrkbd-del-hint', free); } catch { /* no document */ }
     const altGr = active(kb.state?.toggleStates?.AltGr);
     if (!(altGr || kb.__vrkbdDelHold)) {
       if (!free) return rows;
@@ -218,6 +222,11 @@
     `[data-key="${DEL}"] { width: 0 !important; flex-grow: 1 !important; }`,
     `[data-key="${DEL}"] > div { justify-content: center !important; text-align: center !important; }`,
     `[data-key="${DEL}"] > div > span { margin: 0 !important; }`,
+    // The Delete hint (Steam's AltGr hint span, last in the key face): 7px,
+    // bottom inset so its glyphs end where Steam's 9px } hint does (measured:
+    // Motiva Sans descent 0.24 em, } 0.094 em below the baseline).
+    `.vrkbd-del-hint [role="gridcell"]:has(+ [role="gridcell"] > [data-key="Backspace"]) > [data-key]:not([data-key="${DEL}"]) > div > span:last-child:not(:first-child) {` +
+      ' font-size: 7px !important; bottom: 4.42px !important; }',
   ].join('\n');
 
   // ---- key handling ----------------------------------------------------------
