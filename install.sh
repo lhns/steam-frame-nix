@@ -59,8 +59,9 @@ Commands:
 
   uninstall [--yes] [--keep-nix]
       Stop Home Manager's user services, uninstall Home Manager, uninstall
-      Nix (unless --keep-nix) and remove per-user Nix leftovers. Your
-      configuration directory is never deleted.
+      Nix (unless --keep-nix) and remove per-user Nix leftovers and the
+      dashboard patches' saved state (~/.local/state/steam-frame-nix/ui-patches).
+      Your configuration directory is never deleted.
 
   status
       Show Nix, Home Manager and user service state.
@@ -470,6 +471,10 @@ remove_leftovers() { # keep_nix
     fi
   fi
   remove_path "$state/home-manager"
+  # Saved state of the dashboard UI patches (steam-ui-patches, state = true).
+  # Only this subdirectory: the directory's other files have their own rules.
+  remove_path "$state/steam-frame-nix/ui-patches"
+  rmdir "$state/steam-frame-nix" 2>/dev/null || true
   if [[ -L $HM_CONFIG_LINK ]]; then
     info "$HM_CONFIG_LINK pointed to $(readlink "$HM_CONFIG_LINK")"
     remove_path "$HM_CONFIG_LINK"

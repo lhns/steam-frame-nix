@@ -5,7 +5,8 @@
 # 15 s, and runs the unpatches on stop; Steam's files are untouched.
 # It exists while `patches` is non-empty, restarts on every switch (the old
 # instance reverts removed patches) and is stopped once the list is empty.
-# Patch calling convention (mkPatch): lib/default.nix.
+# Patches with `state = true` get a persistent JSON value (injector.mjs:
+# "Persistent state"). Patch calling convention (mkPatch): lib/default.nix.
 { config, pkgs, lib, ... }:
 let
   cfg = config.steamFrame.uiPatches;
@@ -62,11 +63,24 @@ let
           safe on an unpatched page.
         '';
       };
+      state = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Give the patch one persistent JSON value (e.g. choices made in its
+          UI), kept by the service in
+          $XDG_STATE_HOME/steam-frame-nix/ui-patches/<name>.json across
+          SteamVR restarts and reboots: the page reads it with
+          `window.__sfuiStore.get(name)` and writes it with
+          `window.__sfuiStore.set(name, value)` (see injector.mjs). The file
+          is user data and stays when the patch is removed.
+        '';
+      };
     };
   };
 
   entry = p: {
-    inherit (p) name endpoint patch unpatch;
+    inherit (p) name endpoint patch unpatch state;
     target = lib.filterAttrs (_: v: v != null) p.target;
   };
 

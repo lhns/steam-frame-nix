@@ -25,7 +25,13 @@
 // frame, app window keys per app start). Effective: popup choice, else
 // opts.inBar/inMenu, else stock; a popup choice is dropped when that control's
 // option changes. State in window.__sfuiFrameControlsState (kept across
-// re-patch and unpatch) and localStorage (survives SteamVR restarts).
+// re-patch and unpatch), saved on every change through the injector's
+// persistent store (window.__sfuiStore, patch registered with state = true:
+// ~/.local/state/steam-frame-nix/ui-patches/frame-controls.json), which
+// seeds a fresh page (SteamVR restart, reboot, reload). localStorage can't
+// do that: steamvr.service deletes ~/.cache/SteamVR (vrwebhelper's profile)
+// on every start. Version 4's localStorage copy is read once as a fallback
+// (migration) and removed once the file has the state.
 //
 // Long press: the dashboard only gets primary-button laser input (no right
 // click; thumbstick click arrives as nothing). Holding changes nothing; the
@@ -63,9 +69,9 @@
 // setPlacement(name or "icon:N", 'bar' | 'menu' | null), reset().
 ((find, sigs, opts) => {
   const NAME = 'frame-controls';
-  const VERSION = 4;
+  const VERSION = 5;
   const T_SPACER = 1, T_ACTION = 2;
-  const LS_KEY = 'sfui.frameControls.v1';
+  const LS_KEY = 'sfui.frameControls.v1';        // version <= 4 (migration only)
   // Action icon enums (sigs.controls anchors them): names for the options.
   const NAMES = { keyboard: 22, float: 26, dashboard: 27, theater: 28, dockLeft: 29, dockRight: 30, close: 31, curvature: 40 };
   const ICON = { more: 38, float: 26, dashboard: 27 };
@@ -109,20 +115,28 @@
   prev?.teardown?.();                             // other version or options: back to stock first
 
   // ---- state + log -------------------------------------------------------------------
-  let S = window.__sfuiFrameControlsState;
+  const store = window.__sfuiStore;               // injector's persistent store (absent: in-page only)
+  let S = window.__sfuiFrameControlsState, restored = null;
   if (S?.schema !== 1) {
-    let saved = null;
-    try { saved = JSON.parse(localStorage.getItem(LS_KEY) ?? 'null'); } catch { /* none */ }
-    const ok = saved?.schema === 1;
-    S = window.__sfuiFrameControlsState = { schema: 1, placement: ok ? saved.placement ?? {} : {}, nixSeen: ok ? saved.nixSeen ?? {} : {}, log: [] };
+    let saved = store?.get(NAME), from = 'file';
+    if (saved?.schema !== 1) {
+      from = 'localStorage';
+      try { saved = JSON.parse(localStorage.getItem(LS_KEY) ?? 'null'); } catch { saved = null; }
+    }
+    const ok = saved?.schema === 1 && saved.placement && typeof saved.placement === 'object';
+    restored = ok ? from : 'nothing';
+    S = window.__sfuiFrameControlsState = { schema: 1, placement: ok ? { ...saved.placement } : {}, nixSeen: ok ? { ...saved.nixSeen } : {}, log: [] };
   }
   const logBuf = S.log ??= [];
   const log = (msg, data) => {
     logBuf.push({ t: new Date().toISOString().slice(11, 23), msg, ...(data !== undefined ? { data } : {}) });
     if (logBuf.length > 200) logBuf.splice(0, logBuf.length - 200);
   };
+  if (restored) log('state restored', { from: restored, popup: S.placement });
+  let unsaved = true;                             // last save not sent (no injector binding): retried by check()
   const save = () => {
-    try { localStorage.setItem(LS_KEY, JSON.stringify({ schema: 1, placement: S.placement, nixSeen: S.nixSeen })); } catch { /* in-page only */ }
+    unsaved = !store?.set?.(NAME, { schema: 1, placement: { ...S.placement }, nixSeen: { ...S.nixSeen } });
+    if (!unsaved) { try { localStorage.removeItem(LS_KEY); } catch { /* none */ } }
   };
   for (const k of new Set([...Object.keys(optMap), ...Object.keys(S.nixSeen)])) {
     if (S.nixSeen[k] !== optMap[k] && k in S.placement) {
@@ -610,6 +624,7 @@
     document.getElementById(STYLE_ID)?.remove();
   };
   const check = () => {
+    if (unsaved) save();
     if (findOurs()) return 'unchanged';
     install(); captureExisting(); applyAll();
     return 'patched (wrapper reinstalled)';

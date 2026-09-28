@@ -11,7 +11,8 @@
 //                    "endpoint": "http://127.0.0.1:8080",
 //                    "target": { "title": "SharedJSContext" }, // or titleRegex / urlRegex
 //                    "patch": "/nix/store/...-patch.js",
-//                    "unpatch": "/nix/store/...-unpatch.js" } ] }  // unpatch optional
+//                    "unpatch": "/nix/store/...-unpatch.js",   // optional
+//                    "state": true } ] }                        // optional, see below
 //
 // Every target (page of an endpoint's /json/list) matched by at least one
 // patch gets one DevTools session, which evaluates all of its patches: right
@@ -20,7 +21,22 @@
 // logged when it changes, e.g. "patched" once, then "unchanged" silently.
 // On SIGTERM/SIGINT every live session evaluates its patches' unpatch
 // expressions (if any) (each with a timeout), then the process exits.
-import { readFileSync } from 'node:fs';
+//
+// Persistent state ("state": true): one JSON value per patch, kept in
+// $XDG_STATE_HOME/steam-frame-nix/ui-patches/<name>.json (default
+// ~/.local/state/...), so it survives SteamVR restarts (steamvr.service wipes
+// ~/.cache/SteamVR, the pages' localStorage, on every start) and reboots.
+// Before each evaluation of such a patch a prelude defines, in the page,
+//   window.__sfuiStore.get(name)         the stored value (undefined: none)
+//   window.__sfuiStore.set(name, value)  store it (JSON; true if sent)
+// and seeds get(name) from the file only when the page has no value yet (a
+// fresh page after a SteamVR restart or reload): the page's value is
+// authoritative from then on. set() goes through the CDP binding
+// window.__sfuiStoreSave('{"name","value"}'), which this process writes to the
+// file (atomically, only on change, only for "state" patches of that target,
+// at most 64 KiB). The file is user data: nothing deletes it.
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const cfg = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 const POLL = cfg.pollMs ?? 5000;
@@ -28,6 +44,41 @@ const REINJECT = cfg.reinjectMs ?? 15000;
 const DEBOUNCE = cfg.debounceMs ?? 3000;
 const UNPATCH_TIMEOUT = cfg.unpatchTimeoutMs ?? 2000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const STATE_DIR = cfg.stateDir ?? join(process.env.XDG_STATE_HOME || join(process.env.HOME ?? '.', '.local/state'), 'steam-frame-nix/ui-patches');
+const STATE_MAX = 64 * 1024;
+const BINDING = '__sfuiStoreSave';
+
+// name -> JSON text of the stored value (absent: none), read once at start.
+const stored = new Map();
+const stateFile = (name) => join(STATE_DIR, `${name}.json`);
+function loadState(name) {
+  let text;
+  try { text = readFileSync(stateFile(name), 'utf8'); } catch { return; }   // none yet
+  try { stored.set(name, JSON.stringify(JSON.parse(text))); } catch (e) { console.error(`${name}: ignoring ${stateFile(name)}: ${e.message}`); }
+}
+function saveState(name, json) {
+  if (stored.get(name) === json) return false;
+  mkdirSync(STATE_DIR, { recursive: true });
+  const tmp = `${stateFile(name)}.tmp`;
+  writeFileSync(tmp, `${json}\n`);
+  renameSync(tmp, stateFile(name));
+  stored.set(name, json);
+  return true;
+}
+// Page side of the store (idempotent), seeding `name` if the page has no value.
+const prelude = (name) => `(() => {
+  const s = window.__sfuiStore ??= {
+    data: {},
+    get(n) { return this.data[n]; },
+    set(n, v) {
+      this.data[n] = v;
+      try { if (typeof window.${BINDING} !== 'function') return false; window.${BINDING}(JSON.stringify({ name: n, value: v })); return true; } catch { return false; }
+    },
+  };
+  const n = ${JSON.stringify(name)};
+  if (!(n in s.data) && ${stored.has(name)}) s.data[n] = ${stored.get(name) ?? 'undefined'};
+  return 'ok';
+})()`;
 
 const patches = cfg.patches.map((p) => {
   const t = p.target ?? {};
@@ -39,8 +90,10 @@ const patches = cfg.patches.map((p) => {
       (!titleRe || titleRe.test(x.title)) && (!urlRe || urlRe.test(x.url)),
     patch: readFileSync(p.patch, 'utf8'),
     unpatch: p.unpatch ? readFileSync(p.unpatch, 'utf8') : null,
+    state: !!p.state,
   };
 });
+for (const p of patches) if (p.state) loadState(p.name);
 
 const sessions = new Map();                       // "<endpoint> <target id>" -> session
 let stopping = false;
@@ -63,6 +116,7 @@ function open(endpoint, target, list) {
   const evaluate = (expression) => call('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
   const inject = async () => {
     for (const p of list) {
+      if (p.state) await evaluate(prelude(p.name));
       const v = String(value(await evaluate(p.patch)));
       if (last.get(p.name) !== v && v !== 'unchanged') console.log(`${tag} ${p.name}: ${v}`);
       last.set(p.name, v);
@@ -74,12 +128,23 @@ function open(endpoint, target, list) {
     console.log(`${tag} ${p.name} unpatch: ${value(r)}`);
   }));
   const session = { unpatch };
+  const stateful = new Set(list.filter((p) => p.state).map((p) => p.name));
+  const onSave = (payload) => {
+    try {
+      if (payload.length > STATE_MAX) throw new Error(`${payload.length} bytes, max ${STATE_MAX}`);
+      const { name, value: v } = JSON.parse(payload);
+      if (!stateful.has(name)) throw new Error(`no state for ${JSON.stringify(name)} here`);
+      if (v === undefined) throw new Error('no value');
+      if (saveState(name, JSON.stringify(v))) console.log(`${tag} ${name}: state saved`);
+    } catch (e) { console.error(`${tag} state save refused: ${e.message}`); }
+  };
   sessions.set(key, session);
 
   ws.onopen = async () => {
     connected = true;
     console.log(`${tag} connected (${endpoint}): ${list.map((p) => p.name).join(', ')}`);
     await call('Runtime.enable');
+    if (stateful.size) await call('Runtime.addBinding', { name: BINDING });
     await inject().catch((e) => console.error(`${tag} inject:`, e.message));
     timer = setInterval(() => inject().catch(() => {}), REINJECT);
   };
@@ -87,6 +152,7 @@ function open(endpoint, target, list) {
     const m = JSON.parse(e.data);
     if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); }
     else if (m.method === 'Runtime.executionContextCreated' && !stopping) injectSoon();
+    else if (m.method === 'Runtime.bindingCalled' && m.params?.name === BINDING && stateful.size) onSave(String(m.params.payload));
   };
   ws.onerror = () => {};                          // followed by onclose
   ws.onclose = () => {

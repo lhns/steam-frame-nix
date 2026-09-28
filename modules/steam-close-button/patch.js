@@ -22,14 +22,26 @@
 //    passed on without the key.
 // Rarer stock "go home" paths (Now Playing, message overlay) still show Steam.
 //
+// Restarts: "Steam hidden" is saved through the injector's persistent store
+// (window.__sfuiStore, patch registered with state = true:
+// ~/.local/state/steam-frame-nix/ui-patches/steam-close-button.json;
+// { schema: 1, steamHidden }) and restored into a fresh page (SteamVR
+// restart, reboot, dashboard reload). Frame ids, bar-only and the counters
+// are per run and not saved. The injector attaches within ~5 s of the page
+// appearing, so Steam's window may already be up and active then; a restored
+// hidden state therefore stays pending (restorePending) until Steam's frame
+// is seen: active at that point (or when it first becomes active while
+// pending) -> hidden once, like X (previous window, else bar only); inactive
+// -> just stays hidden (the overrides below keep stock from showing it).
+//
 // Contract: state in window.__sfuiSteamCloseState (schema 1: steamHidden,
-// barOnly, history, redirected, redirects; older versions' fields are left
-// for a rollback) survives re-injection; teardown restores all overrides and
-// never switches frames.
+// barOnly, history, redirected, redirects, restorePending; older versions'
+// fields are left for a rollback) survives re-injection; teardown restores
+// all overrides and never switches frames.
 // window.__sfuiSteamClose: plan(), homePlan(), steamHidden, barOnly, state.
 ((find, sigs, opts) => {
   const NAME = 'steam-close-button';
-  const VERSION = 7;
+  const VERSION = 8;
   const MAIN_KEY = 'valve.steam.gamepadui.main';   // sigs.overlayKeys
   const FRAME_ALIVE = 2;                           // sigs.frame
   const REASON = 'sfui steam-close-button';
@@ -55,17 +67,26 @@
 
   prev?.teardown?.();                              // other VERSION; never switches frames
 
+  const store = window.__sfuiStore;                // injector's persistent store (absent: in-page only)
   const S = (() => {
     const s = window.__sfuiSteamCloseState;
-    if (s?.schema !== 1) return (window.__sfuiSteamCloseState =
-      { schema: 1, steamHidden: false, barOnly: false, history: [], redirected: 0, redirects: [] });
+    if (s?.schema !== 1) {                         // fresh page: restore from the store
+      const saved = store?.get(NAME), hidden = saved?.schema === 1 && saved.steamHidden === true;
+      return (window.__sfuiSteamCloseState = { schema: 1, steamHidden: hidden, barOnly: false, history: [],
+        redirected: 0, redirects: [], restorePending: hidden, restored: saved?.schema === 1 ? { steamHidden: hidden } : null });
+    }
     s.steamHidden ??= !!s.barOnly;                 // version <= 5: bar-only implied hidden
     s.barOnly = !!s.barOnly && DS.activeFrame == null;
-    s.history ??= []; s.redirected ??= 0; s.redirects ??= [];
+    s.history ??= []; s.redirected ??= 0; s.redirects ??= []; s.restorePending = !!s.restorePending && s.steamHidden;
     return s;
   })();
+  let persisted;                                   // last steamHidden sent to the store
+  const persist = () => {
+    if (persisted === S.steamHidden) return;
+    if (store?.set?.(NAME, { schema: 1, steamHidden: S.steamHidden })) persisted = S.steamHidden;
+  };
   const mainActive = () => DS.activeFrameID != null && DS.activeFrameID === DS.m_unMainSteamFrameID;
-  if (mainActive()) S.steamHidden = false;
+  if (mainActive() && !S.restorePending) S.steamHidden = false;
 
   const note = (id) => {                           // recently active frames, most recent last
     if (id == null) return;
@@ -114,6 +135,13 @@
     if (S.redirects.length > 10) S.redirects.shift();
     if (p.to != null && window.Dashboard?.switchToFrameInternal) window.Dashboard.switchToFrameInternal(FS.GetFrame(p.to), undefined, REASON);
     else barOnly();
+  };
+  // Restored "hidden" (fresh page): settled once Steam's frame exists (and the
+  // overrides are in): hidden once if it is active, else it just stays hidden.
+  const settleRestore = () => {
+    if (!S.restorePending || !DS.mainSteamFrame || !window.Dashboard) return;
+    S.restorePending = false;
+    if (mainActive()) goHome(DS.mainSteamFrame, 'restored after restart');
   };
 
   // ---- overrides: a Dashboard instance method and its mailbox handlers ------
@@ -187,7 +215,7 @@
   const onClose = (frame) => {
     const p = plan(frame);
     const dash = window.Dashboard;
-    if (p.action !== 'none' || p.dock) { guard(); S.steamHidden = true; }
+    if (p.action !== 'none' || p.dock) { guard(); S.steamHidden = true; S.restorePending = false; persist(); }
     if (p.dock) frame.docking.SetDockLocation(DOCK_DASHBOARD);
     if (p.action === 'switch') dash.switchToFrameInternal(FS.GetFrame(p.to), undefined, REASON);
     else if (p.action === 'bar-only' && guard()) barOnly();
@@ -236,7 +264,9 @@
     const f = DS.mainSteamFrame;
     if (closing && closing.frame !== f) unpatchFrame();          // main frame recreated
     guard();
-    if (!f) return 'main Steam frame not found';
+    settleRestore();
+    persist();
+    if (!f) return `main Steam frame not found${S.restorePending ? ' (Steam hidden, pending)' : ''}`;
     const r = patchFrame(f);
     const notes = [S.steamHidden && 'Steam hidden', S.barOnly && 'bar-only',
       S.redirected && `${S.redirected} redirect${S.redirected === 1 ? '' : 's'}`].filter(Boolean);
@@ -246,7 +276,12 @@
   const disposers = [
     mx.reaction(() => DS.activeFrameID, note),
     mx.reaction(() => DS.activeFrameID != null, (active) => { if (active) S.barOnly = false; }),
-    mx.reaction(mainActive, (on) => { if (on) S.steamHidden = false; }),
+    mx.reaction(mainActive, (on) => {
+      if (!on) return;
+      if (S.restorePending) return settleRestore();              // stock showed Steam before we saw it
+      S.steamHidden = false;
+      persist();
+    }),
     mx.reaction(() => DS.m_unMainSteamFrameID, () => { try { apply(); } catch (e) { console.error(NAME, e); } }),
   ];
   const teardown = () => {

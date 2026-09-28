@@ -16,6 +16,8 @@
 # "unchanged" when already applied (not logged) and tear down/re-apply when
 # its VERSION or options differ. Bump VERSION whenever the patch code changes.
 # A matching unpatch.js (plain expression) reverts it when the service stops.
+# State that must outlive the page (SteamVR restarts, reboots) goes through
+# window.__sfuiStore (patch registered with state = true; injector.mjs).
 # Patches needing none of the arguments may be plain expressions without
 # mkPatch (e.g. launcher-menu/order).
 { pkgs }:

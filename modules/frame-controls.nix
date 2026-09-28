@@ -26,7 +26,9 @@ in {
       moving SteamVR dashboard window controls between the bottom bar and the
       three-dot menu: long press an icon or menu row for a "Show in bar"
       popup. Applies to that control in all windows, kept across SteamVR
-      restarts. SteamVR dashboard patch; off restores stock (next switch)'';
+      restarts and reboots (in
+      ~/.local/state/steam-frame-nix/ui-patches/frame-controls.json).
+      SteamVR dashboard patch; off restores stock (next switch)'';
     longPressMs = mkOption {
       type = types.ints.between 300 10000;
       default = 1500;
@@ -70,6 +72,7 @@ in {
         opts = removeAttrs cfg [ "enable" ];
       };
       unpatch = ./frame-controls/unpatch.js;
+      state = true;                 # popup placements, kept across restarts
     } ];
   };
 }
