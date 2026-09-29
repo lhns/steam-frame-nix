@@ -34,13 +34,14 @@
       };
       firefox = ./modules/firefox.nix;
       jellyfin = ./modules/jellyfin.nix;
-      keyring = ./modules/keyring.nix;
+      launchers = ./modules/launchers.nix;
       docker = ./modules/docker.nix;
     };
     # Former attribute names, kept so existing imports keep working (not in
     # `default`, which imports each module once under its current name).
     aliases = {
       steam-keyboard-patch = modules.vr-keyboard-extra-keys;   # its name until 2026-09
+      keyring = modules.launchers;   # until 2026-09 (its options now fail with the new form)
     };
     systems = [ "aarch64-linux" "x86_64-linux" ];
     forSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
@@ -64,11 +65,12 @@
 
     # Tests of the VR keyboard (text model, corrector, swipe decoder on the
     # default German + English dictionary), the Jellyfin mpv shim, the
-    # Firefox launcher and install.sh cleanup: nix flake check
+    # Firefox wrapper, the launchers and install.sh cleanup: nix flake check
     checks = forSystems (pkgs: {
       cleanup = import ./modules/cleanup/check.nix { inherit pkgs; };
       firefox = import ./modules/firefox/check.nix { inherit pkgs; };
       jellyfin = import ./modules/jellyfin/check.nix { inherit pkgs; };
+      launchers = import ./modules/launchers/check.nix { inherit pkgs; };
       vr-keyboard = import ./modules/vr-keyboard/check.nix { inherit pkgs; };
     });
 

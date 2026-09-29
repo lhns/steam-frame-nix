@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Name=Quoting test
+Name[de]=Zitiertest
+# a comment
+Exec=env "A=x y" "B=100%%" /w/outer "/w/in ner" env FOO=1 "/opt/My App/bin/app" "a b" "50%%" "q\\"uote" "\\$HOME" "back\\\\slash" "back\\`tick" "" --flag "with \\"quote\\"" %F
+Icon=app
+Actions=second;
+Keywords=x;
+X-Unknown-Key=kept\sas is
+X-SteamFrameNix-Source=@SOURCE@
+
+[Desktop Action second]
+Name=Second
+Exec=env "A=x y" "B=100%%" /w/outer "/w/in ner" "/opt/My App/bin/app" "a b" "50%%" "q\\"uote" "\\$HOME" "back\\\\slash" "back\\`tick" "" --second
+
+[X-Other Group]
+Exec=untouched

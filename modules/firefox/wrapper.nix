@@ -1,25 +1,24 @@
-# The Firefox Flatpak launcher (firefox.nix). In the nested desktop (KDE) it
-# uses the desktop profile; with the fullscreen fix it links that profile's
-# user.js to the sandbox path desktopJs (undoing the fix there) right before
-# Firefox starts, and once Firefox has exited and the profile is no longer in
-# use (a second launch that only hands its URL to the running Firefox returns
-# at once) removes the link and the value Firefox stored from it in
-# prefs.js. A user.js of the user's own is never touched. After a crash the
-# next launch or steam-frame-nix-cleanup finishes the removal.
+# The Firefox Flatpak wrapper (firefox.nix, a steamFrame.launchers wrapper):
+# gets the entry's full command line (`flatpak run … org.mozilla.firefox …`)
+# as its arguments. Outside the nested desktop it just runs it. In the nested
+# desktop (KDE) it adds `--profile <desktop profile>` (not to the profile
+# manager action, --ProfileManager); with the fullscreen fix it links that
+# profile's user.js to the sandbox path desktopJs (undoing the fix there)
+# right before Firefox starts, and once Firefox has exited and the profile is
+# no longer in use (a second launch that only hands its URL to the running
+# Firefox returns at once) removes the link and the value Firefox stored from
+# it in prefs.js. A user.js of the user's own is never touched. After a crash
+# the next launch or steam-frame-nix-cleanup finishes the removal.
 { lib, writeShellScript, coreutils, findutils, gnugrep
-, flatpakBin ? "/usr/bin/flatpak"   # (not `flatpak`: callPackage would pass pkgs.flatpak)
-, profileDir ? null      # shell word, e.g. "$HOME/.var/app/…/desktop"; null: no desktop profile
+, profileDir             # shell word, e.g. "$HOME/.var/app/…/desktop"
 , desktopFix ? false
 , desktopJs ? "/app/etc/firefox/steam-frame-nix-desktop-user.js"
 , desktopKeys ? [ "full-screen-api.ignore-widgets" ]
 }:
-writeShellScript "firefox-launcher" (''
+writeShellScript "firefox-wrapper" (''
   PATH=${lib.makeBinPath [ coreutils findutils gnugrep ]}:$PATH
-  run=(${flatpakBin} run --branch=stable --arch=aarch64 --command=firefox --file-forwarding org.mozilla.firefox)
-'' + (if profileDir == null then ''
-  exec "''${run[@]}" "$@"
-'' else ''
-  if [ "$XDG_CURRENT_DESKTOP" != KDE ]; then exec "''${run[@]}" "$@"; fi
+  if [ "$XDG_CURRENT_DESKTOP" != KDE ]; then exec "$@"; fi
+  for a; do [ "$a" = --ProfileManager ] && exec "$@"; done
   prof="${profileDir}"
   # Firefox exits (status 1) if the --profile dir doesn't exist yet.
   mkdir -p "$prof"
@@ -45,10 +44,10 @@ writeShellScript "firefox-launcher" (''
   else
     ln -s "$js" "$u"
   fi
-  "''${run[@]}" --profile "$prof" "$@"
+  "$@" --profile "$prof"
   status=$?
   sfn_unlink
   exit $status
 '' + lib.optionalString (!desktopFix) ''
-  exec "''${run[@]}" --profile "$prof" "$@"
-''))
+  exec "$@" --profile "$prof"
+'')

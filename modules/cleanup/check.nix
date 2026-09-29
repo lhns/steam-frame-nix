@@ -53,6 +53,10 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq ]; } ''
   touch $S/steamvr-debugger                         # marker of the first version
   mkdir -p $root/run/steam-frame-nix $root/run/systemd/user/steamvr.service.d
   echo old > $root/run/steam-frame-nix/steamvr-debugger-restore
+  mkdir -p $root/run/steam-frame-nix/applications       # steamFrame.launchers
+  echo '[Desktop Entry]' > $root/run/steam-frame-nix/applications/im.riot.Riot.desktop
+  echo x > $root/run/steam-frame-nix/applications/.im.riot.Riot.desktop.sum
+  : > $root/run/steam-frame-nix/applications/.lock
   echo old > $root/run/systemd/user/steamvr.service.d/50-steam-frame-nix-debugger.conf
   echo keep > $root/run/systemd/user/steamvr.service.d/other.conf
   ln -s /nix/store/00000000000000000000000000000000-breeze-icons-6.30.0/share/icons/breeze/apps/64/utilities-terminal.svg $I/utilities-terminal.svg
@@ -156,7 +160,7 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq ]; } ''
   echo absent > $S/steamvr-debugger.armed
   mkdir -p $F/desktop $F/x.default
   ln -s /app/etc/firefox/steam-frame-nix-desktop-user.js $F/desktop/user.js
-  touch $F/desktop/.parentlock; exec 8< $F/desktop/.parentlock   # the launcher's, Firefox running
+  touch $F/desktop/.parentlock; exec 8< $F/desktop/.parentlock   # the wrapper's, Firefox running
   ln -s /app/etc/firefox/steam-frame-nix-desktop-user.js $F/x.default/user.js
   printf '[Context]\ndevices=all;\nfilesystems=/nix/store/00000000000000000000000000000000-mpv-hwdec-shim:ro;\n\n[Environment]\nLD_PRELOAD=/nix/store/00000000000000000000000000000000-mpv-hwdec-shim/lib/mpv-hwdec-shim.so\nSFN_MPV_HWDEC=x\n' > $O/org.jellyfin.JellyfinDesktop
   mkdir -p $HOME/.var/app/org.jellyfin.JellyfinDesktop

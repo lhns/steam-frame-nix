@@ -23,18 +23,17 @@ running") and skips `reloadSystemd`.
   and applies `session.services.start` / `stop` / `restart`, which other
   modules fill (you can add your own units).
 
-**Configuration:** apps that keep secrets in the wallet get launchers from
-[keyring](keyring.md). Another launcher that must reach the outer session
-(its bus, services or wallet) uses the prefix:
+**Configuration:** apps that keep secrets in the wallet get a
+[launcher](launchers.md) with `keyring.enable`. Another app that must reach
+the outer session (its bus, services or wallet) gets the bus through its
+launcher's `hostEnv`; a hand-written entry uses the prefix `session.busEnv`:
 
 ```nix
 { config, ... }: {
-  xdg.dataFile."applications/org.example.App.desktop".text = ''
-    [Desktop Entry]
-    Type=Application
-    Name=Example
-    Exec=${config.steamFrame.session.busEnv} flatpak run org.example.App %U
-  '';
+  steamFrame.launchers."org.example.App".hostEnv.DBUS_SESSION_BUS_ADDRESS =
+    config.steamFrame.session.bus;
+  # or, in an entry of your own:
+  # Exec=${config.steamFrame.session.busEnv} flatpak run org.example.App %U
 }
 ```
 

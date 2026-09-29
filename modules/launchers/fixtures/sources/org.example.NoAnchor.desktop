@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=No anchor
+Exec=/app/bin/noanchor %U
+X-Flatpak=org.example.NoAnchor

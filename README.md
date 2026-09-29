@@ -52,7 +52,7 @@ configuration, limitations and how it works.
 
 - [Firefox](docs/firefox.md) (`firefox`): launcher for the Flatpak with a VR fullscreen fix, optional AV1 off, a separate desktop profile, optionally the default browser.
 - [Jellyfin](docs/jellyfin.md) (`jellyfin.hardwareDecoding`): hardware video decoding in the Jellyfin Desktop Flatpak.
-- [Keyring launchers](docs/keyring.md) (`keyring.flatpaks`, `keyring.programs`): apps (Flatpak or Nix, Electron too) keep their KDE wallet logins in both sessions.
+- [Launchers](docs/launchers.md) (`launchers.<desktop ID>`): an app's own desktop entry (Flatpak, Nix package) with extra options, environment, wrappers and MIME defaults; `keyring` keeps its KDE wallet logins in both sessions (Electron too).
 - [Docker](docs/docker.md) (`docker`): rootless Docker as a user service, CLI working in both sessions.
 
 **Your own patches** of Steam's UI, and fixing patches after a Steam update: [UI patches](docs/ui-patches.md).
@@ -115,10 +115,10 @@ What this means for you:
   ([session settings](docs/session.md#session-settings-and-services)).
 - **Wallet:** there should be one `kwalletd6`, on the outer bus; apps started
   from the desktop would otherwise start a second one whose secrets VR can't
-  see. List such apps in [keyring](docs/keyring.md).
+  see. Give such apps a [launcher](docs/launchers.md) with `keyring.enable`.
 - **Launchers:** the "+" menu only sees `~/.local/share/applications` (not
-  `~/.nix-profile/share`), so entries are written there, shadowing
-  Flatpak/package entries with the same ID.
+  `~/.nix-profile/share`), so [launchers](docs/launchers.md) are linked
+  there, replacing Flatpak/package entries with the same ID.
 - **Keyboard layout, clipboard, Firefox:** each session has its own; see
   [keyboard layout](docs/session.md#keyboard-layout),
   [clipboard sync](docs/session.md#clipboard-sync),
@@ -195,10 +195,9 @@ these two files ([`template/`](template), with more comments):
     firefox.disableAv1 = true;
     firefox.defaultBrowser = true;
     jellyfin.hardwareDecoding.enable = true;  # install the Flatpak yourself
-    keyring.flatpaks."im.riot.Riot" = {       # Element: logins in both sessions
-      name = "Element";
-      electron = true;
-      schemeHandlers = [ "element" "io.element.desktop" ];
+    launchers."im.riot.Riot" = {              # Element: logins in both sessions
+      keyring = { enable = true; electron = true; };
+      defaultFor = [ "x-scheme-handler/element" "x-scheme-handler/io.element.desktop" ];
     };
     docker.enable = true;                     # rootless
   };
@@ -215,9 +214,9 @@ home-manager switch --flake .#steamos  # manual setup, from the flake's director
 In your own flake, add the input as above and
 `steam-frame-nix.homeManagerModules.default` to the modules. `default`
 imports all modules; single ones:
-`homeManagerModules.{session,portal,keyboard-layout,vr-keyboard-extra-keys,vr-keyboard,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,cleanup,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox,jellyfin,keyring,docker}`
-(`steam-keyboard-patch` still works as the former name of
-`vr-keyboard-extra-keys`). Every module imports `cleanup` (see
+`homeManagerModules.{session,portal,keyboard-layout,vr-keyboard-extra-keys,vr-keyboard,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,cleanup,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox,jellyfin,launchers,docker}`
+(`steam-keyboard-patch` and `keyring` still work as the former names of
+`vr-keyboard-extra-keys` and `launchers`). Every module imports `cleanup` (see
 [Changes outside Nix](#changes-outside-nix-exceptions)); which file is
 which: [Repository layout](docs/development.md).
 
@@ -227,7 +226,7 @@ which: [Repository layout](docs/development.md).
 |---|---|---|---|
 | `steamFrame.session.runtimeDir` | str | `"/run/user/1000"` | `XDG_RUNTIME_DIR` of the outer (Steam/VR) session. |
 | `steamFrame.session.bus` | str | `"unix:path=${runtimeDir}/bus"` | Outer session D-Bus (user manager, `kwalletd6`). |
-| `steamFrame.session.busEnv` | str, read-only | `"env DBUS_SESSION_BUS_ADDRESS=${bus}"` | Prefix for launchers that must use the outer bus. |
+| `steamFrame.session.busEnv` | str, read-only | `"env DBUS_SESSION_BUS_ADDRESS=${bus}"` | `Exec=` prefix for hand-written entries that must use the outer bus. |
 | `steamFrame.session.services.start` | list of str | `[ ]` | User units started on switch if not running. |
 | `steamFrame.session.services.restart` | list of str | `[ ]` | User units restarted on every switch. |
 | `steamFrame.session.services.stop` | list of str | `[ ]` | User units stopped on switch if running (e.g. of a disabled feature). |
@@ -306,22 +305,21 @@ which: [Repository layout](docs/development.md).
 | `steamFrame.jellyfin.hardwareDecoding.enable` | bool | `false` | Hardware video decoding in the Jellyfin Desktop Flatpak, see [Jellyfin](docs/jellyfin.md). |
 | `steamFrame.jellyfin.hardwareDecoding.hwdec` | str | `"v4l2m2m-copy,auto-copy"` | mpv `hwdec` used instead of Jellyfin's automatic one. |
 | `steamFrame.jellyfin.hardwareDecoding.command` | str, read-only | | The `flatpak run …` command line of the desktop entry, for a terminal. |
-| `steamFrame.keyring.flatpaks` | attrs of submodules | `{ }` | Flatpaks by app ID getting a wallet launcher (outer bus, wallet D-Bus names), see [Keyring launchers](docs/keyring.md). Fields below. |
-| `steamFrame.keyring.programs` | attrs of submodules | `{ }` | Other programs by desktop ID (without `.desktop`) getting a wallet launcher (outer bus). Fields below. |
-| `steamFrame.keyring.{flatpaks,programs}.<id>.name` | str | required | `Name=`. |
-| `steamFrame.keyring.{flatpaks,programs}.<id>.genericName`, `.comment`, `.startupWMClass` | null or str | `null` | `GenericName=`, `Comment=`, `StartupWMClass=`. |
-| `steamFrame.keyring.{flatpaks,programs}.<id>.icon` | null or str | flatpaks: the app ID; programs: `null` | `Icon=`. |
-| `steamFrame.keyring.{flatpaks,programs}.<id>.categories` | list of str | `[ ]` | `Categories=`. |
-| `steamFrame.keyring.{flatpaks,programs}.<id>.schemeHandlers` | list of str | `[ ]` | URL schemes (e.g. login callbacks) the app handles and is made the default and recommended handler for. |
-| `steamFrame.keyring.{flatpaks,programs}.<id>.mimeTypes` | list of str | `[ ]` | Further `MimeType=` entries, not made default. |
-| `steamFrame.keyring.{flatpaks,programs}.<id>.electron` | bool | `false` | Pass `--password-store=kwallet6` (Electron apps). |
-| `steamFrame.keyring.{flatpaks,programs}.<id>.args` | list of str | `[ ]` | Further app arguments (desktop entry syntax). |
-| `steamFrame.keyring.{flatpaks,programs}.<id>.fieldCode` | `"%U"`, `"%u"`, `"%F"`, `"%f"`, `""` | `"%U"` | How the entry passes URLs/files. |
-| `steamFrame.keyring.{flatpaks,programs}.<id>.actions` | attrs of `{ name; args; }` | `{ }` | Desktop actions, each running the command with its args. |
-| `steamFrame.keyring.{flatpaks,programs}.<id>.settings` | attrs of str | `{ }` | Further `[Desktop Entry]` keys. |
-| `steamFrame.keyring.{flatpaks,programs}.<id>.command` | str, read-only | | The command line without args, for a terminal. |
-| `steamFrame.keyring.flatpaks.<id>.flatpakArgs` | list of str | `[ ]` | Further `flatpak run` options. |
-| `steamFrame.keyring.programs.<id>.executable` | str | required | The program to run, e.g. `"${pkgs.claude-desktop}/bin/claude-desktop"`. |
+| `steamFrame.launchers` | attrs of submodules | `{ }` | Launchers by desktop ID (without `.desktop`): the app's own entry, rewritten, see [Launchers](docs/launchers.md). Fields below. |
+| `steamFrame.launchers.<id>.source.flatpak` | null or str | the desktop ID, if no other source | Flatpak app ID whose exported entry is rewritten (at runtime). |
+| `steamFrame.launchers.<id>.source.package` | null or package | `null` | Package whose `share/applications/<id>.desktop` is rewritten (at build time; the build fails without it). |
+| `steamFrame.launchers.<id>.source.file` | null or str | `null` | Desktop entry on the host, rewritten at runtime. |
+| `steamFrame.launchers.<id>.keyring.enable` | bool | `false` | KDE wallet shared by both sessions: outer bus; Flatpaks may talk to `org.kde.kwalletd6`, `org.freedesktop.secrets`. |
+| `steamFrame.launchers.<id>.keyring.electron` | bool | `false` | Pass `--password-store=kwallet6` (Electron apps; needs `keyring.enable`). |
+| `steamFrame.launchers.<id>.defaultFor` | list of str | `[ ]` | MIME types / `x-scheme-handler/<scheme>` the app becomes the default and a recommended handler for (also in `MimeType=`); a type claimed twice fails. |
+| `steamFrame.launchers.<id>.mimeTypes` | list of str | `[ ]` | Added to `MimeType=`, not made default. |
+| `steamFrame.launchers.<id>.flatpakArgs` | list of str | `[ ]` | `flatpak run` options before the app ID (Flatpaks only). |
+| `steamFrame.launchers.<id>.env` | attrs of str | `{ }` | App environment: `--env=K=V` for Flatpaks, like `hostEnv` otherwise. |
+| `steamFrame.launchers.<id>.hostEnv` | attrs of str | `{ }` | Environment of the started process (`env K=V`; for Flatpaks the `flatpak` client). |
+| `steamFrame.launchers.<id>.args` | list of str | `[ ]` | Arguments right after the app ID / program. |
+| `steamFrame.launchers.<id>.wrappers` | list of str | `[ ]` | Commands the command line is passed to, outermost first. |
+| `steamFrame.launchers.<id>.settings` | attrs of null or str | `{ }` | `[Desktop Entry]` keys to set (key-file syntax) or remove (`null`); drops their localized variants. |
+| `steamFrame.launchers.<id>.command` | str, read-only | | About the command the entry runs, for a terminal. |
 | `steamFrame.docker.enable` | bool | `false` | Rootless Docker as a user service, CLI for both sessions, see [Docker](docs/docker.md). |
 | `steamFrame.docker.package` | package | `pkgs.docker` | Docker package (daemon and CLI). |
 | `steamFrame.docker.host` | str, read-only | `"unix://${runtimeDir}/docker.sock"` | The daemon's `DOCKER_HOST` (the CLI's default). |
@@ -344,6 +342,12 @@ Renamed options still work under their old names, with a warning:
 | `dashboard.windowCurvature.snapPixels`, `snapPoints` | `detentPixels`, `detentPoints` |
 | `dashboard.windowCurvature.dragThreshold` | `dragThresholdPixels` |
 
+Removed options fail with the new form:
+
+| Old | New |
+|---|---|
+| `keyring.flatpaks.<id>`, `keyring.programs.<id>` | `launchers.<id>.keyring` (fields: [Launchers](docs/launchers.md#configuration)) |
+
 ## Changes outside Nix (exceptions)
 
 Everything not listed here is a Home Manager link into the Nix store or
@@ -355,6 +359,8 @@ lives in memory (the UI patches). These are written at runtime:
 | `~/.local/state/steam-frame-nix/steamvr-debugger.armed` | SteamVR debugger: the key's previous value | while SteamVR runs; after a power loss until the next SteamVR start or cleanup | SteamVR stopping; `steam-frame-nix-cleanup` |
 | `/run/user/1000/systemd/user/steamvr.service.d/50-steam-frame-nix-debugger.conf`, `/run/user/1000/steam-frame-nix/steamvr-debugger-restore` | SteamVR debugger: puts the key back when SteamVR stops, without Nix | until reboot (tmpfs) | reboot; `steam-frame-nix-cleanup` while SteamVR is stopped and the debugger is off |
 | `~/.local/state/steam-frame-nix/ui-patches/<name>.json` | Saved choices of dashboard patches ([persistent state](docs/ui-patches.md#persistent-state)): window control bar placements (`frame-controls`), "Steam hidden" (`steam-close-button`). SteamOS's `steamvr.service` deletes `~/.cache/SteamVR` (the dashboard's own browser storage) on every SteamVR start. | until removed: kept when a patch is disabled (the choices come back when you enable it again) | `steam-frame-nix-cleanup --all`, `install.sh uninstall` |
+| `/run/user/1000/steam-frame-nix/applications/<id>.desktop` (with `.<id>.desktop.sum`, `.lock`) | [Launchers](docs/launchers.md) of Flatpaks and host files; `~/.local/share/applications/<id>.desktop` is a Home Manager link to it | until reboot (tmpfs), written again at login | reboot; the next switch or rewrite when the launcher or its app is gone; `steam-frame-nix-cleanup --all` |
+| mtime of `~/.local/share/applications` | [Launchers](docs/launchers.md#how-it-works): a running Steam rescans the "+" menu | only the directory's timestamp | nothing to remove |
 | mtime of `~/.local/share/icons/hicolor` | [icon fallbacks](docs/launcher-menu.md#icon-fallbacks): a running Steam rescans icons | only the directory's timestamp | nothing to remove |
 
 **`steam-frame-nix-cleanup`** (`install.sh cleanup`,
@@ -379,8 +385,8 @@ versions left: [docs/cleanup.md](docs/cleanup.md).
 - clipboard-sync runs from KDE autostart (a Home Manager link).
 - Firefox: the desktop profile's `user.js` link exists only while its
   Firefox runs (see [Firefox](docs/firefox.md#how-it-works)).
-- Jellyfin, keyring launchers: the permissions are `flatpak run` options of
-  the desktop entries, not Flatpak overrides.
+- Launchers (Jellyfin, wallet access): the permissions are `flatpak run`
+  options of the desktop entries, not Flatpak overrides.
 - Docker: the daemon's socket in `/run/user/1000` (tmpfs) exists while
   `docker.service` runs.
 

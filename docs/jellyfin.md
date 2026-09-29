@@ -19,8 +19,9 @@ which
 
 ## What you get
 
-The Jellyfin desktop entry (same ID as the Flatpak's, so the KDE menu and
-the "+" menu start it) runs the Flatpak with device access (`devices=all`)
+A [launcher](launchers.md) (the Flatpak's own entry, rewritten under its
+ID, so the KDE menu and the "+" menu start it) runs the Flatpak with device
+access (`devices=all`)
 and makes mpv use `hwdec` (default `v4l2m2m-copy,auto-copy`); explicit
 values such as `no` stay. mpv tries the listed decoders in order and falls
 back to software decoding per stream. With the default, 1080p H.264 plays
@@ -38,7 +39,7 @@ steamFrame.jellyfin.hardwareDecoding.enable = true;
 ```
 
 From a terminal, start it with the command line of
-`steamFrame.jellyfin.hardwareDecoding.command` (or `grep ^Exec=
+`steamFrame.jellyfin.hardwareDecoding.command` (or the one of `grep ^Exec=
 ~/.local/share/applications/org.jellyfin.JellyfinDesktop.desktop`); its
 output shows `mpv-hwdec-shim: hwdec "auto-copy" -> "v4l2m2m-copy,auto-copy"`,
 then mpv's `Using hardware decoding (v4l2m2m-copy)`.
@@ -63,12 +64,13 @@ option). It is preloaded from the Nix store; only its store path is exposed
 (read-only) to the sandbox. It would work for any libmpv app that sets
 `hwdec=auto*`, but only Jellyfin Desktop is set up here.
 
-### The desktop entry
+### The launcher
 
-Nothing is written to Flatpak's overrides: the entry
-(`~/.local/share/applications/org.jellyfin.JellyfinDesktop.desktop`) passes
-device access and the shim as `flatpak run` options, so they apply to
-launches from that entry and are gone with it:
+Nothing is written to Flatpak's overrides: the launcher
+`steamFrame.launchers."org.jellyfin.JellyfinDesktop"` passes device access
+and the shim as `flatpak run` options (`flatpakArgs`, `env`), so they apply
+to launches from the entry and are gone with it. Its command lines (the
+entry's and the four actions') become
 
 ```sh
 flatpak run --branch=stable --arch=aarch64 --command=jellyfin-desktop \
@@ -77,7 +79,8 @@ flatpak run --branch=stable --arch=aarch64 --command=jellyfin-desktop \
   --env=SFN_MPV_HWDEC=v4l2m2m-copy,auto-copy org.jellyfin.JellyfinDesktop
 ```
 
-(`command` is this line with the store path.)
+(`command` is about this line, with the store path and without the
+entry's `--branch`/`--arch`/`--command`.)
 
 Older versions used a Flatpak override (via nix-flatpak or a Home Manager
 link) and a shim copy in `~/.var/app/org.jellyfin.JellyfinDesktop`;

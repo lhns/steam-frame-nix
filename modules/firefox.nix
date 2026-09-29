@@ -11,10 +11,10 @@
 #   fullscreen inside the window.
 # - desktopProfile: the sessions have separate buses/displays, so a second
 #   Firefox can't reach the running one and hits the profile lock; the nested
-#   desktop gets its own profile, where fullscreen works: the launcher undoes
-#   the fix there while its Firefox runs (firefox/launcher.nix).
-# The entry shadows the Flatpak's (same ID), keeping MIME associations, and is
-# seen by the "+" menu (which reads only ~/.local/share/applications).
+#   desktop gets its own profile, where fullscreen works: the wrapper undoes
+#   the fix there while its Firefox runs (firefox/wrapper.nix).
+# The launcher (launchers.nix) is the Flatpak's own entry with the wrapper in
+# front, same ID, so MIME associations keep working and the "+" menu sees it.
 # defaultBrowser: without a default the portal picks the first installed
 # https handler (e.g. Chromium) in both sessions.
 { config, pkgs, lib, ... }:
@@ -41,13 +41,12 @@ let
       (k: "user_pref(${builtins.toJSON k}, false);\n") desktopKeys)} $out/${desktopUserJsName}
   '');
 
-  firefox = pkgs.callPackage ./firefox/launcher.nix {
-    profileDir = if cfg.desktopProfile == null then null else profileDir;
-    inherit desktopFix desktopKeys;
+  wrapper = pkgs.callPackage ./firefox/wrapper.nix {
+    inherit profileDir desktopFix desktopKeys;
     desktopJs = "/app/etc/firefox/${desktopUserJsName}";
   };
 in {
-  imports = [ ./cleanup.nix ];
+  imports = [ ./launchers.nix ];
 
   options.steamFrame.firefox = {
     enable = lib.mkEnableOption ''
@@ -97,49 +96,25 @@ in {
       type = lib.types.bool;
       default = false;
       description = ''
-        Make the launcher the default for http, https and text/html (in
-        Home Manager's ~/.config/mimeapps.list). Without a default the
-        portal opens links with the first installed https handler, in both
-        sessions.
+        Make the launcher the default for http, https and text/html (its
+        `defaultFor`, in Home Manager's ~/.config/mimeapps.list). Without a
+        default the portal opens links with the first installed https
+        handler, in both sessions.
       '';
     };
   };
 
   config = lib.mkIf cfg.enable {
-    xdg.mimeApps = lib.mkIf cfg.defaultBrowser {
-      enable = true;
-      defaultApplications = lib.genAttrs
-        [ "x-scheme-handler/http" "x-scheme-handler/https" "text/html" ]
-        (_: "org.mozilla.firefox.desktop");
+    steamFrame.launchers."org.mozilla.firefox" = {
+      wrappers = lib.optional (cfg.desktopProfile != null) "${wrapper}";
+      defaultFor = lib.optionals cfg.defaultBrowser
+        [ "x-scheme-handler/http" "x-scheme-handler/https" "text/html" ];
     };
 
-    # stable: the branch the launcher runs (the extension point has no
+    # stable: the branch the Flatpak's entry runs (the extension point has no
     # version, so it takes the app's branch).
-    xdg.dataFile = lib.optionalAttrs (defaultPrefs != { }) {   # desktopFix implies a pref
+    xdg.dataFile = lib.mkIf (defaultPrefs != { }) {   # desktopFix implies a pref
       "flatpak/extension/org.mozilla.firefox.systemconfig/aarch64/stable".source = sysconfig;
-    } // {
-    "applications/org.mozilla.firefox.desktop".text = ''
-      [Desktop Entry]
-      Type=Application
-      Name=Firefox
-      GenericName=Web Browser
-      Icon=org.mozilla.firefox
-      Exec=${firefox} @@u %u @@
-      StartupWMClass=firefox
-      StartupNotify=true
-      Terminal=false
-      Categories=Network;WebBrowser;
-      MimeType=application/json;application/pdf;application/rdf+xml;application/rss+xml;application/x-xpinstall;application/xhtml+xml;application/xml;audio/flac;audio/ogg;audio/webm;image/avif;image/gif;image/jpeg;image/png;image/svg+xml;image/webp;text/html;text/xml;video/ogg;video/webm;x-scheme-handler/chrome;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/mailto;
-      Actions=new-window;new-private-window;
-
-      [Desktop Action new-window]
-      Name=New Window
-      Exec=${firefox} --new-window @@u %u @@
-
-      [Desktop Action new-private-window]
-      Name=New Private Window
-      Exec=${firefox} --private-window @@u %u @@
-    '';
     };
   };
 }

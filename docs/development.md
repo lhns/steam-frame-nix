@@ -53,12 +53,18 @@ modules/
   keyboard-layout.nix          gamescope-session drop-in with XKB_DEFAULT_* (keyboard.layout)
   clipboard-sync.nix           app: KDE autostart of clipboard-sync (clipboardSync)
   hidden-apps.nix              Hidden=true desktop entries (launcherMenu.hiddenApps)
-  keyring.nix                  app: launchers sharing the KDE wallet (keyring)
+  launchers.nix                links, MIME defaults, units of the launchers (launchers.<id>)
+  launchers/
+    lib.nix                    the launcher option type, Exec quoting, package entries (build)
+    rewrite.awk                build+service: rewrites a desktop entry's Exec lines and keys
+    generate.sh                service steam-frame-nix-launchers (+ .path), switch: entries
+                               of Flatpaks/host files in <runtimeDir>/steam-frame-nix/applications
+    check.nix, fixtures/       test: real entries rewritten (fixtures/expected), generator runs
   docker.nix                   service: rootless dockerd (docker)
-  firefox.nix                  Flatpak prefs extension and launcher entry (firefox)
-  firefox/launcher.nix         app: launcher script (desktop profile, fullscreen fix)
-  firefox/check.nix            test: launcher against a fake flatpak
-  jellyfin.nix                 desktop entry with flatpak run options (jellyfin.hardwareDecoding)
+  firefox.nix                  Flatpak prefs extension and launcher (firefox)
+  firefox/wrapper.nix          app: launcher wrapper (desktop profile, fullscreen fix)
+  firefox/check.nix            test: wrapper against a fake flatpak
+  jellyfin.nix                 launcher with flatpak run options (jellyfin.hardwareDecoding)
   jellyfin/mpv-hwdec-shim.c    app: LD_PRELOAD shim, hwdec auto* -> v4l2m2m-copy
   jellyfin/shim.nix            build: the shim as lib/mpv-hwdec-shim.so
   jellyfin/check.nix           test: shim ELF and rewriting
@@ -116,6 +122,7 @@ they are kept even where a file name says more:
 | `window-curvature` | `dashboard.windowCurvature` | `window-curvature` (SteamVR) | `steam-ui-patches` |
 | `frame-controls` | `dashboard.frameControls` | `frame-controls` (SteamVR, state) | `steam-ui-patches` |
 | `steamvr-debugger` | `steamvrDebugger` | | `steamvr-webhelper-debugger` |
+| `launchers` | `launchers` | | `steam-frame-nix-launchers` (`.service`, `.path`) |
 
 Log of all patches:
 `journalctl --user -u steam-ui-patches -u steam-keyboard-patch -u vr-keyboard-relay`.

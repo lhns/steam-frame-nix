@@ -62,10 +62,10 @@
   #   jellyfin.hardwareDecoding.enable = true;
   #   # Apps that keep logins in the KDE wallet: one wallet for both
   #   # sessions (Element: install im.riot.Riot yourself):
-  #   keyring.flatpaks."im.riot.Riot" = {
-  #     name = "Element";
-  #     electron = true;
-  #     schemeHandlers = [ "element" "io.element.desktop" ];  # SSO callback
+  #   launchers."im.riot.Riot" = {
+  #     keyring = { enable = true; electron = true; };
+  #     # SSO callback:
+  #     defaultFor = [ "x-scheme-handler/element" "x-scheme-handler/io.element.desktop" ];
   #   };
   #   docker.enable = true;              # rootless Docker, user service
   # };

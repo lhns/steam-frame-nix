@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Name=Quoting test
+Name[de]=Zitiertest
+# a comment
+Exec=env FOO=1 "/opt/My App/bin/app" --flag "with \\"quote\\"" %F
+Icon=app
+Actions=second;
+Keywords=a;b;
+Keywords[de]=c;d;
+X-Unknown-Key=kept\sas is
+
+[Desktop Action second]
+Name=Second
+Exec="/opt/My App/bin/app" --second
+
+[X-Other Group]
+Exec=untouched

@@ -1,8 +1,9 @@
-# Checks of the Firefox launcher's desktop profile user.js (launcher.nix)
+# Checks of the Firefox wrapper's desktop profile user.js (wrapper.nix)
 # against a fake flatpak: the link exists only while Firefox runs, a second
 # launch that hands over to the running Firefox doesn't remove it, the value
-# Firefox stored from it leaves prefs.js once the profile is unlocked, and a
-# user.js of the user's own is never touched.
+# Firefox stored from it leaves prefs.js once the profile is unlocked, a
+# user.js of the user's own is never touched, the profile manager action and
+# the Steam session get no --profile.
 { pkgs }:
 let
   # Fake `flatpak run … org.mozilla.firefox --profile DIR …`: with the
@@ -22,11 +23,12 @@ let
     while [ ! -e $FAKE/release ]; do sleep 0.1; done
     exit 3
   '';
-  launcher = pkgs.callPackage ./launcher.nix {
-    flatpakBin = fakeFlatpak;
+  wrapper = pkgs.callPackage ./wrapper.nix {
     profileDir = "$HOME/ff/desktop";
     desktopFix = true;
   };
+  # What the launcher's Exec= runs: the wrapper, then the Flatpak's command.
+  launcher = "${wrapper} ${fakeFlatpak} run --branch=stable --arch=aarch64 --command=firefox --file-forwarding org.mozilla.firefox";
 in
 pkgs.runCommand "firefox-check" { nativeBuildInputs = [ pkgs.findutils pkgs.gnugrep ]; } ''
   set -euo pipefail
@@ -36,7 +38,7 @@ pkgs.runCommand "firefox-check" { nativeBuildInputs = [ pkgs.findutils pkgs.gnug
   p=$HOME/ff/desktop
 
   # first launch: link made, Firefox runs
-  ${launcher} https://example.org & first=$!
+  ${launcher} @@u https://example.org @@ & first=$!
   for i in $(seq 100); do grep -q started $FAKE/log && break; sleep 0.1; done
   grep -qx 'started /app/etc/firefox/steam-frame-nix-desktop-user.js' $FAKE/log || fail "not linked at start"
   echo 'user_pref("other", 1);' >> $p/prefs.js
@@ -58,6 +60,12 @@ pkgs.runCommand "firefox-check" { nativeBuildInputs = [ pkgs.findutils pkgs.gnug
   [ "$(cat $p/user.js)" = 'user_pref("mine", 1);' ] || fail "own user.js changed"
   grep -q ignore-widgets $p/prefs.js || fail "prefs.js changed with an own user.js"
   rm $p/user.js
+
+  # profile manager action: no --profile, no link
+  : > $FAKE/log
+  ${launcher} --ProfileManager || true
+  grep -qx 'default profile' $FAKE/log || fail "--profile with --ProfileManager"
+  [ ! -e $p/user.js ] || fail "linked for the profile manager"
 
   # Steam session: default profile, no link
   : > $FAKE/log

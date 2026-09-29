@@ -397,7 +397,7 @@ EOF
 #              $SFN_STATE/icon-fallbacks).
 #   firefox    user.js in Firefox profiles: links to
 #              /app/etc/firefox/steam-frame-nix-desktop-user.js (the
-#              launcher's, while the desktop profile runs; left alone while
+#              wrapper's, while the desktop profile runs; left alone while
 #              the profile is in use), older links to *-firefox-*user.js and
 #              copies starting with FF_MARKER, and the values they left in
 #              prefs.js (only with Firefox closed).
@@ -407,6 +407,9 @@ EOF
 #   ui-state   the dashboard patches' saved choices
 #              ($SFN_STATE/ui-patches/<name>.json; --all only, never
 #              --orphans) and stray *.json.tmp files.
+#   launchers  entries of steamFrame.launchers in
+#              $OUTER_RUNTIME_DIR/steam-frame-nix/applications (tmpfs; --all
+#              only: the switch's own run removes those of removed launchers).
 #   dirs       $SFN_STATE and $OUTER_RUNTIME_DIR/steam-frame-nix when empty.
 #
 # --orphans keeps what the current configuration still uses (--keep ...);
@@ -720,7 +723,7 @@ clean_firefox() { # all
       t="$(readlink "$u")"
       case $t in
         "$FF_DESKTOP_JS")
-          # The launcher's, while Firefox runs in the desktop profile.
+          # The wrapper's, while Firefox runs in the desktop profile.
           if ff_in_use "$prof"; then
             (( all )) && c_defer "$u: Firefox is using profile $name; close it and run this again"
             continue
@@ -825,6 +828,17 @@ clean_jellyfin() {
   return 0
 }
 
+# --- launcher entries (tmpfs) ---
+
+clean_launchers() {
+  local d=$SFN_RUNTIME/applications f
+  [[ -d $d && ! -L $d ]] || return 0
+  while IFS= read -r -d '' f; do
+    c_rm "$f" "generated launcher entry"
+  done < <(find "$d" -mindepth 1 -maxdepth 1 -type f -print0)
+  c_rmdir "$d"
+}
+
 # --- dashboard patch state ---
 
 clean_ui_state() { # all
@@ -877,7 +891,7 @@ cmd_cleanup() {
   clean_jellyfin
   clean_ui_state "$([[ $mode == all ]] && echo 1 || echo 0)"
   c_rmdir "$SFN_STATE"
-  if [[ $mode == all ]]; then c_rmdir "$SFN_RUNTIME"; fi
+  if [[ $mode == all ]]; then clean_launchers; c_rmdir "$SFN_RUNTIME"; fi
   (( CLEAN_ACTIONS || ${#CLEAN_DEFERRED[@]} || CLEAN_QUIET )) || info "nothing to clean up"
   return 0
 }

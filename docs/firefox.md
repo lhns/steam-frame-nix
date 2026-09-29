@@ -14,9 +14,10 @@ browser the portal opens links with the first installed `https` handler
 
 ## What you get
 
-A launcher for the Flathub Firefox Flatpak (`org.mozilla.firefox`, stable;
-install it yourself). The launcher shadows the Flatpak's own entry (same
-ID), so default-browser associations keep working.
+A [launcher](launchers.md) for the Flathub Firefox Flatpak
+(`org.mozilla.firefox`, stable; install it yourself): the Flatpak's own
+entry with a wrapper in front, same ID, so default-browser associations
+keep working.
 
 - **`vrFullscreenFix`** (on): `full-screen-api.ignore-widgets` makes
   fullscreen fill just the window. Not applied in the desktop profile.
@@ -26,11 +27,11 @@ ID), so default-browser associations keep working.
 - **`prefs`:** further `about:config` values for every profile; they can
   also override the fixes above.
 - **`desktopProfile`** (`"desktop"`): in the nested desktop the launcher
-  uses this separate profile (a normal Firefox profile with its own browser
+  uses this separate profile (not for "Open Profile Manager") (a normal Firefox profile with its own browser
   data, created on first use). `null`: the default profile in both sessions.
 - **`defaultBrowser`** (off): the launcher becomes the default for `http`,
-  `https` and `text/html` (Home Manager's `xdg.mimeApps`, which then owns
-  `~/.config/mimeapps.list`).
+  `https` and `text/html` (the launcher's `defaultFor`: Home Manager's
+  `xdg.mimeApps`, which then owns `~/.config/mimeapps.list`).
 
 `prefs` and the fixes are *default* values, not user values: `about:config`
 can still change them per profile, and removing one leaves nothing behind.
@@ -71,9 +72,11 @@ to a store directory; Flatpak mounts it itself, so the sandbox doesn't get
 
 ### Desktop profile
 
-The launcher (a desktop entry with the Flatpak's ID) picks `desktopProfile`
-when started in the nested desktop. The desktop profile undoes the
-fullscreen fix only while its Firefox runs: the launcher links the
+The launcher's wrapper (`modules/firefox/wrapper.nix`) gets the entry's
+`flatpak run …` command line and, in the nested desktop, adds `--profile
+<desktopProfile>` (not to the profile manager action, `--ProfileManager`).
+The desktop profile undoes the fullscreen fix only while its Firefox runs:
+the wrapper links the
 profile's `user.js` to `/app/etc/firefox/steam-frame-nix-desktop-user.js`
 (a sandbox path) right before starting Firefox, waits for it, and once it
 has exited and the profile is no longer in use removes the link and the

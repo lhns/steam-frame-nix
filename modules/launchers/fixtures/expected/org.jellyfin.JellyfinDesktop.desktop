@@ -1,0 +1,29 @@
+[Desktop Entry]
+Version=1.0
+Name=Jellyfin
+Comment=Desktop client for Jellyfin
+Exec=flatpak run --branch=stable --arch=aarch64 --command=jellyfin-desktop --device=all --filesystem=/nix/store/00000000000000000000000000000000-mpv-hwdec-shim:ro --env=LD_PRELOAD=/nix/store/00000000000000000000000000000000-mpv-hwdec-shim/lib/mpv-hwdec-shim.so --env=SFN_MPV_HWDEC=v4l2m2m-copy,auto-copy org.jellyfin.JellyfinDesktop
+Icon=org.jellyfin.JellyfinDesktop
+Terminal=false
+Type=Application
+StartupWMClass=org.jellyfin.JellyfinDesktop
+Categories=AudioVideo;Video;Player;TV;
+Actions=DesktopF;DesktopW;TVF;TVW
+X-Flatpak=org.jellyfin.JellyfinDesktop
+X-SteamFrameNix-Source=@SOURCE@
+
+[Desktop Action DesktopF]
+Name=Desktop [Fullscreen]
+Exec=flatpak run --branch=stable --arch=aarch64 --command=jellyfin-desktop --device=all --filesystem=/nix/store/00000000000000000000000000000000-mpv-hwdec-shim:ro --env=LD_PRELOAD=/nix/store/00000000000000000000000000000000-mpv-hwdec-shim/lib/mpv-hwdec-shim.so --env=SFN_MPV_HWDEC=v4l2m2m-copy,auto-copy org.jellyfin.JellyfinDesktop --fullscreen --desktop
+
+[Desktop Action DesktopW]
+Name=Desktop [Windowed]
+Exec=flatpak run --branch=stable --arch=aarch64 --command=jellyfin-desktop --device=all --filesystem=/nix/store/00000000000000000000000000000000-mpv-hwdec-shim:ro --env=LD_PRELOAD=/nix/store/00000000000000000000000000000000-mpv-hwdec-shim/lib/mpv-hwdec-shim.so --env=SFN_MPV_HWDEC=v4l2m2m-copy,auto-copy org.jellyfin.JellyfinDesktop --windowed --desktop
+
+[Desktop Action TVF]
+Name=TV [Fullscreen]
+Exec=flatpak run --branch=stable --arch=aarch64 --command=jellyfin-desktop --device=all --filesystem=/nix/store/00000000000000000000000000000000-mpv-hwdec-shim:ro --env=LD_PRELOAD=/nix/store/00000000000000000000000000000000-mpv-hwdec-shim/lib/mpv-hwdec-shim.so --env=SFN_MPV_HWDEC=v4l2m2m-copy,auto-copy org.jellyfin.JellyfinDesktop --fullscreen --tv
+
+[Desktop Action TVW]
+Name=TV [Windowed]
+Exec=flatpak run --branch=stable --arch=aarch64 --command=jellyfin-desktop --device=all --filesystem=/nix/store/00000000000000000000000000000000-mpv-hwdec-shim:ro --env=LD_PRELOAD=/nix/store/00000000000000000000000000000000-mpv-hwdec-shim/lib/mpv-hwdec-shim.so --env=SFN_MPV_HWDEC=v4l2m2m-copy,auto-copy org.jellyfin.JellyfinDesktop --windowed --tv
