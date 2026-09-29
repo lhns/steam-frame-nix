@@ -50,6 +50,8 @@ modules/
   cleanup/package.nix          build: install.sh as a command (cleanup, steamvr-debugger-arm)
   cleanup/check.nix            test: install.sh cleanup on fake home/runtime dirs
   portal.nix                   Steam session portal config (session.portalFix)
+  applications-menu.nix        applications.menu link for KDE apps (session.applicationsMenu)
+  applications-menu/check.nix  test: the link on by default, absent when disabled
   keyboard-layout.nix          gamescope-session drop-in with XKB_DEFAULT_* (keyboard.layout)
   clipboard-sync.nix           app: KDE autostart of clipboard-sync (clipboardSync)
   hidden-apps.nix              Hidden=true desktop entries (launcherMenu.hiddenApps)

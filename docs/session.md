@@ -1,9 +1,10 @@
 # Session fixes
 
-Four fixes for the Frame's [two graphical sessions](../README.md#two-sessions):
-session settings and services, the portal, the keyboard layout and the
-clipboard. Options: [README, Options](../README.md#options) (`session.*`,
-`keyboard.layout`, `keyboard.variant`, `clipboardSync.*`).
+Five fixes for the Frame's [two graphical sessions](../README.md#two-sessions):
+session settings and services, the portal, the applications menu, the
+keyboard layout and the clipboard. Options:
+[README, Options](../README.md#options) (`session.*`, `keyboard.layout`,
+`keyboard.variant`, `clipboardSync.*`).
 
 ## Session settings and services
 
@@ -54,6 +55,29 @@ desktop's portal is unaffected.
 **How it works:** a portal dir in `~/.local/share` linking Valve's `.portal`
 files plus a config (`default=holo;gamescope`), and a drop-in on
 `xdg-desktop-portal.service`.
+
+## Applications menu
+
+`session.applicationsMenu.enable`, module `applications-menu`. On by default;
+`false` turns it off.
+
+**Problem:** KDE apps build their app database (ksycoca) from
+`applications.menu`, but SteamOS only ships
+`/etc/xdg/menus/plasma-applications.menu`. The nested desktop sets
+`XDG_MENU_PREFIX=plasma-`, the Steam session doesn't: KDE apps started there
+(e.g. Dolphin from the "+" menu) know no apps at all ("no installed
+application can open …").
+
+**What you get:** KDE apps in the Steam session see every installed app,
+Flatpaks included, e.g. for "Open with". The nested desktop is unaffected (it
+reads Plasma's menu through its prefix).
+
+**Remove when** the Steam session sets `XDG_MENU_PREFIX` or SteamOS ships
+`applications.menu`.
+
+**How it works:** `~/.config/menus/applications.menu` is a Home Manager link
+to `/etc/xdg/menus/plasma-applications.menu`. If SteamOS drops that file,
+the link dangles, which is the same as no menu.
 
 ## Keyboard layout
 

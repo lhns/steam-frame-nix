@@ -13,7 +13,8 @@
   # home.packages = with pkgs; [ htop ripgrep ];
 
   # Steam Frame fixes, see https://github.com/lhns/steam-frame-nix
-  # (session.portalFix and clipboardSync are on by default).
+  # (session.portalFix, session.applicationsMenu and clipboardSync are on
+  # by default).
   # steamFrame = {
   #   keyboard.layout = "de";               # XKB layout, Steam session
   #   keyboard.vr.extraKeys.enable = true;  # Esc/Ctrl/Alt/arrows in VR

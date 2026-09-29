@@ -14,6 +14,7 @@
     modules = {
       session = ./modules/session.nix;
       portal = ./modules/portal.nix;
+      applications-menu = ./modules/applications-menu.nix;
       keyboard-layout = ./modules/keyboard-layout.nix;
       vr-keyboard-extra-keys = ./modules/vr-keyboard-extra-keys.nix;
       vr-keyboard = ./modules/vr-keyboard.nix;
@@ -65,8 +66,10 @@
 
     # Tests of the VR keyboard (text model, corrector, swipe decoder on the
     # default German + English dictionary), the Jellyfin mpv shim, the
-    # Firefox wrapper, the launchers and install.sh cleanup: nix flake check
+    # Firefox wrapper, the launchers, install.sh cleanup and the
+    # applications.menu link: nix flake check
     checks = forSystems (pkgs: {
+      applications-menu = import ./modules/applications-menu/check.nix { inherit pkgs; };
       cleanup = import ./modules/cleanup/check.nix { inherit pkgs; };
       firefox = import ./modules/firefox/check.nix { inherit pkgs; };
       jellyfin = import ./modules/jellyfin/check.nix { inherit pkgs; };

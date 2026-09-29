@@ -3,10 +3,10 @@
 [Home Manager](https://github.com/nix-community/home-manager) modules for the
 Valve Steam Frame (SteamOS, `aarch64-linux`, standalone home-manager). They
 work around quirks of the Frame's [two graphical sessions](#two-sessions)
-(portal, keyboard layout, clipboard, KDE wallet, Firefox), enable hardware
-video decoding in Jellyfin, run rootless Docker, and extend Steam's and
-SteamVR's UIs at runtime (VR keyboard, "+" menu, dashboard windows, Steam
-close button, window curvature, window controls).
+(portal, KDE app menu, keyboard layout, clipboard, KDE wallet, Firefox),
+enable hardware video decoding in Jellyfin, run rootless Docker, and extend
+Steam's and SteamVR's UIs at runtime (VR keyboard, "+" menu, dashboard
+windows, Steam close button, window curvature, window controls).
 
 Everything is declarative: files are links into the Nix store, UI patches
 live in memory. The few things that have to be written elsewhere at runtime
@@ -15,8 +15,8 @@ their lifetime and what removes them; `steam-frame-nix-cleanup` removes every
 one of them (on each switch what the configuration no longer uses, `--all`
 for everything).
 
-All options live under `steamFrame.*`. The portal fix and clipboard sync are
-on by default; everything else is opt-in.
+All options live under `steamFrame.*`. The portal fix, the applications menu
+and clipboard sync are on by default; everything else is opt-in.
 
 ## Features
 
@@ -27,6 +27,7 @@ configuration, limitations and how it works.
 
 - [Session settings](docs/session.md#session-settings-and-services) (`session.*`): outer bus and user services, for launchers and the other modules.
 - [Portal fix](docs/session.md#portal-fix) (`session.portalFix`, on): apps in the Steam session can open links.
+- [Applications menu](docs/session.md#applications-menu) (`session.applicationsMenu`, on): KDE apps in the Steam session (Dolphin from the "+" menu) know the installed apps.
 - [Keyboard layout](docs/session.md#keyboard-layout) (`keyboard.layout`, `keyboard.variant`): XKB layout for the Steam session.
 - [Clipboard sync](docs/session.md#clipboard-sync) (`clipboardSync`, on): one clipboard for the Steam session and the nested desktop.
 
@@ -214,7 +215,7 @@ home-manager switch --flake .#steamos  # manual setup, from the flake's director
 In your own flake, add the input as above and
 `steam-frame-nix.homeManagerModules.default` to the modules. `default`
 imports all modules; single ones:
-`homeManagerModules.{session,portal,keyboard-layout,vr-keyboard-extra-keys,vr-keyboard,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,cleanup,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox,jellyfin,launchers,docker}`
+`homeManagerModules.{session,portal,applications-menu,keyboard-layout,vr-keyboard-extra-keys,vr-keyboard,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,cleanup,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox,jellyfin,launchers,docker}`
 (`steam-keyboard-patch` and `keyring` still work as the former names of
 `vr-keyboard-extra-keys` and `launchers`). Every module imports `cleanup` (see
 [Changes outside Nix](#changes-outside-nix-exceptions)); which file is
@@ -231,6 +232,7 @@ which: [Repository layout](docs/development.md).
 | `steamFrame.session.services.restart` | list of str | `[ ]` | User units restarted on every switch. |
 | `steamFrame.session.services.stop` | list of str | `[ ]` | User units stopped on switch if running (e.g. of a disabled feature). |
 | `steamFrame.session.portalFix.enable` | bool | `true` | Working portal config (OpenURI) for the Steam session. |
+| `steamFrame.session.applicationsMenu.enable` | bool | `true` | `~/.config/menus/applications.menu` linked to Plasma's, for KDE apps in the Steam session. |
 | `steamFrame.keyboard.layout` | null or str | `null` | XKB layout for the Steam session, e.g. `"de"`; `null`: US. |
 | `steamFrame.keyboard.variant` | null or str | `null` | XKB variant for the Steam session, e.g. `"nodeadkeys"`; see [Keyboard layout](docs/session.md#keyboard-layout). |
 | `steamFrame.keyboard.vr.extraKeys.enable` | bool | `false` | VR keyboard with Esc/Ctrl/Alt, arrows, real chords, AltGr/non-ASCII. |
