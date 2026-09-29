@@ -50,6 +50,7 @@ modules/
   cleanup/package.nix          build: install.sh as a command (cleanup, steamvr-debugger-arm)
   cleanup/check.nix            test: install.sh cleanup on fake home/runtime dirs
   portal.nix                   Steam session portal config (session.portalFix)
+  portal/check.nix             test: KDE FileChooser on by default, absent when disabled
   applications-menu.nix        applications.menu link for KDE apps (session.applicationsMenu)
   applications-menu/check.nix  test: the link on by default, absent when disabled
   keyboard-layout.nix          gamescope-session drop-in with XKB_DEFAULT_* (keyboard.layout)

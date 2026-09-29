@@ -26,7 +26,7 @@ configuration, limitations and how it works.
 **Session** ([docs/session.md](docs/session.md)):
 
 - [Session settings](docs/session.md#session-settings-and-services) (`session.*`): outer bus and user services, for launchers and the other modules.
-- [Portal fix](docs/session.md#portal-fix) (`session.portalFix`, on): apps in the Steam session can open links.
+- [Portal fix](docs/session.md#portal-fix) (`session.portalFix`, on): apps in the Steam session can open links, and Flatpak apps get KDE's file dialog.
 - [Applications menu](docs/session.md#applications-menu) (`session.applicationsMenu`, on): KDE apps in the Steam session (Dolphin from the "+" menu) know the installed apps.
 - [Keyboard layout](docs/session.md#keyboard-layout) (`keyboard.layout`, `keyboard.variant`): XKB layout for the Steam session.
 - [Clipboard sync](docs/session.md#clipboard-sync) (`clipboardSync`, on): one clipboard for the Steam session and the nested desktop.
@@ -232,6 +232,7 @@ which: [Repository layout](docs/development.md).
 | `steamFrame.session.services.restart` | list of str | `[ ]` | User units restarted on every switch. |
 | `steamFrame.session.services.stop` | list of str | `[ ]` | User units stopped on switch if running (e.g. of a disabled feature). |
 | `steamFrame.session.portalFix.enable` | bool | `true` | Working portal config (OpenURI) for the Steam session. |
+| `steamFrame.session.portalFix.fileChooser` | bool | `true` | KDE's file dialog as the Steam session's FileChooser portal (Flatpak apps can open and save files outside their sandbox). Needs `portalFix.enable`. |
 | `steamFrame.session.applicationsMenu.enable` | bool | `true` | `~/.config/menus/applications.menu` linked to Plasma's, for KDE apps in the Steam session. |
 | `steamFrame.keyboard.layout` | null or str | `null` | XKB layout for the Steam session, e.g. `"de"`; `null`: US. |
 | `steamFrame.keyboard.variant` | null or str | `null` | XKB variant for the Steam session, e.g. `"nodeadkeys"`; see [Keyboard layout](docs/session.md#keyboard-layout). |

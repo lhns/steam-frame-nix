@@ -40,21 +40,37 @@ launcher's `hostEnv`; a hand-written entry uses the prefix `session.busEnv`:
 
 ## Portal fix
 
-`session.portalFix.enable`, module `portal`. On by default.
+`session.portalFix.enable` and `session.portalFix.fileChooser`, module
+`portal`. Both on by default.
 
 **Problem:** the Frame image (SteamOS 0.3.0, build 20260922) points the Steam
 session's `xdg-desktop-portal` at `/usr/share/xdg-desktop-portal/gamescope-portals`,
 which lacks `gamescope-portals.conf`: no backend, no OpenURI, so no app in
-the Steam session can open links.
+the Steam session can open links. Its two backends (gamescope, holo) also
+have no FileChooser, so Flatpak apps fall back to a dialog inside their
+sandbox: e.g. Element's Attachments shows an empty file selector without
+your home dir.
 
-**What you get:** a working OpenURI portal in the Steam session; the
-desktop's portal is unaffected.
+**What you get:** a working OpenURI portal in the Steam session and, with
+`fileChooser`, KDE's file dialog there (a normal window in VR) with access
+to all your files; the app gets only the files you pick. The desktop's
+portal is unaffected.
 
-**Remove when** SteamOS ships `gamescope-portals.conf`.
+**Configuration:** takes effect when the portal restarts (next Steam session
+start, or `systemctl --user restart xdg-desktop-portal`) and the app
+restarts (Electron apps check for the portal at startup). To keep the old
+dialog: `steamFrame.session.portalFix.fileChooser = false;`.
+
+**Remove when** SteamOS ships `gamescope-portals.conf` (and a FileChooser
+backend, for `fileChooser`).
 
 **How it works:** a portal dir in `~/.local/share` linking Valve's `.portal`
 files plus a config (`default=holo;gamescope`), and a drop-in on
-`xdg-desktop-portal.service`.
+`xdg-desktop-portal.service`. `fileChooser` adds a link to
+`/usr/share/xdg-desktop-portal/portals/kde.portal` and
+`org.freedesktop.impl.portal.FileChooser=kde`; the preinstalled
+`xdg-desktop-portal-kde` starts on demand (D-Bus activation) with the Steam
+session's `DISPLAY=:0`.
 
 ## Applications menu
 
