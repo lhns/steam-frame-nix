@@ -64,6 +64,11 @@ modules/
                                of Flatpaks/host files in <runtimeDir>/steam-frame-nix/applications
     check.nix, fixtures/       test: real entries rewritten (fixtures/expected), generator runs
   docker.nix                   service: rootless dockerd (docker)
+  screenshots.nix              ~/Pictures link to the SteamVR screenshots (screenshots)
+  screenshots/
+    link.sh, package.nix       service steam-frame-nix-screenshots (+ .path), switch:
+                               <runtimeDir>/steam-frame-nix/screenshots -> account folder
+    check.nix                  test: account detection on fake Steam dirs
   firefox.nix                  Flatpak prefs extension and launcher (firefox)
   firefox/wrapper.nix          app: launcher wrapper (desktop profile, fullscreen fix)
   firefox/check.nix            test: wrapper against a fake flatpak
@@ -128,6 +133,7 @@ they are kept even where a file name says more:
 | `frame-controls` | `dashboard.frameControls` | `frame-controls` (SteamVR, state) | `steam-ui-patches` |
 | `steamvr-debugger` | `steamvrDebugger` | | `steamvr-webhelper-debugger` |
 | `launchers` | `launchers` | | `steam-frame-nix-launchers` (`.service`, `.path`) |
+| `screenshots` | `screenshots` | | `steam-frame-nix-screenshots` (`.service`, `.path`) |
 
 Log of all patches:
 `journalctl --user -u steam-ui-patches -u steam-keyboard-patch -u vr-keyboard-relay`.

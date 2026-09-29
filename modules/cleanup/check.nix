@@ -57,6 +57,8 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq ]; } ''
   echo '[Desktop Entry]' > $root/run/steam-frame-nix/applications/im.riot.Riot.desktop
   echo x > $root/run/steam-frame-nix/applications/.im.riot.Riot.desktop.sum
   : > $root/run/steam-frame-nix/applications/.lock
+  ln -s $HOME/.local/share/Steam/userdata/1/760/remote/250820/screenshots \
+    $root/run/steam-frame-nix/screenshots               # steamFrame.screenshots
   echo old > $root/run/systemd/user/steamvr.service.d/50-steam-frame-nix-debugger.conf
   echo keep > $root/run/systemd/user/steamvr.service.d/other.conf
   ln -s /nix/store/00000000000000000000000000000000-breeze-icons-6.30.0/share/icons/breeze/apps/64/utilities-terminal.svg $I/utilities-terminal.svg
@@ -191,6 +193,17 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq ]; } ''
   exec 8<&-                                            # Firefox closed
   res=$(steam-frame-nix-cleanup --orphans)
   gone $F/desktop/user.js
+  # screenshots link: kept while used, a foreign link left alone
+  mkdir -p $root/run/steam-frame-nix
+  ln -s /x/userdata/1/760/remote/250820/screenshots $root/run/steam-frame-nix/screenshots
+  res=$(steam-frame-nix-cleanup --orphans --keep screenshots)
+  there $root/run/steam-frame-nix/screenshots
+  res=$(steam-frame-nix-cleanup --orphans)
+  gone $root/run/steam-frame-nix/screenshots
+  ln -s /elsewhere $root/run/steam-frame-nix/screenshots
+  res=$(steam-frame-nix-cleanup --orphans)
+  has "$res" "left alone: $root/run/steam-frame-nix/screenshots"
+  rm -r $root/run/steam-frame-nix
   ! steam-frame-nix-cleanup --all --keep debugger 2>/dev/null || fail "--all --keep accepted"
   ! steam-frame-nix-cleanup --orphans --keep bogus 2>/dev/null || fail "unknown --keep accepted"
   echo "C ok"

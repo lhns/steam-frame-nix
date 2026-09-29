@@ -37,6 +37,7 @@
       jellyfin = ./modules/jellyfin.nix;
       launchers = ./modules/launchers.nix;
       docker = ./modules/docker.nix;
+      screenshots = ./modules/screenshots.nix;
     };
     # Former attribute names, kept so existing imports keep working (not in
     # `default`, which imports each module once under its current name).
@@ -67,8 +68,8 @@
     # Tests of the VR keyboard (text model, corrector, swipe decoder on the
     # default German + English dictionary), the extra keys' xdotool
     # allowlist, the Jellyfin mpv shim, the Firefox wrapper, the launchers,
-    # install.sh cleanup, the applications.menu link and the portal config:
-    # nix flake check
+    # install.sh cleanup, the applications.menu link, the portal config and
+    # the screenshots account detection: nix flake check
     checks = forSystems (pkgs: {
       applications-menu = import ./modules/applications-menu/check.nix { inherit pkgs; };
       cleanup = import ./modules/cleanup/check.nix { inherit pkgs; };
@@ -76,6 +77,7 @@
       jellyfin = import ./modules/jellyfin/check.nix { inherit pkgs; };
       launchers = import ./modules/launchers/check.nix { inherit pkgs; };
       portal = import ./modules/portal/check.nix { inherit pkgs; };
+      screenshots = import ./modules/screenshots/check.nix { inherit pkgs; };
       vr-keyboard = import ./modules/vr-keyboard/check.nix { inherit pkgs; };
       vr-keyboard-extra-keys = import ./modules/vr-keyboard-extra-keys/check.nix { inherit pkgs; };
     });

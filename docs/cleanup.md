@@ -26,6 +26,7 @@ is reported as "left alone" and never touched:
 | `jellyfin` | the hwdec shim entries in the Jellyfin Flatpak's user override `~/.local/share/flatpak/overrides/org.jellyfin.JellyfinDesktop` (nix-flatpak), an empty override file, and the shim copy of earlier versions in `~/.var/app/org.jellyfin.JellyfinDesktop` (marker `~/.local/state/steam-frame-nix/jellyfin-hwdec-shim`) |
 | `ui-state`: `~/.local/state/steam-frame-nix/ui-patches/<name>.json` | the dashboard patches' saved choices; `--all` only, never `--orphans`; stray `*.json.tmp` files |
 | `launchers`: `/run/user/1000/steam-frame-nix/applications` | the entries of [launchers](launchers.md) (tmpfs); `--all` only (switches remove those of removed launchers themselves) |
+| `screenshots`: `/run/user/1000/steam-frame-nix/screenshots` | a link to `*/userdata/*/760/remote/250820/screenshots` ([SteamVR screenshots](screenshots.md)); kept by `--orphans --keep screenshots` (while `steamUserId` is unset) |
 | `dirs` | `~/.local/state/steam-frame-nix` and `/run/user/1000/steam-frame-nix` when empty |
 
 ### Left by older versions

@@ -55,6 +55,7 @@ configuration, limitations and how it works.
 - [Jellyfin](docs/jellyfin.md) (`jellyfin.hardwareDecoding`): hardware video decoding in the Jellyfin Desktop Flatpak.
 - [Launchers](docs/launchers.md) (`launchers.<desktop ID>`): an app's own desktop entry (Flatpak, Nix package) with extra options, environment, wrappers and MIME defaults; `keyring` keeps its KDE wallet logins in both sessions (Electron too).
 - [Docker](docs/docker.md) (`docker`): rootless Docker as a user service, CLI working in both sessions.
+- [SteamVR screenshots](docs/screenshots.md) (`screenshots`): `~/Pictures/SteamVR Screenshots`, a link to Steam's folder of the current account.
 
 **Your own patches** of Steam's UI, and fixing patches after a Steam update: [UI patches](docs/ui-patches.md).
 
@@ -215,7 +216,7 @@ home-manager switch --flake .#steamos  # manual setup, from the flake's director
 In your own flake, add the input as above and
 `steam-frame-nix.homeManagerModules.default` to the modules. `default`
 imports all modules; single ones:
-`homeManagerModules.{session,portal,applications-menu,keyboard-layout,vr-keyboard-extra-keys,vr-keyboard,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,cleanup,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox,jellyfin,launchers,docker}`
+`homeManagerModules.{session,portal,applications-menu,keyboard-layout,vr-keyboard-extra-keys,vr-keyboard,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,cleanup,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox,jellyfin,launchers,docker,screenshots}`
 (`steam-keyboard-patch` and `keyring` still work as the former names of
 `vr-keyboard-extra-keys` and `launchers`). Every module imports `cleanup` (see
 [Changes outside Nix](#changes-outside-nix-exceptions)); which file is
@@ -326,6 +327,9 @@ which: [Repository layout](docs/development.md).
 | `steamFrame.docker.enable` | bool | `false` | Rootless Docker as a user service, CLI for both sessions, see [Docker](docs/docker.md). |
 | `steamFrame.docker.package` | package | `pkgs.docker` | Docker package (daemon and CLI). |
 | `steamFrame.docker.host` | str, read-only | `"unix://${runtimeDir}/docker.sock"` | The daemon's `DOCKER_HOST` (the CLI's default). |
+| `steamFrame.screenshots.enable` | bool | `false` | Link `~/Pictures/<name>` to the SteamVR screenshots, see [SteamVR screenshots](docs/screenshots.md). |
+| `steamFrame.screenshots.name` | str | `"SteamVR Screenshots"` | Name of the link in `~/Pictures`. |
+| `steamFrame.screenshots.steamUserId` | null or str (digits) | `null` | Steam account ID (folder in `~/.local/share/Steam/userdata`); `null`: the account last logged in, found at runtime. |
 | `steamFrame.cleanup.package` | package, read-only | | `steam-frame-nix-cleanup` (on `PATH` too), see [Changes outside Nix](#changes-outside-nix-exceptions). |
 
 Renamed options still work under their old names, with a warning:
@@ -363,6 +367,7 @@ lives in memory (the UI patches). These are written at runtime:
 | `/run/user/1000/systemd/user/steamvr.service.d/50-steam-frame-nix-debugger.conf`, `/run/user/1000/steam-frame-nix/steamvr-debugger-restore` | SteamVR debugger: puts the key back when SteamVR stops, without Nix | until reboot (tmpfs) | reboot; `steam-frame-nix-cleanup` while SteamVR is stopped and the debugger is off |
 | `~/.local/state/steam-frame-nix/ui-patches/<name>.json` | Saved choices of dashboard patches ([persistent state](docs/ui-patches.md#persistent-state)): window control bar placements (`frame-controls`), "Steam hidden" (`steam-close-button`). SteamOS's `steamvr.service` deletes `~/.cache/SteamVR` (the dashboard's own browser storage) on every SteamVR start. | until removed: kept when a patch is disabled (the choices come back when you enable it again) | `steam-frame-nix-cleanup --all`, `install.sh uninstall` |
 | `/run/user/1000/steam-frame-nix/applications/<id>.desktop` (with `.<id>.desktop.sum`, `.lock`) | [Launchers](docs/launchers.md) of Flatpaks and host files; `~/.local/share/applications/<id>.desktop` is a Home Manager link to it | until reboot (tmpfs), written again at login | reboot; the next switch or rewrite when the launcher or its app is gone; `steam-frame-nix-cleanup --all` |
+| `/run/user/1000/steam-frame-nix/screenshots` | [SteamVR screenshots](docs/screenshots.md#how-it-works) without `steamUserId`: link to the current account's folder; `~/Pictures/<name>` is a Home Manager link to it | until reboot (tmpfs), written again at login | reboot; `steam-frame-nix-cleanup` once unused |
 | mtime of `~/.local/share/applications` | [Launchers](docs/launchers.md#how-it-works): a running Steam rescans the "+" menu | only the directory's timestamp | nothing to remove |
 | mtime of `~/.local/share/icons/hicolor` | [icon fallbacks](docs/launcher-menu.md#icon-fallbacks): a running Steam rescans icons | only the directory's timestamp | nothing to remove |
 

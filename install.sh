@@ -74,7 +74,7 @@ Commands:
                      or before removing it.
         --orphans    what the configuration no longer uses (run by the Home
                      Manager module on every switch); keeps saved choices.
-        --keep       still in use (with --orphans): debugger
+        --keep       still in use (with --orphans): debugger, screenshots
         --dry-run    only print what would be done
         --quiet      print only actions, deferrals and warnings
       SteamVR's VRWebHelper.DebuggerEnabled can't be changed while SteamVR
@@ -410,6 +410,9 @@ EOF
 #   launchers  entries of steamFrame.launchers in
 #              $OUTER_RUNTIME_DIR/steam-frame-nix/applications (tmpfs; --all
 #              only: the switch's own run removes those of removed launchers).
+#   screenshots  the link $OUTER_RUNTIME_DIR/steam-frame-nix/screenshots
+#              (tmpfs) to a SteamVR screenshot folder
+#              (*/userdata/<id>/760/remote/250820/screenshots).
 #   dirs       $SFN_STATE and $OUTER_RUNTIME_DIR/steam-frame-nix when empty.
 #
 # --orphans keeps what the current configuration still uses (--keep ...);
@@ -839,6 +842,19 @@ clean_launchers() {
   c_rmdir "$d"
 }
 
+# --- screenshots link (tmpfs) ---
+
+clean_screenshots() { # keep
+  local l=$SFN_RUNTIME/screenshots
+  (( $1 )) && return 0
+  [[ -L $l ]] || return 0
+  if [[ $(readlink "$l") == */userdata/*/760/remote/250820/screenshots ]]; then
+    c_rm "$l" "link to the SteamVR screenshots"
+  else
+    c_left "$l (not a link to SteamVR screenshots)"
+  fi
+}
+
 # --- dashboard patch state ---
 
 clean_ui_state() { # all
@@ -859,7 +875,7 @@ clean_ui_state() { # all
 }
 
 cmd_cleanup() {
-  local mode='' keep_debugger=0 keeps=0 k
+  local mode='' keep_debugger=0 keep_screenshots=0 keeps=0 k
   while (( $# )); do
     case $1 in
       --all) mode=all; shift ;;
@@ -871,7 +887,8 @@ cmd_cleanup() {
         k=$2; shift 2; keeps=$((keeps + 1))
         case $k in
           debugger) keep_debugger=1 ;;
-          *) die "cleanup: unknown artifact '$k' for --keep (debugger)" ;;
+          screenshots) keep_screenshots=1 ;;
+          *) die "cleanup: unknown artifact '$k' for --keep (debugger, screenshots)" ;;
         esac ;;
       -h|--help) usage; exit 0 ;;
       *) die "cleanup: unknown option '$1' (see --help)" ;;
@@ -891,6 +908,7 @@ cmd_cleanup() {
   clean_jellyfin
   clean_ui_state "$([[ $mode == all ]] && echo 1 || echo 0)"
   c_rmdir "$SFN_STATE"
+  clean_screenshots "$keep_screenshots"
   if [[ $mode == all ]]; then clean_launchers; c_rmdir "$SFN_RUNTIME"; fi
   (( CLEAN_ACTIONS || ${#CLEAN_DEFERRED[@]} || CLEAN_QUIET )) || info "nothing to clean up"
   return 0
