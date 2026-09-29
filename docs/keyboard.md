@@ -11,6 +11,8 @@ The keyboard layout of the Steam session itself is a separate fix
 `keyboard.vr.extraKeys.enable`, module `vr-keyboard-extra-keys` (sources in
 `modules/vr-keyboard-extra-keys/`).
 
+![Steam's VR keyboard with the extra keys (Esc, Ctrl, Alt, AltGr, arrows, Pos1/End, PgUp/PgDn) typing into Konsole](screenshots/vr-keyboard-extra-keys.jpg)
+
 **Problem:** Steam's VR keyboard has no Ctrl, Alt or Esc, can't press real
 keys, and its text emulation only maps plain ASCII: non-ASCII and
 AltGr/dead-key characters on the German keymap (`| @ { [ ] } \ ~ ^`,
@@ -75,6 +77,8 @@ Steam client 1790377368 (UI build 11041156).
 ## Swipe and suggestions
 
 `keyboard.vr.*`, module `vr-keyboard`.
+
+![Swiping "hello" on Steam's VR keyboard: the swipe trail and the suggestion strip (hello, hell, Helm, he'll, helm, heel)](screenshots/vr-keyboard-swipe.jpg)
 
 **Problem:** Steam's VR keyboard is tap-only: no swipe typing, no
 suggestions, and deleting more than a few characters means many Backspace
