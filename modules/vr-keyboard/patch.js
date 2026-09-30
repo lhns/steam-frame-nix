@@ -28,7 +28,7 @@
 // Steam's events. Debugging: __sfuiSwipeLog, __sfuiSwipePaths
 // (scripts/vr-keyboard-replay.mjs).
 ((find, sigs, opts, hooks, D, T, C, DICT) => {
-  const VERSION = 23;
+  const VERSION = 24;
   const G = window;
   const O = opts;
 
@@ -186,9 +186,9 @@
         const key = st?.strKey, ts = this.state?.toggleStates || {};
         if (typeof key === 'string' && !TOGGLES.has(key) && !/^(SwitchKeys_|IME_)/.test(key)) {
           // Extra keys typed by keyboard.vr.extraKeys with xdotool (chords, Esc,
-          // arrows, AltGr Delete: text after the cursor) and dead keys: the
-          // model can't follow them.
-          if (on(ts.Control) || on(ts.Alt) || key.startsWith('VKX_') || st.strDeadKeyNext || (on(ts.Shift) && key.startsWith('Arrow'))) {
+          // arrows, Shift+Tab, AltGr Delete: text after the cursor) and dead
+          // keys: the model can't follow them.
+          if (on(ts.Control) || on(ts.Alt) || key.startsWith('VKX_') || st.strDeadKeyNext || (on(ts.Shift) && (key.startsWith('Arrow') || key === 'Tab'))) {
             reset(`key ${key}`);
           } else { model.freeze(); refreshLater(); }
         }

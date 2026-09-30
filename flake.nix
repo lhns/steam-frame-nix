@@ -65,9 +65,10 @@
     }) self.packages;
 
     # Tests of the VR keyboard (text model, corrector, swipe decoder on the
-    # default German + English dictionary), the Jellyfin mpv shim, the
-    # Firefox wrapper, the launchers, install.sh cleanup, the
-    # applications.menu link and the portal config: nix flake check
+    # default German + English dictionary), the extra keys' xdotool
+    # allowlist, the Jellyfin mpv shim, the Firefox wrapper, the launchers,
+    # install.sh cleanup, the applications.menu link and the portal config:
+    # nix flake check
     checks = forSystems (pkgs: {
       applications-menu = import ./modules/applications-menu/check.nix { inherit pkgs; };
       cleanup = import ./modules/cleanup/check.nix { inherit pkgs; };
@@ -76,6 +77,7 @@
       launchers = import ./modules/launchers/check.nix { inherit pkgs; };
       portal = import ./modules/portal/check.nix { inherit pkgs; };
       vr-keyboard = import ./modules/vr-keyboard/check.nix { inherit pkgs; };
+      vr-keyboard-extra-keys = import ./modules/vr-keyboard-extra-keys/check.nix { inherit pkgs; };
     });
 
     # nix flake init -t github:lhns/steam-frame-nix

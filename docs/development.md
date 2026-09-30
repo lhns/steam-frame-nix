@@ -91,6 +91,8 @@ modules/
   vr-keyboard-extra-keys/
     patch.js, unpatch.js       Steam: the extra bottom row and key routing
     xdotool-helper.mjs         service steam-keyboard-patch: own injector + xdotool keys
+    allowlist.mjs              service: the keys the helper may send
+    check.nix, tests/          test: the allowlist
   vr-keyboard.nix              swipe, suggestions, Backspace drag (keyboard.vr)
   vr-keyboard/
     patch.js, unpatch.js       Steam: gestures, text model, suggestion strip

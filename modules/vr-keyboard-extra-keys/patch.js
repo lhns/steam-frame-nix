@@ -23,7 +23,7 @@
 // mkPatch patch (see steam-ui-patches/lib/default.nix); no options. On a
 // signature mismatch it returns an error and changes nothing. Idempotent.
 ((find, sigs) => {
-  const VERSION = 22;
+  const VERSION = 23;
   const send = (msg) => window.__vrkbdKey && window.__vrkbdKey(msg);
   const mods = find.resolvePatch('webpackChunksteamui', sigs);
   if (typeof mods === 'string') return mods;
@@ -252,8 +252,9 @@
     const key = st?.strKey;
     const ts = this.state?.toggleStates || {};
     const ctrl = active(ts.Control), alt = active(ts.Alt), shift = active(ts.Shift);
-    // Extra keys always; Shift+arrow too (Steam's own arrow path drops Shift).
-    const special = key?.startsWith('VKX_') || (shift && key?.startsWith('Arrow'));
+    // Extra keys always; Shift+arrow and Shift+Tab too (Steam sends arrows
+    // and Tab without Shift: Tab as the text "\t").
+    const special = key?.startsWith('VKX_') || (shift && (key?.startsWith('Arrow') || key === 'Tab'));
     const sym = key && !TOGGLES.includes(key) && (special || ctrl || alt) && keysym(key);
     if (!sym) return orig.call(this, st);
     send('key:' + [ctrl && 'ctrl', alt && 'alt', shift && 'shift', sym].filter(Boolean).join('+'));

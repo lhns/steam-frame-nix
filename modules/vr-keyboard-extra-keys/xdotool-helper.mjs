@@ -8,6 +8,7 @@
 // usage: node xdotool-helper.mjs <patch.js> <unpatch.js> [xdotool]
 import { readFileSync } from 'node:fs';
 import { execFile } from 'node:child_process';
+import { allowedCombo, allowedChar } from './allowlist.mjs';
 
 const [, , patchPath, unpatchPath, xdotool = 'xdotool'] = process.argv;
 const PATCH = readFileSync(patchPath, 'utf8');
@@ -19,30 +20,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // :0 is the Steam session's Xwayland, where the VR app windows live.
 const ENV = { ...process.env, DISPLAY: process.env.VRKBD_DISPLAY || ':0', LC_ALL: 'C.UTF-8' };
 
-// Allowlist: requests come from Steam's UI JS, so the helper must not be able
-// to type ASCII text or press Enter on its behalf. Accepted:
-//  key:<combo>  the extra keys (Esc, Del, Home, End, PgUp/PgDn, arrows),
-//               optionally with modifiers; or ctrl and/or alt (+ optional
-//               shift) with one key
-//  type:<char>  one character Steam's key emulation can't produce: non-ASCII
-//               (äöüß€§°´…) or | @ { [ ] } \ ~ ^ `
-//  down:<mod> / up:<mod>   hold/release ctrl or alt
-const SPECIAL = new Set(['Escape', 'Delete', 'Home', 'End', 'Prior', 'Next', 'Left', 'Right', 'Up', 'Down']);
-const KEY = /^([a-z0-9]|space|BackSpace|Tab|period|comma|minus|plus|numbersign|less|slash|ssharp|udiaeresis|odiaeresis|adiaeresis)$/;
 const MODKEY = { ctrl: 'Control_L', alt: 'Alt_L' };
-function allowedCombo(combo) {
-  const parts = combo.split('+');
-  const key = parts.pop();
-  const mods = new Set(parts);
-  if (parts.length !== mods.size || ![...mods].every((m) => ['ctrl', 'alt', 'shift'].includes(m))) return false;
-  if (SPECIAL.has(key)) return true;
-  return KEY.test(key) && (mods.has('ctrl') || mods.has('alt'));
-}
-function allowedChar(c) {
-  if ([...c].length !== 1) return false;
-  const cp = c.codePointAt(0);
-  return (cp > 0xa0 && !/\s|\p{C}/u.test(c)) || '|@{[]}\\~^`'.includes(c);
-}
 
 const held = new Set();                           // modifiers currently held down via keydown
 const xdo = (args) => execFile(xdotool, args, { env: ENV }, (err) => err && console.error('xdotool', args.join(' '), err.message));

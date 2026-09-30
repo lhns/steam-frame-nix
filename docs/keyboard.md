@@ -25,6 +25,10 @@ backtick, `ä ö ü €`) come out as `1`.
   AltGr and layout keys.
 - AltGr + arrows: Home, End, Page Up, Page Down (hinted on the keys);
   Shift + arrows select text.
+- Shift + Tab moves the focus backwards (stock Steam drops the Shift);
+  Ctrl + Shift + Tab works too (e.g. previous Firefox tab). A locked Shift
+  is released after it, like a tapped one. Shift + Enter and
+  Shift + Backspace stay plain Enter and Backspace.
 - AltGr + the key left of Backspace (`´` on German, `=` on US): Delete,
   labelled like Steam's Delete key in its language (`Entf`; `Del` if that is
   longer), hinted on the key without AltGr; repeats while held. Layouts with
@@ -46,8 +50,10 @@ after Steam restarts. Turning it off reverts the keyboard.
 is harmless, and Esc/Ctrl/Alt/arrows work regardless.
 
 **Security:** the helper service that presses the keys only accepts
-single-key Ctrl/Alt chords, the extra keys, Ctrl/Alt hold/release and single
-non-ASCII/AltGr characters; it cannot type ASCII text or press Enter.
+single-key Ctrl/Alt chords, the extra keys, Shift + Tab, Ctrl/Alt
+hold/release and single non-ASCII/AltGr characters; it cannot type ASCII
+text or press Enter (`allowlist.mjs`, tested by the flake check
+`vr-keyboard-extra-keys`).
 
 **Caveat:** depends on Steam UI internals; after a Steam update that changes
 them the keyboard stays stock and the journal says why (see
@@ -63,8 +69,11 @@ Steam client 1790377368 (UI build 11041156).
   Steam's `SharedJSContext` over DevTools (`127.0.0.1:8080`) and re-injects
   it after Steam restarts; stopping it (or disabling the option)
   runs the unpatch.
-- Ctrl/Alt chords and Esc are sent with `xdotool key` on `:0` (focus follows
-  the VR-selected window); a toggled Ctrl/Alt is held down with `xdotool`.
+- Ctrl/Alt chords, Esc, Shift + arrows and Shift + Tab are sent with
+  `xdotool key` on `:0` (focus follows the VR-selected window); a toggled
+  Ctrl/Alt is held down with `xdotool`. Shift is never held as a real key
+  (Steam types capitals itself); `shift+Tab` is `ISO_Left_Tab` on any
+  keymap.
 - Problem characters (non-ASCII, AltGr/dead-key characters on the German
   keymap) are typed with `xdotool type`; everything else goes through
   Steam's own text emulation. On other keymaps those characters are still

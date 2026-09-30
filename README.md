@@ -33,7 +33,7 @@ configuration, limitations and how it works.
 
 **VR keyboard** ([docs/keyboard.md](docs/keyboard.md)):
 
-- [Extra keys](docs/keyboard.md#extra-keys) (`keyboard.vr.extraKeys`): Esc/Ctrl/Alt, arrows, Delete, real chords and AltGr/non-ASCII characters.
+- [Extra keys](docs/keyboard.md#extra-keys) (`keyboard.vr.extraKeys`): Esc/Ctrl/Alt, arrows, Delete, Shift+Tab, real chords and AltGr/non-ASCII characters.
 - [Swipe and suggestions](docs/keyboard.md#swipe-and-suggestions) (`keyboard.vr`): swipe typing, corrections, completions, Backspace drag.
 
 **VR "+" menu** ([docs/launcher-menu.md](docs/launcher-menu.md)):
