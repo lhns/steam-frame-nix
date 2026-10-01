@@ -258,7 +258,11 @@ Delete repeat and the swipe patch's gestures react to the laser only. Depends on
   while a hand's tip is within 10 cm of the keyboard, its trigger is
   pulled or Steam asks for it (`__sfuiControllers.demand(ms)`, back through
   the relay: the swipe patch during a press), else every second; nothing
-  while the keyboard is hidden. The
+  while the keyboard is hidden. The poses are read (~0.15 ms each) only as
+  often as needed: with touch typing the next read comes after
+  (distance − 10 cm) / 2.5 m/s, 11–250 ms (4 per second with the hands
+  far), so even a fast hand is read within 10 cm before it can reach the
+  surface; with only `swipe.twoHanded` only during a demand. The
   laser hit matches SteamVR's laser to a few px.
 - **Touch typing** (patch `vr-keyboard-touch`, `SharedJSContext`): per hand
   `tracker.js` turns the tip's path into press and release, then calls the
@@ -268,9 +272,12 @@ Delete repeat and the swipe patch's gestures react to the laser only. Depends on
   `vr-keyboard-controllers`).
 
 **Tests:** `nix flake check` (checks `vr-keyboard-controllers`: tip and
-laser relative to the keyboard; `vr-keyboard-touch`: contact, hysteresis,
-two hands, the touch list Steam's highlight and long press read).
+laser relative to the keyboard, the bridge's read rate and demand with a
+fake clock, a fast tap through the contact tracker; `vr-keyboard-touch`:
+contact, hysteresis, two hands, the touch list Steam's highlight and long
+press read).
 
 **Debugging:** `window.__sfuiTouchTypeLog` (`SharedJSContext`: presses,
 misses), `__sfuiControllers.last` (the last frame), and in `systemui`
-`__sfuiCtl.log` and `__sfuiCtl.last`.
+`__sfuiCtl.log`, `__sfuiCtl.last` and `__sfuiCtl.delay` (ms to the next
+read; null: none).

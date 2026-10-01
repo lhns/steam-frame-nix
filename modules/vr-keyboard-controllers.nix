@@ -5,7 +5,9 @@
 # - vr-keyboard-controllers/bridge-patch.js (SteamVR systemui, 8087; patch
 #   "vr-keyboard-controllers"): the keyboard's pose, per hand the tip (where
 #   the laser starts), the laser's hit and the trigger (geometry.js), ~90 Hz
-#   while relevant or asked for (demand); CDP binding __sfuiCtlOut.
+#   near the keyboard or asked for (demand), slower with distance
+#   (`continuous`, set by touch typing), else only on demand; CDP binding
+#   __sfuiCtlOut.
 # - vr-keyboard-controllers/relay.mjs (user service
 #   vr-keyboard-controllers-relay): to Steam's SharedJSContext; demand back
 #   (CDP binding __sfuiCtlIn there).
@@ -28,6 +30,12 @@ in {
       internal = true;
       description = "The controller bridge (set by the VR keyboard features that use it).";
     };
+    continuous = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      internal = true;
+      description = "Sample the controllers all the time the keyboard is shown (touch typing), not only on demand (the two-handed swipe).";
+    };
     files = lib.mkOption {
       type = lib.types.attrsOf lib.types.path;
       readOnly = true;
@@ -48,6 +56,7 @@ in {
           cp ${uiLib.mkPatch {
             name = "vr-keyboard-controllers";
             src = ./vr-keyboard-controllers/bridge-patch.js;
+            opts = { inherit (cfg) continuous; };
             extraArgs = [ ./vr-keyboard-controllers/geometry.js ];
           }} $out
           node --check $out

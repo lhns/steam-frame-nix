@@ -2,7 +2,7 @@
 # key is pressed when a controller's tip (where SteamVR's laser starts)
 # passes through it. Independent of keyboard.vr.enable / extraKeys.
 # - The tips relative to the keyboard come from the controller bridge
-#   (vr-keyboard-controllers.nix, turned on here).
+#   (vr-keyboard-controllers.nix, turned on here, sampling continuously).
 # - vr-keyboard-touch/keyboard-patch.js (Steam UI, 8080; patch
 #   "vr-keyboard-touch"): tracker.js per hand (contact, hysteresis); presses
 #   the key with the keyboard's own touch handlers, like a laser press.
@@ -36,6 +36,7 @@ in {
 
   config = lib.mkIf cfg.enable {
     steamFrame.keyboard.vr.controllers.enable = true;
+    steamFrame.keyboard.vr.controllers.continuous = true;
     steamFrame.uiPatches.patches = [ {
       name = "vr-keyboard-touch";
       target.title = "SharedJSContext";

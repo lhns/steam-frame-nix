@@ -12,26 +12,36 @@
 //   read with SteamVR's own SGQueryService.requestSGTransform every POLL_MS;
 //   for MOVE_QUIET_MS after it moved (drag, dashboard re-latch) frames say
 //   moving: true;
-// - every TICK_MS both controllers: VRHTML.GetPose(hand, Standing) times the
+// - per tick both controllers: VRHTML.GetPose(hand, Standing) times the
 //   render model's "tip" component (SteamVR's laser origin) -> the tip and
 //   the laser's hit on the keyboard (geometry.js), the trigger from the
 //   render model's animated "trigger" component (null without one).
-// Frames go out through the CDP binding __sfuiCtlOut(json) at TICK_MS while
-// a hand is relevant (tip within NEAR m of the keyboard or trigger pulled) or
-// Steam asked for it (S.demand(ms), hub.js demand: a laser press), else every
-// IDLE_MS; one { keyboard: null } frame when the keyboard goes. While it is
-// hidden: no frames and no TICK_MS loop, one DOM lookup per POLL_MS.
+// Ticks (setTimeout, one at a time): with opts.continuous (touch typing)
+// the next after (reach - NEAR) / VMAX, clamped to TICK_MS..SLOW_MS, reach
+// = the nearest tip's distance to the keyboard's rect plus a margin (none:
+// SLOW_MS). A tip at up to VMAX is thus sampled within NEAR before it can
+// reach the surface, at TICK_MS from there (contacts: tracker.js). TICK_MS
+// while Steam asks for it (S.demand(ms), hub.js demand: a laser press) or a
+// trigger is pulled. Without opts.continuous (only the two-handed swipe):
+// ticks only during a demand; a demand starting one ticks at once.
+// Frames go out through the CDP binding __sfuiCtlOut(json) per tick while
+// a hand is relevant (reach < NEAR or trigger pulled) or demanded, else
+// every IDLE_MS; one { keyboard: null } frame when the keyboard goes. While
+// it is hidden: no frames and no ticks, one DOM lookup per POLL_MS.
 // Frame (hub.js adds page px):
 //   { seq, t, moving, keyboard: { width } | null,
 //     hands: { left, right: null | { tip: { u, v, d }, ray: { u, v, dist } | null,
 //                                    trigger: 0..1 | null } } }
 // Never touches SteamVR's input or the lasers. Debugging: __sfuiCtl.log,
-// __sfuiCtl.last (the last frame).
+// __sfuiCtl.last (the last frame), __sfuiCtl.delay (the next tick's ms;
+// null: none), __sfuiCtl.ticks (count).
 ((find, sigs, opts, hooks, GEO) => {
-  const VERSION = 5;
+  const VERSION = 6;
   const G = window;
-  const TICK_MS = 11, IDLE_MS = 1000, POLL_MS = 250, MOVE_QUIET_MS = 300, TIP_CACHE_MS = 5000;
+  const TICK_MS = 11, SLOW_MS = 250, IDLE_MS = 1000, POLL_MS = 250, MOVE_QUIET_MS = 300, TIP_CACHE_MS = 5000;
   const NEAR = 0.1;                                  // m
+  const VMAX = 2.5;                                  // m/s, a fast hand
+  const RECT = { u0: -0.2, u1: 1.2, v0: -0.2, v1: 0.7 };  // keyboard widths: the keyboard (v 0..~0.33) plus a margin
   const TRIGGER_DEG = 12.5;                          // frame controller: trigger component's full travel
   const PROBE = 'sfui-ctl-keyboard';
   const HANDS = ['left', 'right'];
@@ -51,7 +61,7 @@
   if (missing.length) return `SteamVR internals changed, no controller bridge: missing ${missing.join(', ')}`;
   try { G.__sfuiCtl?.dispose?.(); } catch { /* gone */ }
 
-  const S = G.__sfuiCtl = { stamp, log: [], kb: null, last: null };
+  const S = G.__sfuiCtl = { stamp, log: [], kb: null, last: null, delay: null, ticks: 0 };
   const log = (...a) => { S.log.push([Math.round(performance.now()), ...a]); if (S.log.length > 100) S.log.shift(); };
   let seq = 0, sentAt = -Infinity, wasRelevant = false;
   const send = (f) => {
@@ -95,11 +105,11 @@
   async function pollKeyboard() {
     pending = true;
     try {
-      let timer;
+      let timeout;
       const xf = await Promise.race([
         G.SGQueryService.requestSGTransform(`${V.VROverlay.ThisOverlayKey()}::${PROBE}`),
-        new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('timeout')), 1000); }),
-      ]).finally(() => clearTimeout(timer));
+        new Promise((_, rej) => { timeout = setTimeout(() => rej(new Error('timeout')), 1000); }),
+      ]).finally(() => clearTimeout(timeout));
       if (!probe) return;
       let ow = 1;
       try { ow = V.VROverlay.GetWidthInMeters(V.VROverlay.FindOverlay('valve.steam.gamepadui.keyboard')) || 1; } catch { /* 1 */ }
@@ -109,6 +119,7 @@
         Math.abs(kb.rotation.w * o.rotation.w + kb.rotation.x * o.rotation.x + kb.rotation.y * o.rotation.y + kb.rotation.z * o.rotation.z) < 0.99998 ||
         Math.abs(kb.width - o.width) > 0.002) movedAt = performance.now();
       S.kb = kb;
+      if (!o && shown && timer === null && (opts.continuous || performance.now() < fastUntil)) tick();
     } catch (e) { log('keyboard pose', String(e?.message ?? e)); } finally { pending = false; }
   }
 
@@ -138,14 +149,41 @@
     const pose = GEO.tipPose(p.xfDeviceToAbsoluteTracking, m.tip);
     return { tip: GEO.toKeyboard(pose.translation, S.kb), ray: GEO.rayHit(pose, S.kb), trigger: trigger(hand, m.rm) };
   }
-  const relevant = (h) => !!h && ((Math.abs(h.tip.d) < NEAR && h.tip.u > -0.2 && h.tip.u < 1.2 && h.tip.v > -0.2 && h.tip.v < 0.7) ||
-    h.trigger >= 0.5);
+  // The tip's distance (m) to RECT.
+  const reach = (h) => {
+    const { u, v, d } = h.tip, w = S.kb.width;
+    return Math.hypot(Math.max(RECT.u0 - u, 0, u - RECT.u1) * w, Math.max(RECT.v0 - v, 0, v - RECT.v1) * w, d);
+  };
+  const pulled = (h) => !!h && h.trigger >= 0.5;
+  const relevant = (h) => !!h && (reach(h) < NEAR || pulled(h));
 
   // ---- loops ---------------------------------------------------------------------
-  let fast = null, fastUntil = -Infinity;            // fast: the TICK_MS loop, only while the keyboard is shown
-  S.demand = (ms) => { fastUntil = performance.now() + Math.max(0, Math.min(5000, +ms || 0)); };
+  // shown: the keyboard is (POLL_MS loop); timer/dueAt: the next tick.
+  let shown = false, timer = null, dueAt = Infinity, fastUntil = -Infinity;
+  function schedule(ms) {
+    clearTimeout(timer);
+    S.delay = ms;
+    if (ms === null) { timer = null; dueAt = Infinity; return; }
+    dueAt = performance.now() + ms;
+    timer = setTimeout(tick, ms);
+  }
+  // The next tick's delay (ms) after hands at now; null: none.
+  function delay(hands, now) {
+    if (now < fastUntil || HANDS.some((h) => pulled(hands[h]))) return TICK_MS;
+    if (!opts.continuous) return null;
+    const r = Math.min(...HANDS.map((h) => (hands[h] ? reach(hands[h]) : Infinity)));
+    if (!(r < Infinity)) return SLOW_MS;
+    return Math.min(SLOW_MS, Math.max(TICK_MS, ((r - NEAR) / VMAX) * 1000));
+  }
+  S.demand = (ms) => {
+    const now = performance.now();
+    fastUntil = now + Math.max(0, Math.min(5000, +ms || 0));
+    if (shown && now < fastUntil && dueAt - now > TICK_MS) tick();
+  };
   function tick() {
-    if (!S.kb) return;
+    clearTimeout(timer); timer = null; dueAt = Infinity;
+    if (!S.kb) { S.delay = null; return; }                // pollKeyboard starts it
+    S.ticks++;
     const now = performance.now(), hands = {};
     for (const h of HANDS) {
       try { hands[h] = handFrame(h, now); } catch (e) { hands[h] = null; log('pose', String(e)); }
@@ -155,10 +193,11 @@
       send({ seq: ++seq, t: now, moving: now - movedAt < MOVE_QUIET_MS, keyboard: { width: S.kb.width }, hands });
     }
     wasRelevant = rel;
+    schedule(delay(hands, now));
   }
   function deactivate() {
-    if (fast === null) return;
-    clearInterval(fast); fast = null;
+    if (!shown) return;
+    shown = false; schedule(null);
     send({ seq: ++seq, t: performance.now(), moving: false, keyboard: null, hands: { left: null, right: null } });
     log('inactive');
   }
@@ -166,7 +205,7 @@
     const parent = findScaled();
     if (!parent) { deactivate(); S.kb = null; removeProbe(); return; }
     ensureProbe(parent);
-    if (fast === null) { fast = setInterval(tick, TICK_MS); log('active'); }
+    if (!shown) { shown = true; log('active'); if (opts.continuous || performance.now() < fastUntil) tick(); }
     if (!pending) pollKeyboard();
   }, POLL_MS);
 
