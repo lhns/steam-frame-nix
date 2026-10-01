@@ -509,6 +509,20 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
   ! grep -q "^clone" $LOG || fail "cloned again"
   ! switched_to_template || fail "template switched again"
   [ "$(grep -c '^hm ' $LOG)" = 1 ] || fail "switches: $(cat $LOG)"
+
+  # a plain install with ~/nix-config but no link: used as it is, linked
+  rm $HOME/.config/home-manager
+  res=$(inst)
+  has "$res" "$HOME/nix-config already exists: using it as it is"
+  hasnt "$res" "Creating a Home Manager configuration"
+  has "$res" "hm switch --flake $HOME/nix-config -b"
+  has "$res" "'home-manager switch' (from"
+  [ "$(readlink $HOME/.config/home-manager)" = $HOME/nix-config ] || fail "plain install: link"
+  # not a flake: the error, nothing created
+  rm $HOME/.config/home-manager $HOME/nix-config/flake.nix
+  res=$(inst 2>&1) && fail "a directory without flake.nix accepted"
+  has "$res" "$HOME/nix-config exists and is not empty"
+  gone $HOME/.config/home-manager
   echo "G ok"
 
   # --- H: uninstall: Nix goes while programs from the store still run ---

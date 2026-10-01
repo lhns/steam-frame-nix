@@ -69,7 +69,8 @@ Commands:
                              if the clone fails. Only a missing directory or
                              the unchanged template is replaced by the clone;
                              anything else there is used as it is
-        otherwise            ~/.config/home-manager
+        otherwise            ~/.config/home-manager, else the flake in
+                             ~/nix-config (linked there)
         neither exists       a new config in ~/nix-config from the
                              steam-frame-nix template, linked to
                              ~/.config/home-manager
@@ -353,9 +354,6 @@ template_untouched() { # dir
 create_config() { # dir [question]
   local dir=$1 system
   if [[ -e $dir ]] && [[ -n $(ls -A "$dir" 2>/dev/null) ]]; then
-    if [[ -e $dir/flake.nix ]]; then
-      die "$dir already contains a flake. Use it with: install.sh install --flake $dir"
-    fi
     die "$dir exists and is not empty; move it away or pass --flake <your config>"
   fi
   [[ $USER_NAME =~ ^[a-z_][a-z0-9_-]*$ ]] || die "unsupported user name '$USER_NAME' for the template"
@@ -529,6 +527,10 @@ cmd_install() {
   fi
 
   step "Finding the Home Manager configuration"
+  if [[ -z $flake && ! -e $HM_CONFIG_LINK && ! -L $HM_CONFIG_LINK && -e $DEFAULT_CONFIG_DIR/flake.nix ]]; then
+    info "$DEFAULT_CONFIG_DIR already exists: using it as it is"
+    flake=$DEFAULT_CONFIG_DIR
+  fi
   if [[ -n $flake ]]; then
     if [[ -d ${flake%%#*} ]]; then
       dir="$(cd "${flake%%#*}" && pwd -P)"

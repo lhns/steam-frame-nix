@@ -79,13 +79,14 @@ on `main`. `sudo` needs a password: run `passwd` first if you never set one.
 
 The installer installs Nix (skipped if Nix already works), uses
 `~/.config/home-manager` or `--flake <dir-or-flakeref>` (if there is none, it
-creates `~/nix-config` from the [template](template) with your user name) and
-runs `home-manager switch`; what it sets up is listed under
-[Set up by install.sh](#set-up-by-installsh). Everything works in the running
-session right away, except two settings read only at a process start: the
-[keyboard layout](docs/session.md#keyboard-layout) (next Steam session start)
-and the [SteamVR dashboard patches](docs/steamvr-debugger.md) (VR pet, VR
-keyboard suggestions, window curvature, ...; next SteamVR start). If they
+uses `~/nix-config` as it is, or creates it from the [template](template)
+with your user name) and runs `home-manager switch`; what it sets up is
+listed under [Set up by install.sh](#set-up-by-installsh). Everything works
+in the running session right away, except two settings read only at a
+process start: the [keyboard layout](docs/session.md#keyboard-layout) (next
+Steam session start) and the
+[SteamVR dashboard patches](docs/steamvr-debugger.md) (VR pet, VR keyboard
+suggestions, window curvature, ...; next SteamVR start). If they
 are waiting, the installer ends with "Restart once": reboot once. Re-running
 it just switches again (`--yes` answers every question). Afterwards edit
 `~/nix-config/home.nix` and switch (see [Usage](#usage)).
