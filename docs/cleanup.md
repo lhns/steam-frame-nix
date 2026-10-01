@@ -45,6 +45,21 @@ What `install.sh install` sets up is listed in the README under
 desktop can't reach it with its own environment) and uses the installed
 `home-manager` if there is one, else Home Manager's `master`.
 
+`install --clone` takes SteamOS' `git`, else `nix run nixpkgs#git`. An
+existing directory is reused only if it is the top of a clone whose
+`origin` is the same repository: URLs are compared as lower-case
+host/path without `.git` (so `git@host:o/r`, `ssh://git@host/o/r` and
+`https://host/o/r.git` match), and with `--ref` it must be on that branch.
+
+`restart-check` (run by the session module's activation after
+`steamFrameUserServices`, and by `install` at its end) compares the
+keyboard layout drop-in on `gamescope-session.service` with
+`XKB_DEFAULT_*` in the environment of the first readable process in that
+unit's cgroup (gamescope's own isn't readable), and, while SteamVR runs
+with the debugger drop-in, looks for a listener on port 8087 in
+`/proc/net/tcp*`. Tests use `STEAM_FRAME_NIX_PROC` and
+`STEAM_FRAME_NIX_CGROUP` (section F of `modules/cleanup/check.nix`).
+
 `uninstall` removes Nix with nix-installer, which fails when it can't
 unmount `/nix` (`systemctl stop nix.mount`). Before that it scans `/proc`
 for processes using `/nix`: their `exe`, `cwd`, `root` or an `fd` links into
@@ -56,6 +71,6 @@ the script itself, its subshells (descendants) and its process group (the
 `uninstall` from another terminal. Nothing is killed: it asks to close them
 and re-checks on Enter, or (`--yes`, no terminal) stops before Nix. A bash
 from the Nix store re-executes the script with `/usr/bin/bash` first, and
-nix-installer runs from a copy outside `/nix`. The check uses
+nix-installer runs from a root-owned copy in `/tmp`. The check uses
 `STEAM_FRAME_NIX_PROC` as a fake `/proc` (section H of
 `modules/cleanup/check.nix`).

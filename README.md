@@ -84,11 +84,10 @@ runs `home-manager switch`; what it sets up is listed under
 [Set up by install.sh](#set-up-by-installsh). Everything works in the running
 session right away, except two settings read only at a process start: the
 [keyboard layout](docs/session.md#keyboard-layout) (next Steam session start)
-and the [SteamVR dashboard patches](docs/steamvr-debugger.md) (VR pet, the VR
-keyboard's suggestion strip, window curvature and the other patches of
-SteamVR's dashboard; next SteamVR start). If you use them, the installer ends
-with "Restart once": reboot once. Re-running it just switches
-again (`--yes` answers every question). Afterwards edit
+and the [SteamVR dashboard patches](docs/steamvr-debugger.md) (VR pet, VR
+keyboard suggestions, window curvature, ...; next SteamVR start). If they
+are waiting, the installer ends with "Restart once": reboot once. Re-running
+it just switches again (`--yes` answers every question). Afterwards edit
 `~/nix-config/home.nix` and switch (see [Usage](#usage)).
 
 Your own config in a git repository: `--clone <git-url>` clones it into
@@ -501,12 +500,11 @@ stops Home Manager's user services (reverting the UI patches), runs
 `cleanup --all`, runs `home-manager uninstall`, then removes Nix and the
 per-user Nix state (see [Set up by install.sh](#set-up-by-installsh)). If
 SteamVR is running, its key is restored when SteamVR stops (the closing
-message says so). Programs started from the Nix store keep `/nix` busy:
-before removing Nix, `uninstall` lists them and waits until you close them
-(with `--yes`, it stops instead); close them or run it right after a reboot.
-If Nix's own uninstaller fails anyway, the rest still runs (the `~/.config/home-manager` link goes) except
-the per-user Nix state, and the closing message says to reboot and run
-`uninstall` again. Your configuration, `*.hm-backup-*` files, app data and
+message says so). Nix can't be removed while programs started from the Nix
+store run: `uninstall` lists them and waits; close them or run it right
+after a reboot. If Nix stays (in use, `--yes`, or its uninstaller failed),
+the rest still runs (the `~/.config/home-manager` link goes) except the
+per-user Nix state, and the closing message says to run `uninstall` again. Your configuration, `*.hm-backup-*` files, app data and
 Flatpaks stay.
 
 To drop steam-frame-nix from a Home Manager configuration you keep, first

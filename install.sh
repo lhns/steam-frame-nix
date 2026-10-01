@@ -234,17 +234,19 @@ install_nix() {
 }
 
 uninstall_nix() {
-  local rc=0 bin
+  local rc=0 bin=
   need_sudo
   ro_unlock
   step "Uninstalling Nix"
-  # From a copy: the uninstaller running from /nix would keep /nix busy.
-  bin="$(mktemp)"
-  if ! { cp "$NIX_INSTALLER_BIN" "$bin" && chmod +x "$bin" && "$bin" --version >/dev/null 2>&1; }; then
-    rm -f "$bin"; bin=$NIX_INSTALLER_BIN
+  # From a root-owned copy: the uninstaller running from /nix would keep
+  # /nix busy.
+  if ! bin="$(sudo mktemp)" || ! sudo cp "$NIX_INSTALLER_BIN" "$bin" \
+     || ! sudo chmod 700 "$bin" || ! sudo "$bin" --version >/dev/null 2>&1; then
+    [[ -n $bin ]] && sudo rm -f "$bin"
+    bin=$NIX_INSTALLER_BIN
   fi
   sudo "$bin" uninstall --no-confirm || rc=$?
-  [[ $bin == "$NIX_INSTALLER_BIN" ]] || rm -f "$bin"
+  [[ $bin == "$NIX_INSTALLER_BIN" ]] || sudo rm -f "$bin"
   ro_relock
   return "$rc"
 }
@@ -1056,7 +1058,6 @@ session_xkb() { # LAYOUT|VARIANT
 
 # Whether something listens on 127.0.0.1/::1/any :<port> (/proc/net/tcp*).
 port_listening() { # port
-  local hex
   local hex f files=()
   printf -v hex '%04X' "$1"
   for f in "$SFN_PROC/net/tcp" "$SFN_PROC/net/tcp6"; do [[ -r $f ]] && files+=("$f"); done
@@ -1178,7 +1179,8 @@ nix_users() {
     grep -ls '[[:space:]]/nix/' "$SFN_PROC"/[0-9]*/maps || true
   } | while IFS= read -r p; do p=${p#"$SFN_PROC"/}; echo "${p%%/*}"; done | sort -un \
     | while read -r pid; do
-      [[ $pid != "$self" ]] && { read -r name <"$SFN_PROC/$pid/comm"; } 2>/dev/null || continue
+      [[ $pid != "$self" ]] || continue
+      { read -r name <"$SFN_PROC/$pid/comm"; } 2>/dev/null || continue   # exited
       # argv[0]'s name says more than comm (often a thread name)
       argv0=''; { IFS= read -r -d '' argv0 <"$SFN_PROC/$pid/cmdline"; } 2>/dev/null || true
       [[ ${argv0##*/} == '' || ${argv0##*/} == exe ]] || name=${argv0##*/}
@@ -1274,9 +1276,9 @@ cmd_uninstall() {
   cmd_cleanup --all
   remove_hm
 
-  # A failed Nix uninstall (e.g. /nix still busy) must not skip the rest:
-  # Home Manager is gone by now, so its config link goes regardless; the
-  # per-user Nix files stay for a Nix that may still be there.
+  # Nix still in use or a failed Nix uninstall must not skip the rest: Home
+  # Manager is gone by now, so its config link goes regardless; the per-user
+  # Nix files stay for the Nix that is still there.
   local nix_failed=''
   if (( ! keep_nix )); then
     if [[ -x $NIX_INSTALLER_BIN ]]; then
