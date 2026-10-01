@@ -1,10 +1,10 @@
 // Gestures and suggestions for Steam's VR keyboard (vr-keyboard.nix),
 // injected into Steam's SharedJSContext (8080). The keyboard is a popup of
 // that context ("SteamVR - Keyboard"); everything works on its document.
-// mkPatch convention plus six more arguments: swipe-decoder.js,
+// mkPatch convention plus seven more arguments: swipe-decoder.js,
 // textmodel.js, corrector.js, the dictionary text ("word<TAB>zipf*10\n..."),
-// gesture-input.js and vr-keyboard-controllers' hub.js (null without
-// swipe.twoHanded).
+// gesture-input.js, vr-keyboard-controllers' hub.js (null without
+// swipe.twoHanded) and function-keys.js.
 //
 // - Swipe: the laser arrives as touch events; Steam types the key a touch
 //   started on at release. With both lasers on the keyboard the pressing one
@@ -28,12 +28,14 @@
 //   above/below the keyboard ("above"/"below", suggestions-panel/patch.js):
 //   state out via the CDP binding __sfuiStripOut, picks back via
 //   __sfuiSwipe.remote.pick(seq, index) (suggestions-panel/relay.mjs).
+//   With keyboard.vr.functionKeys it shows F1-F12 instead while AltGr is
+//   active (function-keys.js), typed via keyboard.vr.extraKeys.
 // All Steam internals are checked first (sigs, instance members); if one is
 // missing the keyboard stays stock. Only passive listeners; never blocks
 // Steam's events. Debugging: __sfuiSwipeLog, __sfuiSwipePaths
 // (scripts/vr-keyboard-replay.mjs).
-((find, sigs, opts, hooks, D, T, C, DICT, P, HUB) => {
-  const VERSION = 26;
+((find, sigs, opts, hooks, D, T, C, DICT, P, HUB, F) => {
+  const VERSION = 27;
   const G = window;
   const O = opts;
 
@@ -164,6 +166,11 @@
     };
     const reset = (why, o) => { model.reset(why, o); log('reset', why); refreshLater(); };
 
+    // view: what the strip shows (function-keys.js): the suggestions (cur),
+    // or F1-F12 while AltGr is active, leaving cur as it is. kbNow: the
+    // keyboard instance last hooked.
+    let view = null, kbNow = inst0;
+
     // Own-property hooks calling the (possibly keyboard-patch-wrapped)
     // prototype method; re-installed if the instance changes.
     function hook(obj, name, make) {
@@ -177,6 +184,8 @@
     const TOGGLES = new Set(['Shift', 'CapsLock', 'Control', 'Alt', 'AltGr']);
     function hookInst(inst) {
       if (!inst) return;
+      kbNow = inst;
+      hookFnKeys(inst);
       const mgr = inst.props?.VirtualKeyboardManager;
       hook(mgr, 'HandleVirtualKeyDown', (call) => function (key, ...rest) {
         if (this === mgr) {
@@ -217,6 +226,7 @@
       // (A boundary only matters for suggestions, whose replacements stay exact.)
       if (quiet && !idle) reset('idle', { boundary: true });
       idle = quiet;
+      if (O.functionKeys && fnKeysOn() !== (view?.kind === 'fkeys')) refreshLater();   // AltGr change missed
     }, 500);
     cleanup.push(() => clearInterval(poll));
 
@@ -274,16 +284,48 @@
       const dragging = down?.kind === 'backspace' && down.active;   // no suggestions during a Backspace drag
       if (!dragging) suggest();
       const shown = !dragging && !!(cur && valid(cur));
-      if (!inPage) { publish(shown); return; }
-      strip.replaceChildren(...(shown ? cur.items : []).map((text, i) => {
+      view = F.view({ fnKeys: fnKeysOn(), suggestions: shown ? cur : null });
+      if (!inPage) { publish(view); return; }
+      strip.replaceChildren(...(view ? view.items : []).map((text, i) => {
         const el = doc.createElement('div');
         el.textContent = text;
         el.dataset.index = i;
-        if (i === cur.index) el.className = 'current';
+        if (i === view.index) el.className = 'current';
         return el;
       }));
-      strip.classList.toggle('shown', shown);
-      if (shown) placeStrip();
+      strip.classList.toggle('shown', !!view);
+      if (view) placeStrip();
+    }
+    const stripPick = (i) => (view?.kind === 'fkeys' ? typeFnKey(i) : pick(i));
+
+    // ---- F-keys (keyboard.vr.functionKeys) ------------------------------------------
+    // Sent by keyboard.vr.extraKeys (its TypeKeyInternal wrapper and xdotool
+    // helper), so only while that patch is live. AltGr changes reach the strip
+    // through a componentDidUpdate on the keyboard instance (Steam's has none;
+    // React looks it up on every update), and the poll above if missed.
+    function fnKeysReady() { return !!O.functionKeys && typeof G.__vrkbdKey === 'function' && !!G.__vrkbdProto?.TypeKeyInternal?.__vrkbd; }
+    function fnKeysOn() { return fnKeysReady() && F.active(kbNow?.state?.toggleStates); }
+    function hookFnKeys(inst) {
+      if (!O.functionKeys || (own(inst, 'componentDidUpdate') && inst.componentDidUpdate.__sfuiSwipe === hook)) return;
+      const f = function (...a) {
+        const r = Object.getPrototypeOf(inst).componentDidUpdate?.apply(this, a);
+        if (F.active(a[1]?.toggleStates) !== F.active(this.state?.toggleStates)) refreshLater();
+        return r;
+      };
+      f.__sfuiSwipe = hook;
+      inst.componentDidUpdate = f;
+      cleanup.push(() => { if (own(inst, 'componentDidUpdate') && inst.componentDidUpdate === f) delete inst.componentDidUpdate; });
+    }
+    // An extra key (VKX_F<n>): our TypeKeyInternal hook resets the text model,
+    // like for Esc; extraKeys presses it with the active Ctrl/Alt/Shift and
+    // releases the one-shot toggles (AltGr too: the strip goes back).
+    function typeFnKey(i) {
+      const key = F.keyOf(i);
+      if (!key || !fnKeysReady()) return;
+      hookInst(kbNow);
+      log('fkey', key);
+      kbNow.TypeKeyInternal({ strKey: key });
+      if (inPage) haptic(HAPTIC.pick);           // a panel ticks on its own overlay
     }
     // The in-page strip covers exactly the number row (up to Backspace).
     function placeStrip() {
@@ -360,22 +402,22 @@
       keyStyleCache = { sig, style };
       return style;
     }
-    function publish(shown, force = false) {
+    function publish(v, force = false) {
       let st = null;
-      if (shown) try { st = keyStyle(); } catch (e) { log('key-style-error', String(e)); }
-      const body = JSON.stringify(shown ? { items: cur.items, current: cur.index, visible: true, style: st, haptic: O.haptics ? HAPTIC.pick : 0, position: O.position } : { items: [], current: -1, visible: false });
+      if (v) try { st = keyStyle(); } catch (e) { log('key-style-error', String(e)); }
+      const body = JSON.stringify(v ? { items: v.items, current: v.index, visible: true, style: st, haptic: O.haptics ? HAPTIC.pick : 0, position: O.position } : { items: [], current: -1, visible: false });
       if (body === outLast && !force) return;
       outLast = body;
-      published = shown ? cur : null;
+      published = v?.source ?? null;
       try { G.__sfuiStripOut?.(JSON.stringify({ seq: ++outSeq, ...JSON.parse(body) })); } catch (e) { log('publish-error', String(e)); }
     }
     const remote = {
-      pick(seq, i) { if (seq === outSeq && published && published === cur) pick(i); else log('stale-pick', seq, outSeq); },
+      pick(seq, i) { if (seq === outSeq && published && published === view?.source) stripPick(i); else log('stale-pick', seq, outSeq); },
       sync() { outLast = ''; showStrip(); return 'ok'; },
     };
     S.remote = remote;
     cleanup.push(() => {
-      if (!inPage) publish(false, true);
+      if (!inPage) publish(null, true);
       if (S.remote === remote) delete S.remote;
     });
 
@@ -472,7 +514,7 @@
       down = null;
       if (bridge) { endDemand(); if (d) d.src = st; }
       if (d?.kind === 'strip') {                  // released anywhere on the strip: the button pressed
-        if (strip.contains(at(x, y))) pick(d.index);
+        if (strip.contains(at(x, y))) stripPick(d.index);
         return;
       }
       if (d?.kind === 'backspace' && d.active) {

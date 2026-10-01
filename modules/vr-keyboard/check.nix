@@ -1,7 +1,8 @@
 # Tests of the VR keyboard (flake check `vr-keyboard`, also built before the
 # patch by vr-keyboard.nix with the configured dictionary): text model,
-# gesture input (two controllers, the controller bridge's path), corrector
-# and swipe-decoder accuracy
+# gesture input (two controllers, the controller bridge's path), the F-key
+# strip (function-keys.js with the text model and the extra keys'
+# allowlist), corrector and swipe-decoder accuracy
 # (tests/*.test.mjs). The accuracy
 # thresholds (German keyboard geometry, German and English words) fail the
 # build only for German + English dictionaries, the default here.
@@ -22,6 +23,7 @@ in
 pkgs.runCommand "vr-keyboard-checks" { nativeBuildInputs = [ pkgs.nodejs ]; } ''
   set -o pipefail
   node ${./tests/textmodel.test.mjs} ${./textmodel.js}
+  node ${./tests/function-keys.test.mjs} ${./function-keys.js} ${./textmodel.js} ${../vr-keyboard-extra-keys/allowlist.mjs}
   node ${./tests/gesture-input.test.mjs} ${./gesture-input.js} ${./tests/two-controllers.json}
   node ${./tests/corrector.test.mjs} ${./corrector.js} ${./swipe-decoder.js} ${words} ${lib.optionalString (!strict) "|| echo warning: corrector test failed"}
   node ${./tests/swipe-decoder.test.mjs} ${./swipe-decoder.js} ${words} 100 1 | tee $out ${lib.optionalString (!strict) "|| true"}

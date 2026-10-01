@@ -12,6 +12,8 @@
 #   dashboard panel above/below the keyboard (suggestions-panel/patch.js in
 #   systemui, 8087), fed by suggestions-panel/relay.mjs (user service
 #   vr-keyboard-relay).
+# - functionKeys: F1-F12 in the strip while AltGr is active
+#   (vr-keyboard/function-keys.js), sent by keyboard.vr.extraKeys.
 # - Dictionary: dictionary.nix (gen-dict.py) from wordfreq frequency lists,
 #   filtered and cased by Hunspell (nixpkgs' hunspellDicts).
 # Works alongside keyboard.vr.extraKeys (both hook the same keyboard; this
@@ -23,7 +25,9 @@ let
   inherit (lib) mkOption mkEnableOption types;
   uiLib = import ./steam-ui-patches/lib { inherit pkgs; };
 
-  on = cfg.enable && (cfg.swipe.enable || cfg.autocorrect.enable || cfg.completions.enable || cfg.backspaceDrag.enable);
+  on = cfg.enable && (cfg.swipe.enable || cfg.autocorrect.enable || cfg.completions.enable || cfg.backspaceDrag.enable
+    || cfg.functionKeys.enable);
+  extraKeys = config.steamFrame.keyboard.vr.extraKeys.enable or false;
   panel = on && cfg.suggestions.position != "inside";
   twoHanded = on && cfg.swipe.enable && cfg.swipe.twoHanded;
   noHub = pkgs.writeText "no-controllers.js" "null";
@@ -59,9 +63,11 @@ let
         pixelsPerChar = if cfg.backspaceDrag.enable then cfg.backspaceDrag.pixelsPerChar else 0;
         inherit (cfg.backspaceDrag) wordDetentPixels;
         inherit (cfg) haptics;
+        functionKeys = cfg.functionKeys.enable;
       };
       extraArgs = [ ./vr-keyboard/swipe-decoder.js ./vr-keyboard/textmodel.js ./vr-keyboard/corrector.js dictionaryJs ./vr-keyboard/gesture-input.js
-        (if twoHanded then config.steamFrame.keyboard.vr.controllers.files.hub else noHub) ];
+        (if twoHanded then config.steamFrame.keyboard.vr.controllers.files.hub else noHub)
+        ./vr-keyboard/function-keys.js ];
     }} $out
     node --check $out
   '';
@@ -191,6 +197,14 @@ in {
       };
     };
 
+    functionKeys.enable = mkEnableOption ''
+      F1-F12 in the suggestion strip while AltGr (Fn on layouts without
+      AltGr) is active: tapped, locked or held. A tap on one presses it with
+      the active Ctrl/Alt/Shift (e.g. Alt+F4); when AltGr goes off, the
+      strip shows the same suggestions as before. Needs `enable`,
+      `extraKeys.enable` (which sends the keys) and a strip `position` of
+      "above" or "below"; shown even with the suggestion features off'';
+
     haptics = mkOption {
       type = types.bool;
       default = true;
@@ -208,7 +222,12 @@ in {
 
   config = lib.mkMerge [
     {
-      assertions = map (l: {
+      assertions = lib.optionals cfg.functionKeys.enable [
+        { assertion = cfg.enable; message = "steamFrame.keyboard.vr.functionKeys needs steamFrame.keyboard.vr.enable (the strip is part of that patch)."; }
+        { assertion = extraKeys; message = "steamFrame.keyboard.vr.functionKeys needs steamFrame.keyboard.vr.extraKeys.enable (its xdotool helper presses the keys)."; }
+        { assertion = cfg.suggestions.position != "inside";
+          message = ''steamFrame.keyboard.vr.functionKeys needs suggestions.position "above" or "below": "inside" covers the number row, whose AltGr characters ({ [ ] } \ on German) it would hide.''; }
+      ] ++ map (l: {
         assertion = l.hunspell == null || pkgs.hunspellDicts ? ${l.hunspell};
         message = "steamFrame.keyboard.vr.dictionary.languages: no pkgs.hunspellDicts.${toString l.hunspell}.";
       }) cfg.dictionary.languages;

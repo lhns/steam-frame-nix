@@ -34,7 +34,7 @@ configuration, limitations and how it works.
 **VR keyboard** ([docs/keyboard.md](docs/keyboard.md)):
 
 - [Extra keys](docs/keyboard.md#extra-keys) (`keyboard.vr.extraKeys`): Esc/Ctrl/Alt, arrows, Delete, Shift+Tab, real chords and AltGr/non-ASCII characters.
-- [Swipe and suggestions](docs/keyboard.md#swipe-and-suggestions) (`keyboard.vr`): swipe typing, corrections, completions, Backspace drag.
+- [Swipe and suggestions](docs/keyboard.md#swipe-and-suggestions) (`keyboard.vr`): swipe typing, corrections, completions, Backspace drag, F1–F12 on AltGr.
 - [Touch typing](docs/keyboard.md#touch-typing) (`keyboard.vr.touchTyping`): press keys by touching them with the controller's tip, both hands.
 
 **VR "+" menu** ([docs/launcher-menu.md](docs/launcher-menu.md)):
@@ -260,6 +260,7 @@ which: [Repository layout](docs/development.md).
 | `steamFrame.keyboard.vr.backspaceDrag.enable` | bool | `true` | Backspace drag: left deletes, back right retypes. |
 | `steamFrame.keyboard.vr.backspaceDrag.pixelsPerChar` | int | `25` | Travel per character (keyboard px; a key is ~60). |
 | `steamFrame.keyboard.vr.backspaceDrag.wordDetentPixels` | int | `90` | Extra travel across a word border (`0`: none). |
+| `steamFrame.keyboard.vr.functionKeys.enable` | bool | `false` | F1–F12 in the suggestion strip while AltGr (or Fn) is active, pressed with the active Ctrl/Alt/Shift; the suggestions come back unchanged. Needs `keyboard.vr.enable`, `keyboard.vr.extraKeys.enable` and `suggestions.position` `"above"`/`"below"`, see [VR keyboard](docs/keyboard.md#swipe-and-suggestions). |
 | `steamFrame.keyboard.vr.haptics` | bool | `true` | Haptic ticks for drag steps, word detents and picks. |
 | `steamFrame.keyboard.vr.checks` | package, read-only | | The tests, built with the configured dictionary. |
 | `steamFrame.keyboard.vr.touchTyping.enable` | bool | `false` | Touch typing: a key is pressed when a controller's tip touches it, both hands; the lasers work as before, see [Touch typing](docs/keyboard.md#touch-typing). |

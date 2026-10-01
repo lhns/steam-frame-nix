@@ -105,12 +105,14 @@ modules/
     textmodel.js               Steam (argument of patch.js): what the keyboard typed
     corrector.js               Steam (argument of patch.js): corrections, completions
     gesture-input.js           Steam (argument of patch.js): a gesture's own events, its hand's bridge path
+    function-keys.js           Steam (argument of patch.js): F1-F12 in the strip while AltGr is active
     suggestions-panel/
       patch.js, unpatch.js     SteamVR: the strip as a panel above/below the keyboard
       relay.mjs                service vr-keyboard-relay: strip state Steam <-> SteamVR
     dictionary.nix, gen-dict.py  build: dictionary from wordfreq + Hunspell
     check.nix, tests/          test (also built before the patch): text model,
-                               corrector, swipe-decoder accuracy, gesture input
+                               corrector, swipe-decoder accuracy, gesture input,
+                               the F-key strip
   vr-keyboard-controllers.nix  controller bridge for keyboard features (internal option)
   vr-keyboard-controllers/
     bridge-patch.js, unpatch.js  SteamVR: keyboard pose, tips, laser hits, triggers

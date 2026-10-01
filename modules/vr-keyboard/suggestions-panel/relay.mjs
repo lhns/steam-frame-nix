@@ -4,7 +4,8 @@
 // "above" / "below". CDP bindings: the keyboard page calls
 // __sfuiStripOut(state json) -> systemui __sfuiKbdStrip.show(state); the
 // panel calls __sfuiStripPick({ seq, index } json) -> keyboard page
-// __sfuiSwipe.remote.pick(seq, index). Only these two messages, validated.
+// __sfuiSwipe.remote.pick(seq, index). Only these two messages, validated
+// (up to 12 items: the F-keys of keyboard.vr.functionKeys).
 // On (re)connects and page reloads the keyboard page re-sends its state; if
 // the keyboard page goes away, the panel is hidden.
 const SIDES = {
@@ -35,7 +36,7 @@ function forward(side, payload) {
   try { msg = JSON.parse(payload); } catch { return; }
   if (side === 'steam' && Array.isArray(msg?.items) && typeof msg.seq === 'number') {
     show({ seq: msg.seq, visible: !!msg.visible, current: Number(msg.current) | 0,
-      items: msg.items.slice(0, 8).map((s) => String(s).slice(0, 64)), style: cleanStyle(msg.style),
+      items: msg.items.slice(0, 12).map((s) => String(s).slice(0, 64)), style: cleanStyle(msg.style),
       haptic: Math.max(0, Math.min(5, Number(msg.haptic) | 0)), position: msg.position === 'below' ? 'below' : 'above' });
   } else if (side === 'vr' && typeof msg?.seq === 'number' && typeof msg.index === 'number') {
     live.steam?.(`window.__sfuiSwipe?.remote?.pick(${msg.seq | 0}, ${msg.index | 0})`);

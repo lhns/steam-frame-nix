@@ -50,7 +50,8 @@ after Steam restarts. Turning it off reverts the keyboard.
 is harmless, and Esc/Ctrl/Alt/arrows work regardless.
 
 **Security:** the helper service that presses the keys only accepts
-single-key Ctrl/Alt chords, the extra keys, Shift + Tab, Ctrl/Alt
+single-key Ctrl/Alt chords, the extra keys (and F1–F12 for
+[F-keys](#swipe-and-suggestions), with any of Ctrl/Alt/Shift), Shift + Tab, Ctrl/Alt
 hold/release and single non-ASCII/AltGr characters; it cannot type ASCII
 text or press Enter (`allowlist.mjs`, tested by the flake check
 `vr-keyboard-extra-keys`).
@@ -118,6 +119,17 @@ default):
   buttons take the keyboard's key style. Below/above uses the
   [SteamVR debugger](steamvr-debugger.md), turned on automatically.
 - **Haptics:** light ticks for drag steps and picks, a Snap at word detents.
+- **F-keys** (`functionKeys.enable`, off by default): while AltGr is
+  active (tapped: until the next key; tapped twice: locked; held: while
+  held; `Fn` on layouts without AltGr) the strip shows F1–F12 instead of
+  the suggestions. A tap presses the F-key for real, with the active
+  Ctrl/Alt/Shift (Alt + F4, Ctrl + F5, Shift + F10) and releases them like
+  any key. When AltGr goes off without a key typed, the strip shows the
+  same suggestions as before, with the same one selected. An F-key resets
+  the text memory, like Esc (the app may move the cursor or focus).
+  Needs [extra keys](#extra-keys) (they press it) and a strip position of
+  `above` or `below` (`inside` would cover the number row's AltGr
+  characters); the F-keys show even with the suggestion features off.
 
 **Dictionary** (`dictionary.*`): by default the `keyboard.layout` language
 (de, fr, es, it, nl, pt, sv) plus English, else English only. Add words
@@ -176,10 +188,16 @@ has the letters.
   frames (option off, relay or SteamVR gone) only laser events count, as
   before. A second press during a swipe is Steam's (a tap): one text
   field, one word at a time.
+- F-keys: `function-keys.js` decides what the strip shows; the suggestion
+  state is kept as it is while F1–F12 are shown. AltGr changes reach the
+  strip through a `componentDidUpdate` on the keyboard instance (with a
+  0.5 s poll as a fallback). An F-key button types Steam key `VKX_F<n>`,
+  which the extra keys' patch sends with xdotool like its other keys.
 - Found by signature (entries `vr-keyboard`, `vr-keyboard-panel`).
 
 **Tests:** `nix flake check` (checks `vr-keyboard`: text model, corrector,
-decoder accuracy on German + English,
+decoder accuracy on German + English, the F-key strip (switching and
+restoring, the keys against the allowlist, the text memory),
 gesture input from two controllers, also with synthetic bridge frames:
 a pressing hand without laser events, attribution, a stale bridge) and
 `keyboard.vr.checks` for the
