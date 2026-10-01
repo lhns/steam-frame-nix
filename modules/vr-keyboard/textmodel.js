@@ -9,7 +9,7 @@
 // replacement (swipe candidates, corrections, completions) goes through an
 // intact anchor, so it deletes exactly what it typed or nothing.
 (() => {
-  const VERSION = 5;
+  const VERSION = 6;
   const TERMINATORS = new Set([...' .,!?;:']);
   const OPENING = new Set([...'([{<"\'„“‚‘«‹¿¡/@#-_']);   // no auto-space after these
   const isWordChar = (c) => /[\p{L}\p{N}'’-]/u.test(c);
@@ -27,7 +27,6 @@
         m.startKnown = boundary;
         m.version++;
         epoch++;
-        m.lastReset = why;
       },
       freeze() { epoch++; },
       // Returns false if the key reset the model.

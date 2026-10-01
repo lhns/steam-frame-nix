@@ -156,7 +156,6 @@
 
     // ---- text model, hooks, resets --------------------------------------------------
     const model = T.create({ size: O.bufferChars });
-    S.model = model;
     let lastActivity = Date.now();
     const activity = () => { lastActivity = Date.now(); };
     let refreshQueued = false;

@@ -11,7 +11,7 @@
 // same-folded variant is >= 1 zipf more frequent ("cant" -> "can't").
 // Memory: one folded string + 26 bytes per word.
 (() => {
-  const VERSION = 2;
+  const VERSION = 3;
   const fold = (w) => w.toLowerCase().replace(/['’-]/g, '')
     .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss');
   const VARIANT_GAP = 1.0;
@@ -114,8 +114,8 @@
       return pickWords(prefix, hits.sort((a, b) => dict.freq[b] - dict.freq[a]), max);
     }
 
-    return { corrections, completions, setLayout, distance };
+    return { corrections, completions, setLayout };
   }
 
-  return { VERSION, create, fold };
+  return { VERSION, create };
 })()
