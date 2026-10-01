@@ -5,8 +5,8 @@
 # Also `install.sh restart-check` (what waits for a session/SteamVR restart).
 # Also `install.sh install --clone` (argument parsing and the clone step),
 # against local bare repositories through a logging git, without network.
-# Also `install.sh uninstall` stopping before Nix while programs from the
-# Nix store run (a fake /proc).
+# Also `install.sh uninstall` removing Nix while programs from the Nix store
+# run (a fake /proc, a logging nix-installer).
 { pkgs }:
 let
   cleanup = pkgs.callPackage ./package.nix { };
@@ -388,7 +388,7 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
   has "$res" "gh auth login"
   echo "G ok"
 
-  # --- H: uninstall: /nix in use ---
+  # --- H: uninstall: Nix goes while programs from the store still run ---
   fresh h
   export -f fail has hasnt gone
   export root INSTALL
@@ -413,23 +413,42 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
   fake 41 cwd 1 41 /usr/bin/cwd; ln -sfn /nix/store/e $P/41/cwd
   fake 42 fd 1 42 /usr/bin/fd; ln -s /nix/store/f/file $P/42/fd/3
   fake 43 clean 1 43 /usr/bin/clean
-  printf '#!/bin/sh\n' > $root/nix-installer; chmod +x $root/nix-installer
-  mkdir -p $HOME/.config; ln -s $HOME/cfg $HOME/.config/home-manager
-  uninst() {
-    (STEAM_FRAME_NIX_PROC=$P; . $INSTALL; ASSUME_YES=1 NIX_INSTALLER_BIN=$root/nix-installer
-     uninstall_nix() { echo "nix-installer uninstall"; }; cmd_uninstall) 2>&1
+  # nix-installer: logs its arguments and the lazy-unmount drop-in it sees
+  D=$root/run-system/nix.mount.d/50-steam-frame-nix-lazy-unmount.conf
+  export D LOG=$root/log RC=0
+  printf '#!%s\n[ "$1" = --version ] && exit 0\necho "nix-installer $*" >> $LOG\ncat $D >> $LOG 2>/dev/null || echo "no drop-in" >> $LOG\nexit $RC\n' \
+    "$(command -v bash)" > $root/nix-installer
+  chmod +x $root/nix-installer
+  uninst() { # mounted: 1|0
+    local m=$1
+    : > $LOG; rm -rf $HOME/.config; mkdir -p $HOME/.config; ln -s $HOME/cfg $HOME/.config/home-manager
+    (STEAM_FRAME_NIX_PROC=$P STEAM_FRAME_NIX_SYSTEM_RUNTIME=$root/run-system; . $INSTALL
+     ASSUME_YES=1 NIX_INSTALLER_BIN=$root/nix-installer
+     # sudo without root: systemctl only logged
+     sudo() {
+       case $1 in -v) return 0 ;; -n) shift ;; esac
+       echo "sudo $*" >> $LOG
+       [ "$1" = systemctl ] || "$@"
+     }
+     nix_mounted() { [ "$m" = 1 ]; }
+     cmd_uninstall </dev/null) 2>&1
   }
-  res=$(uninst) && fail "uninstall went on with /nix in use: $res"
+  res=$(uninst 1) || fail "uninstall failed: $res"
   echo "$res"
-  hasnt "$res" "nix-installer uninstall"
-  has "$res" "zsh (PID 30, started this uninstall"
-  for p in "app (PID 40)" "cwd (PID 41)" "fd (PID 42)" "Close these or reboot,"; do has "$res" "$p"; done
-  for p in "PID 31" "PID 32" "PID 43" "PID $$"; do hasnt "$res" "$p"; done
-  gone $HOME/.config/home-manager
-  # closed: Nix is removed
-  rm -r $P/30 $P/40 $P/41 $P/42; fake $$ bash 1 $$ /usr/bin/bash
-  res=$(uninst) || fail "uninstall failed: $res"
-  has "$res" "nix-installer uninstall"
+  for p in "zsh (PID 30)" "app (PID 40)" "cwd (PID 41)" "fd (PID 42)" "keep running until you log out or reboot"; do has "$res" "$p"; done
+  for p in "PID 31" "PID 32" "PID 43" "PID $$" "Not done yet"; do hasnt "$res" "$p"; done
+  log=$(cat $LOG)
+  has "$log" "nix-installer uninstall --no-confirm"
+  has "$log" "LazyUnmount=yes"     # the drop-in was there while it ran
+  [ "$(grep -c '^sudo systemctl daemon-reload$' $LOG)" = 2 ] || fail "daemon-reloads: $log"
+  gone $D ''${D%/*} $HOME/.config/home-manager
+  # /nix not a mount point: no drop-in
+  res=$(uninst 0) || fail "uninstall failed: $res"
+  has "$(cat $LOG)" "no drop-in"
+  # the uninstaller fails: Nix stays, the drop-in goes
+  res=$(RC=1 uninst 1) && fail "uninstall succeeded: $res"
+  has "$res" "its uninstaller failed. Reboot, then run uninstall again"
+  gone $D $HOME/.config/home-manager
   SH
   echo "H ok"
   touch $out
