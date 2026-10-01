@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Application
+Name=Example Chat
+Comment=A made-up Electron chat app (Flatpak) with an SSO callback scheme
+Icon=org.example.Chat
+Exec=env DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus /usr/bin/flatpak run --branch=stable --arch=aarch64 --command=/app/bin/example-chat --file-forwarding --talk-name=org.kde.kwalletd6 --talk-name=org.freedesktop.secrets org.example.Chat --password-store=kwallet6 @@u %U @@
+Categories=Network;InstantMessaging;Chat;
+MimeType=x-scheme-handler/example-chat;
+StartupWMClass=example-chat
+Keywords=chat;messaging;
+Actions=new-window;
+X-Flatpak=org.example.Chat
+X-SteamFrameNix-Source=@SOURCE@
+
+[Desktop Action new-window]
+Name=New Window
+Exec=env DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus /usr/bin/flatpak run --branch=stable --arch=aarch64 --command=/app/bin/example-chat --talk-name=org.kde.kwalletd6 --talk-name=org.freedesktop.secrets org.example.Chat --password-store=kwallet6 --new-window

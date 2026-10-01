@@ -22,12 +22,11 @@ the Frame's [two sessions](../README.md#two-sessions):
   `XDG_CURRENT_DESKTOP`. In the Steam session that is `gamescope`, which it
   doesn't know, so it falls back to `basic` (a local, unencrypted store) and
   the login made in the desktop (stored in the wallet) is gone.
-- **Flatpak permissions:** many Flatpaks may not talk to the wallet at all
-  (Element), or only to `org.kde.kwalletd6` while their KF6 wallet client
-  reads through the Secret Service `org.freedesktop.secrets` (KRDC: "Password
-  not found").
-- **Login callbacks:** SSO logins come back through a URL scheme
-  (`io.element.desktop://`, `signalcaptcha://`) opened by the portal. Unless the app
+- **Flatpak permissions:** many Flatpaks may not talk to the wallet at all,
+  or only to `org.kde.kwalletd6` while their KF6 wallet client reads through
+  the Secret Service `org.freedesktop.secrets` (the app finds no password).
+- **Login callbacks:** logins come back through a URL scheme (e.g.
+  `signalcaptcha://`) opened by the portal. Unless the app
   is the default and a recommended handler, the portal opens an app chooser,
   which isn't shown in VR.
 
@@ -64,27 +63,26 @@ The desktop ID is the attribute name; the source is the Flatpak with that
 app ID unless `source.package` or `source.file` is set. Installing the app
 is up to you.
 
-A Flatpak whose logins live in the wallet (Element, an Electron app), with
-its SSO callback schemes:
+A Flatpak whose logins live in the wallet (Signal, an Electron app), with
+its link callback schemes, and a non-Electron app:
 
 ```nix
-steamFrame.launchers."im.riot.Riot" = {
+steamFrame.launchers."org.signal.Signal" = {
   keyring = { enable = true; electron = true; };
-  defaultFor = [ "x-scheme-handler/element" "x-scheme-handler/io.element.desktop" ];
+  defaultFor = [ "x-scheme-handler/sgnl" "x-scheme-handler/signalcaptcha" ];
 };
-steamFrame.launchers."org.kde.krdc".keyring.enable = true;
+steamFrame.launchers."org.example.App".keyring.enable = true;
 ```
 
-A program from a Nix package, from the package's own entry
-(`share/applications/<desktop ID>.desktop`, rewritten at build time):
+A program from a Nix package (installed by you, e.g. in `home.packages`),
+from the package's own entry (`share/applications/<desktop ID>.desktop`,
+rewritten at build time):
 
 ```nix
 { pkgs, ... }: {
-  home.packages = [ pkgs.signal-desktop ];
   steamFrame.launchers.signal = {
     source.package = pkgs.signal-desktop;
     keyring = { enable = true; electron = true; };
-    defaultFor = [ "x-scheme-handler/sgnl" "x-scheme-handler/signalcaptcha" ];
   };
 }
 ```
@@ -164,14 +162,14 @@ after an optional leading `env A=B …`. The rest (`--file-forwarding`,
 `@@u %U @@`, `%c`, action arguments) stays. `DBusActivatable=true` becomes
 `false` (otherwise the desktop would start the app over D-Bus, skipping
 Exec), `defaultFor` and `mimeTypes` are added to `MimeType=`, and
-`X-SteamFrameNix-Source=` names the source. Element's entry with
+`X-SteamFrameNix-Source=` names the source. A Flatpak's entry with
 `keyring = { enable = true; electron = true; }`:
 
 ```sh
 env DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus \
-  /usr/bin/flatpak run --branch=stable --arch=aarch64 --command=/app/bin/element \
+  /usr/bin/flatpak run --branch=stable --arch=aarch64 --command=/app/bin/example-chat \
   --file-forwarding --talk-name=org.kde.kwalletd6 --talk-name=org.freedesktop.secrets \
-  im.riot.Riot --password-store=kwallet6 @@u %U @@
+  org.example.Chat --password-store=kwallet6 @@u %U @@
 ```
 
 `flatpak run` connects the sandbox's D-Bus proxy (and portals) to the bus in

@@ -51,8 +51,8 @@ session's `xdg-desktop-portal` at `/usr/share/xdg-desktop-portal/gamescope-porta
 which lacks `gamescope-portals.conf`: no backend, no OpenURI, so no app in
 the Steam session can open links. Its two backends (gamescope, holo) also
 have no FileChooser, so Flatpak apps fall back to a dialog inside their
-sandbox: e.g. Element's Attachments shows an empty file selector without
-your home dir.
+sandbox: a Flatpak app's file selector shows only its sandbox, not your
+home dir.
 
 **What you get:** a working OpenURI portal in the Steam session and, with
 `fileChooser`, KDE's file dialog there (a normal window in VR) with access

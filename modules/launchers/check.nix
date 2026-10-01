@@ -1,8 +1,9 @@
 # Checks of steamFrame.launchers (lib.nix, rewrite.awk, generate.sh) on
-# copies of real entries (fixtures/sources: Element, KRDC, Firefox, gedit
-# (DBusActivatable) from /var/lib/flatpak, Jellyfin from the user
-# installation) and three made-up ones (quoting, an Exec without anchor, an
-# Electron app from a fake package):
+# copies of real entries (fixtures/sources: Firefox, gedit (DBusActivatable)
+# from /var/lib/flatpak, Jellyfin from the user installation) and made-up
+# ones: two Flatpaks (an Electron chat app with an action and an SSO scheme,
+# a Qt app with `-qwindowtitle %c`), quoting, an Exec without anchor, an
+# Electron app from a fake package:
 # - the rewritten entries equal fixtures/expected (X-SteamFrameNix-Source
 #   compared separately) and pass desktop-file-validate;
 # - the generator: unchanged sources change nothing (mtimes kept, no touch of
@@ -32,11 +33,11 @@ let
           (L.launcherModule { bus = "unix:path=/run/user/1000/bus"; }));
       };
       config.launchers = {
-        "im.riot.Riot" = {
+        "org.example.Chat" = {
           keyring = { enable = true; electron = true; };
-          defaultFor = [ "x-scheme-handler/element" "x-scheme-handler/io.element.desktop" ];
+          defaultFor = [ "x-scheme-handler/example-chat" ];
         };
-        "org.kde.krdc".keyring.enable = true;
+        "org.example.Remote".keyring.enable = true;
         "org.mozilla.firefox" = {
           wrappers = [ "/nix/store/00000000000000000000000000000000-firefox-wrapper" ];
           defaultFor = [ "x-scheme-handler/http" "x-scheme-handler/https" "text/html" ];
@@ -98,7 +99,7 @@ pkgs.runCommand "launchers-check" {
   export STEAM_FRAME_NIX_FLATPAK_EXPORTS=$root/user:$root/system
   out_dir=$root/run/steam-frame-nix/applications
   mkdir -p $root/user $root/system $root/apps
-  for id in im.riot.Riot org.kde.krdc org.mozilla.firefox org.gnome.gedit org.example.NoAnchor; do
+  for id in org.example.Chat org.example.Remote org.mozilla.firefox org.gnome.gedit org.example.NoAnchor; do
     cp ${src}/$id.desktop $root/system/
   done
   cp ${src}/org.jellyfin.JellyfinDesktop.desktop $root/user/
@@ -130,7 +131,7 @@ pkgs.runCommand "launchers-check" {
   cp ${app} $out/actual/org.example.App.desktop
   grep -qx "X-SteamFrameNix-Source=$root/user/org.jellyfin.JellyfinDesktop.desktop" $out/actual/org.jellyfin.JellyfinDesktop.desktop \
     || fail "Jellyfin not from the user installation"
-  grep -qx "X-SteamFrameNix-Source=$root/system/org.kde.krdc.desktop" $out/actual/org.kde.krdc.desktop || fail "KRDC source"
+  grep -qx "X-SteamFrameNix-Source=$root/system/org.example.Remote.desktop" $out/actual/org.example.Remote.desktop || fail "system source"
   grep -qx "X-SteamFrameNix-Source=${src}/org.example.Quoting.desktop" $out/actual/org.example.Quoting.desktop || fail "file source"
   grep -qx "X-SteamFrameNix-Source=${fakeApp}/share/applications/org.example.App.desktop" $out/actual/org.example.App.desktop || fail "package source"
   sed -i 's|^X-SteamFrameNix-Source=.*|X-SteamFrameNix-Source=@SOURCE@|' $out/actual/*.desktop
@@ -147,13 +148,13 @@ pkgs.runCommand "launchers-check" {
   for f in $out_dir/*.desktop; do [ "$(mt $f)" = 1000000000 ] || fail "unchanged run rewrote $f"; done
 
   # changed source: rewritten, dir touched
-  echo '# changed' >> $root/system/org.kde.krdc.desktop
+  echo '# changed' >> $root/system/org.example.Remote.desktop
   run
-  logged "org.kde.krdc: entry written"
-  [ "$(mt $out_dir/org.kde.krdc.desktop)" != 1000000000 ] || fail "changed source not rewritten"
-  [ "$(mt $out_dir/im.riot.Riot.desktop)" = 1000000000 ] || fail "other entry rewritten"
+  logged "org.example.Remote: entry written"
+  [ "$(mt $out_dir/org.example.Remote.desktop)" != 1000000000 ] || fail "changed source not rewritten"
+  [ "$(mt $out_dir/org.example.Chat.desktop)" = 1000000000 ] || fail "other entry rewritten"
   [ "$(mt $root/apps)" != 1000000000 ] || fail "changed run didn't touch the applications dir"
-  grep -qx '# changed' $out_dir/org.kde.krdc.desktop || fail "comment not kept"
+  grep -qx '# changed' $out_dir/org.example.Remote.desktop || fail "comment not kept"
 
   # launcher no longer configured, source gone: removed
   echo stale > $out_dir/org.example.Old.desktop; echo x > $out_dir/.org.example.Old.desktop.sum
@@ -166,17 +167,17 @@ pkgs.runCommand "launchers-check" {
   [ "$(mt $root/apps)" != 1000000000 ] || fail "removal didn't touch the applications dir"
 
   # edited entry (e.g. KDE's editor writing through the link): overwritten
-  cp $out_dir/im.riot.Riot.desktop $root/riot
-  echo 'Name[de]=Edited' >> $out_dir/im.riot.Riot.desktop
+  cp $out_dir/org.example.Chat.desktop $root/chat
+  echo 'Name[de]=Edited' >> $out_dir/org.example.Chat.desktop
   run
-  logged "im.riot.Riot.desktop was edited"
-  cmp -s $root/riot $out_dir/im.riot.Riot.desktop || fail "edit not overwritten"
+  logged "org.example.Chat.desktop was edited"
+  cmp -s $root/chat $out_dir/org.example.Chat.desktop || fail "edit not overwritten"
   # replaced link: reported; our own link: not
-  ln -s $out_dir/im.riot.Riot.desktop $root/apps/im.riot.Riot.desktop
-  echo '[Desktop Entry]' > $root/apps/org.kde.krdc.desktop
+  ln -s $out_dir/org.example.Chat.desktop $root/apps/org.example.Chat.desktop
+  echo '[Desktop Entry]' > $root/apps/org.example.Remote.desktop
   run
-  logged "org.kde.krdc.desktop no longer leads to"
-  ! grep -q "im.riot.Riot.desktop no longer" $root/log || fail "own link reported"
+  logged "org.example.Remote.desktop no longer leads to"
+  ! grep -q "org.example.Chat.desktop no longer" $root/log || fail "own link reported"
 
   # no launchers left (the activation runs it anyway): all entries removed
   old $root/apps

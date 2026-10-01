@@ -37,15 +37,11 @@ let
   removed = what: lib.mkRemovedOptionModule [ "steamFrame" "keyring" what ] ''
     Keyring launchers are now steamFrame.launchers.<desktop ID>, made from the
     app's own desktop entry (name, icon, actions come from it), e.g.
-      steamFrame.launchers."im.riot.Riot" = {
-        keyring = { enable = true; electron = true; };
-        defaultFor = [ "x-scheme-handler/element" "x-scheme-handler/io.element.desktop" ];
-      };
-      steamFrame.launchers.signal = {
-        source.package = pkgs.signal-desktop;
+      steamFrame.launchers."org.signal.Signal" = {
         keyring = { enable = true; electron = true; };
         defaultFor = [ "x-scheme-handler/sgnl" ];
       };
+      steamFrame.launchers.signal.source.package = pkgs.signal-desktop;  # a package's entry
     (schemeHandlers = [ "x" ] -> defaultFor = [ "x-scheme-handler/x" ];
     flatpakArgs, args, mimeTypes, settings keep their meaning; name, icon,
     categories, actions, executable, fieldCode, ... are gone.)
@@ -58,16 +54,11 @@ in {
     default = { };
     example = lib.literalExpression ''
       {
-        "im.riot.Riot" = {
+        "org.signal.Signal" = {
           keyring = { enable = true; electron = true; };
-          defaultFor = [ "x-scheme-handler/element" "x-scheme-handler/io.element.desktop" ];
+          defaultFor = [ "x-scheme-handler/sgnl" "x-scheme-handler/signalcaptcha" ];
         };
-        "org.kde.krdc".keyring.enable = true;
-        signal = {
-          source.package = pkgs.signal-desktop;
-          keyring = { enable = true; electron = true; };
-          defaultFor = [ "x-scheme-handler/sgnl" ];
-        };
+        "org.example.App".keyring.enable = true;
       }
     '';
     description = ''

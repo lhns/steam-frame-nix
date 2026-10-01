@@ -65,11 +65,11 @@
   #   # org.jellyfin.JellyfinDesktop yourself); gives it devices=all:
   #   jellyfin.hardwareDecoding.enable = true;
   #   # Apps that keep logins in the KDE wallet: one wallet for both
-  #   # sessions (Element: install im.riot.Riot yourself):
-  #   launchers."im.riot.Riot" = {
+  #   # sessions (install the Signal Flatpak org.signal.Signal yourself):
+  #   launchers."org.signal.Signal" = {
   #     keyring = { enable = true; electron = true; };
-  #     # SSO callback:
-  #     defaultFor = [ "x-scheme-handler/element" "x-scheme-handler/io.element.desktop" ];
+  #     # link callbacks:
+  #     defaultFor = [ "x-scheme-handler/sgnl" "x-scheme-handler/signalcaptcha" ];
   #   };
   #   docker.enable = true;              # rootless Docker, user service
   # };

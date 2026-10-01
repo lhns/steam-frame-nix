@@ -63,8 +63,8 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
   mkdir -p $root/run/steam-frame-nix $root/run/systemd/user/steamvr.service.d
   echo old > $root/run/steam-frame-nix/steamvr-debugger-restore
   mkdir -p $root/run/steam-frame-nix/applications       # steamFrame.launchers
-  echo '[Desktop Entry]' > $root/run/steam-frame-nix/applications/im.riot.Riot.desktop
-  echo x > $root/run/steam-frame-nix/applications/.im.riot.Riot.desktop.sum
+  echo '[Desktop Entry]' > $root/run/steam-frame-nix/applications/org.example.App.desktop
+  echo x > $root/run/steam-frame-nix/applications/.org.example.App.desktop.sum
   : > $root/run/steam-frame-nix/applications/.lock
   ln -s $HOME/.local/share/Steam/userdata/1/760/remote/250820/screenshots \
     $root/run/steam-frame-nix/screenshots               # steamFrame.screenshots

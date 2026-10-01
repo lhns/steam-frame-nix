@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=Example Chat
+Comment=A made-up Electron chat app (Flatpak) with an SSO callback scheme
+Icon=org.example.Chat
+Exec=/usr/bin/flatpak run --branch=stable --arch=aarch64 --command=/app/bin/example-chat --file-forwarding org.example.Chat @@u %U @@
+Categories=Network;InstantMessaging;Chat;
+MimeType=x-scheme-handler/example-chat;
+StartupWMClass=example-chat
+Keywords=chat;messaging;
+Actions=new-window;
+X-Flatpak=org.example.Chat
+
+[Desktop Action new-window]
+Name=New Window
+Exec=/usr/bin/flatpak run --branch=stable --arch=aarch64 --command=/app/bin/example-chat org.example.Chat --new-window

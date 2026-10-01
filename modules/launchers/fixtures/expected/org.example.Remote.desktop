@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Application
+Exec=env DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus /usr/bin/flatpak run --branch=stable --arch=aarch64 --command=/app/bin/example-remote --file-forwarding --talk-name=org.kde.kwalletd6 --talk-name=org.freedesktop.secrets org.example.Remote -qwindowtitle %c @@u %u @@
+Icon=org.example.Remote
+Terminal=false
+Name=Example Remote
+Name[de]=Beispiel-Fernzugriff
+Name[zh_TW]=範例遠端
+GenericName=Remote Desktop Client
+GenericName[de]=Fernzugriff
+Comment=A made-up Qt app (Flatpak) that reads its passwords through the Secret Service
+StartupWMClass=example-remote
+MimeType=x-scheme-handler/vnc;x-scheme-handler/rdp;application/x-example-remote;
+Categories=Qt;KDE;Network;RemoteAccess;
+X-KDE-Wayland-Interfaces=org_kde_kwin_keystate
+X-Flatpak=org.example.Remote
+X-SteamFrameNix-Source=@SOURCE@

@@ -111,7 +111,7 @@ in rec {
       defaultFor = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         default = [ ];
-        example = [ "x-scheme-handler/element" "x-scheme-handler/io.element.desktop" ];
+        example = [ "x-scheme-handler/sgnl" "x-scheme-handler/signalcaptcha" ];
         description = ''
           MIME types / `x-scheme-handler/<scheme>` the app becomes the default
           and a recommended handler for (`xdg.mimeApps`, Added Associations:
@@ -122,7 +122,7 @@ in rec {
       settings = lib.mkOption {
         type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
         default = { };
-        example = { Name = "Element (wallet)"; Keywords = null; };
+        example = { Name = "Signal (wallet)"; Keywords = null; };
         description = ''
           `[Desktop Entry]` keys to set or override (value in key-file syntax,
           as given); `null` removes a key. Either way the key's localized

@@ -218,9 +218,9 @@ these two files ([`template/`](template), with more comments):
     firefox.disableAv1 = true;
     firefox.defaultBrowser = true;
     jellyfin.hardwareDecoding.enable = true;  # install the Flatpak yourself
-    launchers."im.riot.Riot" = {              # Element: logins in both sessions
+    launchers."org.signal.Signal" = {         # logins in both sessions; install the Flatpak yourself
       keyring = { enable = true; electron = true; };
-      defaultFor = [ "x-scheme-handler/element" "x-scheme-handler/io.element.desktop" ];
+      defaultFor = [ "x-scheme-handler/sgnl" "x-scheme-handler/signalcaptcha" ];
     };
     docker.enable = true;                     # rootless
   };
