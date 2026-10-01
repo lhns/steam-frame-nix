@@ -36,7 +36,7 @@
 // Steam's events. Debugging: __sfuiSwipeLog, __sfuiSwipePaths
 // (scripts/vr-keyboard-replay.mjs).
 ((find, sigs, opts, hooks, D, T, C, DICT, P, HUB, F) => {
-  const VERSION = 27;
+  const VERSION = 28;
   const G = window;
   const O = opts;
 
@@ -218,6 +218,9 @@
     const idOf = (o) => (o && typeof o === 'object' ? (ids.get(o) ?? (ids.set(o, nextId), nextId++)) : 0);
     let lastTarget = null, idle = false;
     const poll = setInterval(() => {
+      // Popup closed: detach now (else on the next injection), so this
+      // instance stops publishing over the next popup's strip.
+      if (!doc.defaultView) { S.docs.get(doc)?.(); S.docs.delete(doc); return; }
       const s = status.VRKeyboardStatus;
       const target = [s?.bIsOpen, s?.sOverlayKey, s?.unAppID, idOf(inst0.props?.VirtualKeyboardManager?.m_ActiveElementProps)].join('|');
       if (lastTarget !== null && target !== lastTarget) reset(`target ${target}`, { boundary: true });
