@@ -15,9 +15,9 @@ their lifetime and what removes them; `steam-frame-nix-cleanup` removes every
 one of them (on each switch what the configuration no longer uses, `--all`
 for everything).
 
-All options live under `steamFrame.*`. The portal fix, the applications menu,
-clipboard sync and the "+" menu's icon fallbacks are on by default;
-everything else is opt-in.
+All options live under `steamFrame.*`. The portal fix, the applications menu
+and the "+" menu's icon fallbacks are on by default; everything else is
+opt-in.
 
 ## Features
 
@@ -30,7 +30,7 @@ configuration, limitations and how it works.
 - [Portal fix](docs/session.md#portal-fix) (`session.portalFix`, on): apps in the Steam session can open links, and Flatpak apps get KDE's file dialog.
 - [Applications menu](docs/session.md#applications-menu) (`session.applicationsMenu`, on): KDE apps in the Steam session (Dolphin from the "+" menu) know the installed apps.
 - [Keyboard layout](docs/session.md#keyboard-layout) (`keyboard.layout`, `keyboard.variant`): XKB layout for the Steam session.
-- [Clipboard sync](docs/session.md#clipboard-sync) (`clipboardSync`, on): one clipboard for the Steam session and the nested desktop.
+- [Clipboard sync](docs/session.md#clipboard-sync) (`clipboardSync`): one clipboard for the Steam session and the nested desktop (built from source).
 
 **VR keyboard** ([docs/keyboard.md](docs/keyboard.md)):
 
@@ -139,8 +139,8 @@ of their differences:
 What this means for you:
 
 - **Switch from the nested desktop:** run `home-manager switch` in a
-  terminal there, so clipboard-sync restarts with the desktop's
-  environment. User services are handled for you
+  terminal there, so clipboard-sync (if enabled) restarts with the
+  desktop's environment. User services are handled for you
   ([session settings](docs/session.md#session-settings-and-services)).
 - **Wallet:** there should be one `kwalletd6`, on the outer bus; apps started
   from the desktop would otherwise start a second one whose secrets VR can't
@@ -207,6 +207,7 @@ these two files ([`template/`](template), with more comments):
     keyboard.layout = "de";               # XKB layout, Steam session
     keyboard.vr.extraKeys.enable = true;  # Esc/Ctrl/Alt/arrows in VR
     keyboard.vr.enable = true;            # swipe, suggestions, Backspace drag
+    clipboardSync.enable = true;          # one clipboard for both sessions (builds from source)
     launcherMenu = {
       sort = true;
       pinDesktop = "bottom";
@@ -344,7 +345,7 @@ which: [Repository layout](docs/development.md).
 | `steamFrame.pet.mount` | `"dynamic"`, `"all"` | `"dynamic"` | Baked frames kept mounted in the scene graph: the clips needed now or next, or all of them. |
 | `steamFrame.pet.debug.demo` | bool | `false` | Demo tour: cycles through all poses and activities. |
 | `steamFrame.steamvrDebugger.enable` | bool | automatic | SteamVR dashboard DevTools on `127.0.0.1:8087` (set only while SteamVR runs); on when a dashboard patch is, see [SteamVR debugger](docs/steamvr-debugger.md). |
-| `steamFrame.clipboardSync.enable` | bool | `true` | Clipboard bridge between the Steam session and the nested desktop. |
+| `steamFrame.clipboardSync.enable` | bool | `false` | Clipboard bridge between the Steam session and the nested desktop; built from source (the first switch takes a while). |
 | `steamFrame.clipboardSync.package` | package | built from `dnut/clipboard-sync` | The clipboard-sync package. |
 | `steamFrame.firefox.enable` | bool | `false` | Launcher for the Flathub Firefox Flatpak with the fixes below. |
 | `steamFrame.firefox.vrFullscreenFix` | bool | `true` | Default `full-screen-api.ignore-widgets` to `true` (not in the desktop profile). |

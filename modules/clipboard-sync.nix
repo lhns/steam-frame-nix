@@ -12,10 +12,11 @@ in {
   options.steamFrame.clipboardSync = {
     enable = lib.mkOption {
       type = lib.types.bool;
-      default = true;   # without it the nested desktop's clipboard is isolated
+      default = false;  # built from source: a long first build
       description = ''
         Run clipboard-sync between the Steam session and the nested desktop
-        (KDE autostart; switch stops stale builds and duplicates).
+        (KDE autostart; switch stops stale builds and duplicates). Built from
+        source.
       '';
     };
     package = lib.mkOption {

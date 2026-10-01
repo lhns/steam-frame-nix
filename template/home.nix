@@ -23,12 +23,14 @@
   # home.packages = with pkgs; [ htop ripgrep ];
 
   # Steam Frame fixes, see https://github.com/lhns/steam-frame-nix
-  # (session.portalFix, session.applicationsMenu and clipboardSync are on
-  # by default).
+  # (session.portalFix and session.applicationsMenu are on by default).
   # steamFrame = {
   #   keyboard.layout = "de";               # XKB layout, Steam session
   #   keyboard.vr.extraKeys.enable = true;  # Esc/Ctrl/Alt/arrows in VR
   #   keyboard.vr.enable = true;            # swipe, suggestions, Backspace drag
+  #   # nested desktop <-> Steam session clipboard (builds from source,
+  #   # takes a while):
+  #   clipboardSync.enable = true;
   #   # VR "+" menu: sorted by name, Desktop pinned below the list, closed
   #   # on click, no second launch of the same program within 10 s, programs
   #   # as a grid of 4 columns, at most 4 rows visible:

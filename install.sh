@@ -1416,7 +1416,12 @@ cmd_status() {
   else
     info "user manager not reachable at $OUTER_RUNTIME_DIR"
   fi
-  info "$(printf '%-30s %s' clipboard-sync "$(pgrep -u "$USER_ID" -x clipboard-sync >/dev/null && echo running || echo 'not running')")"
+  # steamFrame.clipboardSync (off by default): its autostart link or a process
+  if pgrep -u "$USER_ID" -x clipboard-sync >/dev/null; then
+    info "$(printf '%-30s %s' clipboard-sync running)"
+  elif [[ -e $CONFIG_HOME/autostart/clipboard-sync.desktop ]]; then
+    info "$(printf '%-30s %s' clipboard-sync 'not running')"
+  fi
 
   cmd_cleanup --dry-run --all
 }

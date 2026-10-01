@@ -132,7 +132,8 @@ steamFrame.keyboard = { layout = "de"; variant = "nodeadkeys"; };
 
 ## Clipboard sync
 
-`clipboardSync.enable`, module `clipboard-sync`. On by default.
+`clipboardSync.enable`, module `clipboard-sync`. Off by default: it is
+built from source, so the first switch with it takes a while.
 
 **Problem:** the Steam session's X displays and the nested desktop have
 separate clipboards.
