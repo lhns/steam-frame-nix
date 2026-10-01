@@ -19,15 +19,16 @@
 // Frames go out through the CDP binding __sfuiCtlOut(json) at TICK_MS while
 // a hand is relevant (tip within NEAR m of the keyboard or trigger pulled) or
 // Steam asked for it (S.demand(ms), hub.js demand: a laser press), else every
-// IDLE_MS; one { keyboard: null } frame when the keyboard goes.
-// Nothing at all while the keyboard is hidden (one DOM lookup per POLL_MS). Frame (hub.js adds page px):
+// IDLE_MS; one { keyboard: null } frame when the keyboard goes. While it is
+// hidden: no frames and no TICK_MS loop, one DOM lookup per POLL_MS.
+// Frame (hub.js adds page px):
 //   { seq, t, moving, keyboard: { width } | null,
 //     hands: { left, right: null | { tip: { u, v, d }, ray: { u, v, dist } | null,
 //                                    trigger: 0..1 | null } } }
 // Never touches SteamVR's input or the lasers. Debugging: __sfuiCtl.log,
 // __sfuiCtl.last (the last frame).
 ((find, sigs, opts, hooks, GEO) => {
-  const VERSION = 4;
+  const VERSION = 5;
   const G = window;
   const TICK_MS = 11, IDLE_MS = 1000, POLL_MS = 250, MOVE_QUIET_MS = 300, TIP_CACHE_MS = 5000;
   const NEAR = 0.1;                                  // m
@@ -94,10 +95,11 @@
   async function pollKeyboard() {
     pending = true;
     try {
+      let timer;
       const xf = await Promise.race([
         G.SGQueryService.requestSGTransform(`${V.VROverlay.ThisOverlayKey()}::${PROBE}`),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 1000)),
-      ]);
+        new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('timeout')), 1000); }),
+      ]).finally(() => clearTimeout(timer));
       if (!probe) return;
       let ow = 1;
       try { ow = V.VROverlay.GetWidthInMeters(V.VROverlay.FindOverlay('valve.steam.gamepadui.keyboard')) || 1; } catch { /* 1 */ }
@@ -140,23 +142,10 @@
     h.trigger >= 0.5);
 
   // ---- loops ---------------------------------------------------------------------
-  let active = false, fastUntil = -Infinity;
+  let fast = null, fastUntil = -Infinity;            // fast: the TICK_MS loop, only while the keyboard is shown
   S.demand = (ms) => { fastUntil = performance.now() + Math.max(0, Math.min(5000, +ms || 0)); };
-  const slow = setInterval(() => {
-    const parent = findScaled();
-    if (!parent) {
-      if (active) { send({ seq: ++seq, t: performance.now(), moving: false, keyboard: null, hands: { left: null, right: null } }); log('inactive'); }
-      active = false; S.kb = null;
-      removeProbe();
-      return;
-    }
-    ensureProbe(parent);
-    if (!active) log('active');
-    active = true;
-    if (!pending) pollKeyboard();
-  }, POLL_MS);
-  const fast = setInterval(() => {
-    if (!active || !S.kb) return;
+  function tick() {
+    if (!S.kb) return;
     const now = performance.now(), hands = {};
     for (const h of HANDS) {
       try { hands[h] = handFrame(h, now); } catch (e) { hands[h] = null; log('pose', String(e)); }
@@ -166,12 +155,21 @@
       send({ seq: ++seq, t: now, moving: now - movedAt < MOVE_QUIET_MS, keyboard: { width: S.kb.width }, hands });
     }
     wasRelevant = rel;
-  }, TICK_MS);
+  }
+  function deactivate() {
+    if (fast === null) return;
+    clearInterval(fast); fast = null;
+    send({ seq: ++seq, t: performance.now(), moving: false, keyboard: null, hands: { left: null, right: null } });
+    log('inactive');
+  }
+  const slow = setInterval(() => {
+    const parent = findScaled();
+    if (!parent) { deactivate(); S.kb = null; removeProbe(); return; }
+    ensureProbe(parent);
+    if (fast === null) { fast = setInterval(tick, TICK_MS); log('active'); }
+    if (!pending) pollKeyboard();
+  }, POLL_MS);
 
-  S.dispose = () => {
-    clearInterval(slow); clearInterval(fast);
-    if (active) send({ seq: ++seq, t: performance.now(), moving: false, keyboard: null, hands: { left: null, right: null } });
-    removeProbe();
-  };
+  S.dispose = () => { clearInterval(slow); deactivate(); removeProbe(); };
   return 'patched';
 })
