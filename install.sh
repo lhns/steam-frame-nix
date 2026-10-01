@@ -48,10 +48,17 @@ Nix + Home Manager for SteamOS (Steam Frame, Steam Deck).
 Usage: install.sh <command> [options]
 
 Commands:
-  install [--flake <dir-or-flakeref>] [--yes]
+  install [--flake <dir-or-flakeref> | --clone <git-url> [--dir <path>]
+          [--ref <branch>]] [--yes]
       Install Nix (NixOS nix-installer, steam-deck planner, flakes enabled) if
       it is missing, then activate a Home Manager configuration:
         --flake given        that flake (a directory or a flake reference)
+        --clone given        your config's git repository (git@host:owner/repo,
+                             https://..., github:owner/repo), cloned into
+                             --dir (default ~/nix-config) on branch --ref,
+                             then used like --flake <dir>; an existing clone
+                             of the same repository is reused (and pulled
+                             with --ff-only after asking)
         otherwise            ~/.config/home-manager
         neither exists       a new config in ~/nix-config from the
                              steam-frame-nix template, linked to
@@ -62,7 +69,8 @@ Commands:
   uninstall [--yes] [--keep-nix]
       Stop Home Manager's user services, run 'cleanup --all', uninstall Home
       Manager, uninstall Nix (unless --keep-nix) and remove per-user Nix
-      leftovers. Your configuration directory is never deleted.
+      leftovers. Your configuration directory (also a --clone) is never
+      deleted.
 
   cleanup [--dry-run] [--quiet] (--all | --orphans [--keep <artifact>]...)
       Remove what steam-frame-nix (any version) wrote outside the Nix store,
@@ -309,22 +317,93 @@ create_config() {
   info "linked $HM_CONFIG_LINK -> $dir"
 }
 
+# git, or Nix's when SteamOS has none (only after ensure_nix).
+git_any() {
+  if command -v git >/dev/null 2>&1; then git "$@"
+  else nix run nixpkgs#git -- "$@"; fi
+}
+
+# git URL for --clone: github:owner/repo -> https://github.com/owner/repo.git
+clone_url() {
+  case $1 in
+    github:*)
+      [[ ${1#github:} =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] \
+        || die "--clone: expected github:owner/repo, got '$1' (use --ref for a branch)"
+      printf 'https://github.com/%s.git\n' "${1#github:}" ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
+# host/path of a git URL, to compare SSH and HTTPS forms of one repository.
+repo_id() {
+  local u=$1
+  case $u in
+    *://*) u=${u#*://}; u=${u#*@} ;;
+    *@*:*) u=${u#*@}; u=${u/://} ;;
+  esac
+  u=${u%/}; u=${u%.git}
+  printf '%s\n' "${u,,}"
+}
+
+# Clone the config (--clone), or reuse an existing clone of the same repository.
+clone_config() { # url dir ref
+  local url dir=$2 ref=$3 origin branch
+  url="$(clone_url "$1")"
+  if [[ -e $dir ]] && [[ -n $(ls -A "$dir" 2>/dev/null) ]]; then
+    [[ $(git_any -C "$dir" rev-parse --show-toplevel 2>/dev/null) -ef $dir ]] \
+      && origin="$(git_any -C "$dir" config --get remote.origin.url)" \
+      || die "$dir exists and is not a git clone; move it away or pass --dir <path>"
+    [[ $(repo_id "$origin") == "$(repo_id "$url")" ]] \
+      || die "$dir is a clone of $origin, not $url; move it away or pass --dir <path>"
+    branch="$(git_any -C "$dir" symbolic-ref --short -q HEAD || true)"
+    [[ -z $ref || $branch == "$ref" ]] \
+      || die "$dir is on ${branch:-a detached HEAD}, not $ref; check out $ref there first"
+    step "Using the existing clone in $dir"
+    if confirm "Update it with 'git pull --ff-only'?"; then
+      git_any -C "$dir" pull --ff-only \
+        || warn "git pull failed; using $dir as it is"
+    fi
+    return 0
+  fi
+  step "Cloning $url into $dir"
+  mkdir -p "${dir%/*}"
+  git_any clone ${ref:+--branch "$ref"} -- "$url" "$dir" || die "git clone failed. \
+For a private repository use an SSH URL (git@github.com:owner/repo) with a key \
+your account knows, or HTTPS credentials (e.g. 'gh auth login')."
+}
+
 cmd_install() {
-  local flake='' ref dir=''
+  local flake='' ref dir='' clone='' clone_dir='' clone_ref=''
   while (( $# )); do
     case $1 in
       --flake) [[ $# -ge 2 ]] || die "--flake needs an argument"; flake=$2; shift 2 ;;
+      --clone) [[ $# -ge 2 ]] || die "--clone needs an argument"; clone=$2; shift 2 ;;
+      --dir) [[ $# -ge 2 ]] || die "--dir needs an argument"; clone_dir=$2; shift 2 ;;
+      --ref) [[ $# -ge 2 ]] || die "--ref needs an argument"; clone_ref=$2; shift 2 ;;
       -y|--yes) ASSUME_YES=1; shift ;;
       -h|--help) usage; exit 0 ;;
       *) die "install: unknown option '$1' (see --help)" ;;
     esac
   done
+  if [[ -n $clone ]]; then
+    [[ -z $flake ]] || die "install: --clone and --flake exclude each other"
+    clone_url "$clone" >/dev/null
+    clone_dir=${clone_dir:-$DEFAULT_CONFIG_DIR}
+    [[ $clone_dir == /* ]] || clone_dir=$PWD/$clone_dir
+  elif [[ -n $clone_dir || -n $clone_ref ]]; then
+    die "install: --dir and --ref need --clone"
+  fi
 
   need_not_root
   check_os
   command -v curl >/dev/null 2>&1 || die "curl not found"
 
   ensure_nix
+
+  if [[ -n $clone ]]; then
+    clone_config "$clone" "$clone_dir" "$clone_ref"
+    flake=$clone_dir
+  fi
 
   step "Finding the Home Manager configuration"
   if [[ -n $flake ]]; then
@@ -1182,7 +1261,7 @@ cmd_uninstall() {
   cat <<EOF
 
 Intentionally left in place:
-  - your configuration (e.g. $DEFAULT_CONFIG_DIR)
+  - your configuration (e.g. $DEFAULT_CONFIG_DIR, also when cloned)
   - files Home Manager renamed to *.hm-backup-<time>
   - app data, e.g. ~/.local/share/docker, Firefox profiles, and Flatpak apps
 Log out or reboot so running sessions drop the removed tweaks.

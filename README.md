@@ -91,6 +91,17 @@ with "Restart once": reboot once. Re-running it just switches
 again (`--yes` answers every question). Afterwards edit
 `~/nix-config/home.nix` and switch (see [Usage](#usage)).
 
+Your own config in a git repository: `--clone <git-url>` clones it into
+`~/nix-config` (`--dir <path>`, branch `--ref <branch>`) and installs it like
+`--flake <dir>`; an existing clone of the same repository is reused (after
+asking, `git pull --ff-only`). URLs: `git@github.com:owner/repo`,
+`https://...` or `github:owner/repo`; a private repository needs an SSH URL
+with your key or HTTPS credentials (e.g. `gh auth login`).
+
+```sh
+curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- install --clone git@github.com:owner/my-config
+```
+
 ```sh
 curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- status      # Nix, generation, services
 curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- uninstall   # --keep-nix keeps Nix
@@ -440,8 +451,10 @@ versions left: [docs/cleanup.md](docs/cleanup.md).
   if Nix was already there without flakes;
 - `~/nix-config` (your configuration, a git repository, from the template
   with your user name filled into `flake.nix`) and the link
-  `~/.config/home-manager` to it, unless that exists or `--flake` is given;
-  uninstall removes the link, never the configuration;
+  `~/.config/home-manager` to it, unless that exists or `--flake` is given
+  (with `--flake <dir>` or `--clone`, the link to that directory unless it
+  exists); uninstall removes the link, never the configuration (a clone
+  included);
 - dotfiles in Home Manager's way, renamed to `*.hm-backup-<time>` (kept);
 - `~/.local/state/home-manager`, `~/.local/state/nix` (profiles,
   generations), `~/.nix-profile`, `~/.nix-defexpr`, `~/.nix-channels`,

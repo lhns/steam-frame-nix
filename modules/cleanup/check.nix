@@ -3,11 +3,13 @@
 # aren't ours (left alone), --dry-run changes nothing, a second run changes
 # nothing, SteamVR running defers the debugger key to a runtime drop-in.
 # Also `install.sh restart-check` (what waits for a session/SteamVR restart).
+# Also `install.sh install --clone` (argument parsing and the clone step),
+# against local bare repositories through a logging git, without network.
 { pkgs }:
 let
   cleanup = pkgs.callPackage ./package.nix { };
 in
-pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq ]; } ''
+pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git ]; } ''
   set -euo pipefail
   fail() { echo "FAIL: $*" >&2; exit 1; }
   export HOME XDG_RUNTIME_DIR STEAM_FRAME_NIX_RUNTIME_DIR STEAM_FRAME_NIX_SYSTEMCTL
@@ -300,5 +302,88 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq ]; } ''
   rm -r $U/gamescope-session.service.d $U/steamvr.service.d; : > $root/proc/net/tcp
   res=$(rc); [ -z "$res" ] || fail "restart-check without the drop-ins: $res"
   echo "F ok"
+
+  # --- G: install --clone ---
+  INSTALL=${../../install.sh}
+  export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+  fresh g
+  R=$root/remotes; mkdir -p $R
+  for repo in config other; do
+    git init -q -b main $R/src-$repo
+    echo "{ outputs = _: { }; }" > $R/src-$repo/flake.nix
+    git -C $R/src-$repo add -A; git -C $R/src-$repo commit -qm init
+    git -C $R/src-$repo branch dev
+    git clone -q --bare $R/src-$repo $R/$repo.git
+  done
+  # The URL forms reach the bare repositories; a git that logs its arguments.
+  export GIT_CONFIG_GLOBAL=$root/gitconfig GITLOG=$root/gitlog
+  git config --global url."file://$R/config.git".insteadOf https://github.com/owner/config.git
+  git config --global --add url."file://$R/config.git".insteadOf git@github.com:owner/config
+  git config --global url."file://$R/other.git".insteadOf https://example.org/other.git
+  mkdir -p $root/bin
+  printf '#!%s\necho "$*" >> "$GITLOG"\nexec %s "$@"\n' ${pkgs.bash}/bin/bash ${pkgs.git}/bin/git > $root/bin/git
+  chmod +x $root/bin/git
+  PATH=$root/bin:$PATH
+  # sourced: run one function with fresh state
+  sfn() { (. $INSTALL; "$@"); }
+  # install with Nix, curl and home-manager stubbed
+  inst() {
+    : > $GITLOG
+    (. $INSTALL; ASSUME_YES=1; ensure_nix() { :; }; curl() { :; }; hm() { echo "hm $*"; }; cmd_install "$@")
+  }
+
+  # parsing
+  res=$(bash $INSTALL install --clone github:owner/config --flake /x 2>&1) && fail "--clone --flake accepted"
+  has "$res" "--clone and --flake exclude each other"
+  res=$(bash $INSTALL install --dir /x 2>&1) && fail "--dir without --clone accepted"
+  has "$res" "--dir and --ref need --clone"
+  res=$(bash $INSTALL install --clone github:owner/config/dev 2>&1) && fail "github:o/r/x accepted"
+  has "$res" "expected github:owner/repo"
+  res=$(bash $INSTALL install --clone 2>&1) && fail "--clone without URL accepted"
+  [ "$(sfn clone_url github:owner/config)" = https://github.com/owner/config.git ] || fail clone_url
+  [ "$(sfn clone_url git@github.com:owner/config)" = git@github.com:owner/config ] || fail clone_url-ssh
+  [ "$(sfn repo_id git@GitHub.com:owner/config.git)" = "$(sfn repo_id https://github.com/owner/config/)" ] || fail repo_id
+  [ "$(sfn repo_id ssh://git@github.com/owner/config)" = github.com/owner/config ] || fail repo_id-ssh
+
+  # each URL form: the git command, the flake dir, the link
+  for url in github:owner/config https://github.com/owner/config.git git@github.com:owner/config; do
+    rm -rf $HOME/nix-config $HOME/.config/home-manager
+    res=$(inst --clone $url)
+    want=$(sfn clone_url $url)
+    grep -qxF -- "clone -- $want $HOME/nix-config" $GITLOG || fail "$url: git: $(cat $GITLOG)"
+    has "$res" "hm switch --flake $HOME/nix-config -b"
+    [ "$(readlink $HOME/.config/home-manager)" = $HOME/nix-config ] || fail "$url: link"
+    [ "$(git -C $HOME/nix-config branch --show-current)" = main ] || fail "$url: branch"
+  done
+
+  # reuse: same repository in another URL form, pulled (--yes)
+  res=$(inst --clone https://github.com/owner/config.git)
+  has "$res" "Using the existing clone in $HOME/nix-config"
+  grep -qxF -- "-C $HOME/nix-config pull --ff-only" $GITLOG || fail "no pull: $(cat $GITLOG)"
+  ! grep -q "^clone" $GITLOG || fail "cloned again"
+  has "$res" "hm switch --flake $HOME/nix-config -b"
+
+  # --dir (relative) and --ref; the existing link stays
+  res=$(cd $HOME && inst --clone github:owner/config --dir cfg --ref dev)
+  grep -qxF -- "clone --branch dev -- https://github.com/owner/config.git $HOME/cfg" $GITLOG || fail "ref: $(cat $GITLOG)"
+  [ "$(git -C $HOME/cfg branch --show-current)" = dev ] || fail "ref branch"
+  has "$res" "hm switch --flake $HOME/cfg -b"
+  [ "$(readlink $HOME/.config/home-manager)" = $HOME/nix-config ] || fail "link replaced"
+  res=$(inst --clone github:owner/config --dir $HOME/cfg --ref main 2>&1) && fail "other branch reused"
+  has "$res" "is on dev, not main"
+
+  # refused: another repository, not a clone, a subdirectory of a clone
+  res=$(inst --clone https://example.org/other.git 2>&1) && fail "other repo reused"
+  has "$res" "is a clone of git@github.com:owner/config, not https://example.org/other.git"
+  mkdir $HOME/plain; echo x > $HOME/plain/x
+  res=$(inst --clone github:owner/config --dir $HOME/plain 2>&1) && fail "plain dir used"
+  has "$res" "is not a git clone"
+  mkdir $HOME/cfg/sub; echo x > $HOME/cfg/sub/x
+  res=$(inst --clone github:owner/config --dir $HOME/cfg/sub 2>&1) && fail "subdir used"
+  has "$res" "is not a git clone"
+  # a failed clone: the hint
+  res=$(inst --clone https://example.org/missing.git --dir $HOME/m 2>&1) && fail "missing repo"
+  has "$res" "gh auth login"
+  echo "G ok"
   touch $out
 ''
