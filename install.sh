@@ -471,13 +471,11 @@ c_rmdir() { # dir: removed if empty (after the planned removals)
   rmdir -- "$1" && CLEAN_GONE[$1]=1 && c_done "removed empty directory $1"
 }
 
-c_write() { # path why: replace the contents with stdin (same inode and mode)
-  local tmp
-  if (( CLEAN_DRY )); then cat >/dev/null; c_do "rewrite $1 ($2)" || true; return 0; fi
-  c_do "rewrite $1 ($2)"
-  tmp="$(mktemp "$1.sfn-XXXXXX")"
-  cat >"$tmp" && cat "$tmp" >"$1"
-  rm -f -- "$tmp"
+# Not fed through a pipe: a pipe's subshell would lose CLEAN_ACTIONS and the
+# --quiet header state.
+c_write() { # path why content: replace the contents (same inode and mode)
+  c_do "rewrite $1 ($2)" || return 0
+  printf '%s\n' "$3" >"$1"
   c_done "rewrote $1 ($2)"
 }
 
@@ -753,7 +751,7 @@ clean_firefox() { # all
         continue
       fi
       left="$(grep -vF "$pats" "$prof/prefs.js" || true)"
-      printf '%s\n' "$left" | c_write "$prof/prefs.js" "values of the $kind: ${keys//$'\n'/ }"
+      c_write "$prof/prefs.js" "values of the $kind: ${keys//$'\n'/ }" "$left"
     fi
     c_rm "$u" "$kind"
     c_rmdir "$prof"
@@ -814,7 +812,7 @@ clean_jellyfin() {
         if [[ -z $(tr -d '[:space:]' <<<"$out") ]]; then
           c_rm "$JF_OVERRIDE" "Flatpak override with only the hwdec shim entries"
         else
-          printf '%s\n' "$out" | c_write "$JF_OVERRIDE" "hwdec shim entries"
+          c_write "$JF_OVERRIDE" "hwdec shim entries" "$out"
           warn "$JF_OVERRIDE keeps entries of its own: $(grep -v '^\[' <<<"$out" | grep . | tr '\n' ' ')"
         fi
       elif (( rc == 3 )); then
