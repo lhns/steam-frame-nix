@@ -89,4 +89,4 @@ A patch with its own gesture lets `mousemove` through while undecided,
 drops its gesture on `sfui-curv-dragstart`, may raise the threshold while
 its gesture is under way, and calls `cancelPress()` when it takes the press
 over. Neither side reads the other's thresholds or restores the other's
-state. The window control bar uses factor 3 once its progress ring shows.
+state.
