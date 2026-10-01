@@ -4,8 +4,9 @@
 # patch (core.js + systemui.js), the `vr-pet` CLI (cli.mjs), the "+" menu
 # entry and its icons (steam-frame-nix-pet-icon: icon.sh), the desktop preview (preview/)
 # and the tests (tests/, the flake check pet). System-independent
-# inputs (pinned fetchurl, Python + numpy/pillow), so it also builds on
-# x86_64. Credits and licences: README.md, "Credits".
+# inputs (the model sources, in this repository: sources/ and
+# models/<id>/; Python + numpy/pillow), so it also builds on x86_64.
+# Credits and licences: README.md, "Credits".
 { pkgs, lib ? pkgs.lib
 , height ? 0.30   # m, standing height of the cat (ears)
 , fps ? 24        # baked frames per second, and core ticks per second
@@ -20,22 +21,9 @@
 , hicolor ? "/nonexistent"        # steam-frame-nix-pet-icon: the hicolor dir whose mtime it bumps
 }:
 let
-  toonCat = pkgs.fetchurl {
-    name = "toon_cat_free.glb";   # Omabuarts, CC-BY 4.0
-    url = "https://raw.githubusercontent.com/DevTakao/threejs-cat/97b71575ebd84ff32c50785563bb6b97a9b87012/assets/models/toon_cat_free.glb";
-    hash = "sha256-92KR9dN9YPxY6ABqERGllglYVF/E2VkpiGgq06mq74E=";
-  };
-  tuxedo = "https://raw.githubusercontent.com/xialin-he/xialin-he.github.io/054a1f088cdd19544a8fd5d6d5eaad11e8b0d08e/public/tuxedo_cat_animated_2.0";
-  tuxedoGltf = pkgs.fetchurl {   # DreamNoms, CC-BY 4.0
-    name = "tuxedo-scene.gltf";
-    url = "${tuxedo}/scene.gltf";
-    hash = "sha256-BLwRrWZL65yEKE+4pOYw3lrun8ZUrw5HqeM3ol96HoI=";
-  };
-  tuxedoBin = pkgs.fetchurl {
-    name = "tuxedo-scene.bin";
-    url = "${tuxedo}/scene.bin";
-    hash = "sha256-iiRZRV2GxilBDUvz6tUAzT3z5+Vqr/AkzQ6wFZFfTqw=";
-  };
+  # The cat's sources, in this repository (sources/*/LICENSE.md):
+  toonCat = ./sources/toon-cat/toon_cat_free.glb;   # Omabuarts, CC-BY 4.0
+  tuxedo = ./sources/tuxedo-cat;                     # DreamNoms, CC-BY 4.0
   threeTgz = pkgs.fetchurl {   # MIT
     url = "https://registry.npmjs.org/three/-/three-0.170.0.tgz";
     hash = "sha256-SmCKNV3KunLg5Tg83IFDA/W2BgtDwjjN9pMtzraZI40=";
@@ -48,8 +36,8 @@ let
 
   models = pkgs.runCommand "vr-pet-models" { nativeBuildInputs = [ python ]; } ''
     mkdir tuxedo
-    cp ${tuxedoGltf} tuxedo/scene.gltf
-    cp ${tuxedoBin} tuxedo/scene.bin
+    cp ${tuxedo + "/scene.gltf"} tuxedo/scene.gltf
+    cp ${tuxedo + "/scene.bin"} tuxedo/scene.bin
     ${srcOf [ "bake.py" "rig.py" ]}
     python3 src/bake.py ${toonCat} tuxedo/scene.gltf $out ${toString height} ${toString fps}
     cp ${credits} $out/CREDITS.md

@@ -7,7 +7,8 @@ scripts in `modules/pet/` point here). Credits of the built-in models:
 Every model is a folder with a `model.json` (its spec) and any files the
 spec names (a texture, a `.glb`, a thumbnail, a Blender script). The
 built-in ones are `modules/pet/models/<id>/`, found by `builtins.readDir`
-(nothing else lists them). Your own go into `steamFrame.pet.extraModels`:
+(nothing else lists them); an animal's source is in its folder with a
+`LICENSE.md`, the cat's in `modules/pet/sources/`. Your own go into `steamFrame.pet.extraModels`:
 either such a folder (`corgi = ./pets/corgi;`) or the spec as an attrset,
 with files as Nix paths (`calico = { name = "Calico"; png = ./calico.png; };`).
 Rebuild, and the model shows up in the pet's ⋯ menu and in
@@ -171,8 +172,7 @@ it) and relax the ears on top at `Ear2` (sleep).
 {
   "name": "Shiba Inu", "kind": "gltf", "order": 10,
   "credit": "Shiba Inu, Ultimate Animated Animal Pack by Quaternius, CC0 1.0",
-  "src": { "url": "https://static.poly.pizza/ba6d0ee3-bcc0-4ef0-9d3c-a3e245b41c77.glb",
-           "hash": "sha256-nL1PHhL4UCQSbqtqLFcGwJkZbfGhDbdObItnusP/9Uo=" },
+  "src": "model.glb",
   "height": 0.35,
   "feet": ["FrontLowerLeg.L_end", "FrontLowerLeg.R_end", "BackLowerLeg.L_end", "BackLowerLeg.R_end"],
   "follow": { "IKFrontLeg.L": "FrontLowerLeg.L", "IKFrontLeg.R": "FrontLowerLeg.R",

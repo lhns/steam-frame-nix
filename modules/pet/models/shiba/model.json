@@ -3,10 +3,7 @@
   "kind": "gltf",
   "order": 10,
   "credit": "Shiba Inu from the Ultimate Animated Animal Pack by Quaternius, CC0 1.0 (https://quaternius.com/packs/ultimateanimatedanimals.html, mirrored at https://poly.pizza/m/y4wdQpg767)",
-  "src": {
-    "url": "https://static.poly.pizza/ba6d0ee3-bcc0-4ef0-9d3c-a3e245b41c77.glb",
-    "hash": "sha256-nL1PHhL4UCQSbqtqLFcGwJkZbfGhDbdObItnusP/9Uo="
-  },
+  "src": "model.glb",
   "height": 0.35,
   "feet": ["FrontLowerLeg.L_end", "FrontLowerLeg.R_end", "BackLowerLeg.L_end", "BackLowerLeg.R_end"],
   "follow": {

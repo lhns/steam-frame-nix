@@ -3,10 +3,7 @@
   "kind": "gltf",
   "order": 11,
   "credit": "Fox from the Ultimate Animated Animal Pack by Quaternius, CC0 1.0 (https://quaternius.com/packs/ultimateanimatedanimals.html, mirrored at https://poly.pizza/m/Bc97C66HKi)",
-  "src": {
-    "url": "https://static.poly.pizza/e18e86df-1692-48d8-ac6e-1e25ab4ad574.glb",
-    "hash": "sha256-mRd3HhQUxGVXsBHLqu5t6CqCdgUAgiejZMOGLwvmLdw="
-  },
+  "src": "model.glb",
   "height": 0.32,
   "feet": ["FrontLowerLeg.L_end", "FrontLowerLeg.R_end", "BackLowerLeg.L_end", "BackLowerLeg.R_end"],
   "follow": {

@@ -490,39 +490,38 @@ steam-frame-nix's modules, so it can't clean up after them.)
 
 ## Credits
 
-The [VR pet](docs/pet.md)'s models are not in this repository: Nix fetches
-them at build time from the URLs pinned (with their hashes) in
-`modules/pet/package.nix` and `modules/pet/models/<id>/model.json`, and
-bakes them into the store.
+The [VR pet](docs/pet.md)'s model sources are included in this repository,
+unchanged (byte-identical to the originals linked below), each with a
+`LICENSE.md` next to it: the cat's in `modules/pet/sources/`, the animals'
+in `modules/pet/models/<id>/`. Nix bakes them into the store at build time.
 
 - **Toon Cat FREE** by [Omabuarts Studio](https://sketchfab.com/omabuarts)
   ([model](https://sketchfab.com/3d-models/toon-cat-free-b2bd1ee7858444bda366110a2d960386)),
   [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/): the cat (mesh,
   texture, rig, walk) and its coats. Modified: recoloured coats (Tuxedo,
   Blue, Cream, Snow), retargeted and hand-keyed animations, baked to one OBJ
-  per frame. Fetched from a third-party GitHub mirror
-  ([DevTakao/threejs-cat](https://github.com/DevTakao/threejs-cat), pinned
-  commit and hash).
+  per frame. Included as `modules/pet/sources/toon-cat/toon_cat_free.glb`
+  (the glb of [DevTakao/threejs-cat](https://github.com/DevTakao/threejs-cat)).
 - **Tuxedo Cat Animated 2.0** by [DreamNoms](https://sketchfab.com/DreamNoms)
   ([model](https://sketchfab.com/3d-models/tuxedo-cat-animated-20-783fcb78b55b4394a212c2b6392e1113)),
   [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/): only its
   SitDown, IdleSit and StandUp clips, retargeted onto the Toon Cat and
-  baked. Fetched from a third-party GitHub mirror
-  ([xialin-he/xialin-he.github.io](https://github.com/xialin-he/xialin-he.github.io),
-  pinned commit and hash).
+  baked. Included as `modules/pet/sources/tuxedo-cat/` (the glTF of
+  [xialin-he/xialin-he.github.io](https://github.com/xialin-he/xialin-he.github.io)).
 - **Shiba Inu** and **Fox** from the
   [Ultimate Animated Animal Pack](https://quaternius.com/packs/ultimateanimatedanimals.html)
   by [Quaternius](https://quaternius.com),
   [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) (credited
   anyway). Modified: clips sampled per frame, sit, lie, sleep and the
   held-by-the-scruff pose hand-keyed, a wagging tail and breathing added,
-  material colours turned into a texture. Fetched from the Poly Pizza
-  mirror ([Shiba Inu](https://poly.pizza/m/y4wdQpg767),
-  [Fox](https://poly.pizza/m/Bc97C66HKi), pinned hashes).
+  material colours turned into a texture. Included as
+  `modules/pet/models/{shiba,fox}/model.glb` (the glbs of Poly Pizza:
+  [Shiba Inu](https://poly.pizza/m/y4wdQpg767),
+  [Fox](https://poly.pizza/m/Bc97C66HKi)).
 - **Dachshund:** the Quaternius Shiba Inu (CC0 1.0), reshaped (longer back
   and ears, shorter legs) and recoloured black and tan.
 - **three.js** (desktop preview only), [MIT](https://github.com/mrdoob/three.js/blob/dev/LICENSE),
-  fetched from npm.
+  from npm at build time (not in this repository).
 
 The baked cat's store output carries a short `CREDITS.md` pointing here.
 

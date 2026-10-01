@@ -53,8 +53,8 @@ steamFrame.pet.enable = true;
 
 The first switch bakes the models: a few minutes on the Frame and about
 0.5 GB in the store (1.1 GB without `auto-optimise-store`, which hardlinks
-the coats' copies of the cat's frames); the sources are fetched at build
-time (no Blender needed for the built-in models). Adding your own model, the spec and the
+the coats' copies of the cat's frames); the model sources are in this
+repository (no model download, no Blender needed for the built-in models). Adding your own model, the spec and the
 animation mapping: [VR pet models](pet-models.md). A model of a character
 someone else owns belongs in your own `extraModels` with `"private": true`
 ([private models](pet-models.md#private-models)), never in this repository.
