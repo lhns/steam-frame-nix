@@ -6,6 +6,7 @@ let
   shim = pkgs.callPackage ./shim.nix { };
 in
 pkgs.runCommandCC "jellyfin-check" { nativeBuildInputs = [ pkgs.binutils ]; } ''
+  set -euo pipefail
   so=${shim}/lib/mpv-hwdec-shim.so
   fail() { echo "FAIL: $*" >&2; exit 1; }
 
