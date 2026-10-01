@@ -716,7 +716,7 @@ ff_keys() { sed -n 's/^[[:space:]]*user_pref(\("[^"]*"\),.*/\1/p' "$1" 2>/dev/nu
 ff_in_use() { [[ -n $(find /proc/[0-9]*/fd -lname "$1/.parentlock" -print -quit 2>/dev/null) ]]; }
 
 clean_firefox() { # all
-  local all=$1 prof name u t kind keys pats left
+  local all=$1 prof name u t kind keys pats left rc
   [[ -d $FF_DIR ]] || return 0
   for prof in "$FF_DIR"/*/; do
     prof=${prof%/}; name=${prof##*/}; u=$prof/user.js
@@ -750,7 +750,8 @@ clean_firefox() { # all
         c_defer "$u: Firefox is using profile $name; close it and run this again"
         continue
       fi
-      left="$(grep -vF "$pats" "$prof/prefs.js" || true)"
+      rc=0; left="$(grep -vF "$pats" "$prof/prefs.js")" || rc=$?
+      if (( rc > 1 )); then warn "could not read $prof/prefs.js; left as is"; continue; fi
       c_write "$prof/prefs.js" "values of the $kind: ${keys//$'\n'/ }" "$left"
     fi
     c_rm "$u" "$kind"
