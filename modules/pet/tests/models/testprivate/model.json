@@ -1,0 +1,6 @@
+{
+  "name": "Test Private", "kind": "recolor", "order": 6,
+  "fur": ["#203040", "#8090a0"],
+  "private": true,
+  "rights": "An example: a character someone else owns, for personal use only (never published)"
+}

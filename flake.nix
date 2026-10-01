@@ -40,6 +40,7 @@
       launchers = ./modules/launchers.nix;
       docker = ./modules/docker.nix;
       screenshots = ./modules/screenshots.nix;
+      pet = ./modules/pet.nix;
     };
     # Former attribute names, kept so existing imports keep working (not in
     # `default`, which imports each module once under its current name).
@@ -49,15 +50,22 @@
     };
     systems = [ "aarch64-linux" "x86_64-linux" ];
     forSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
+    # The VR pet's build (defaults: no extraModels), for its packages and check.
+    petFor = pkgs: import ./modules/pet/package.nix { inherit pkgs; };
   in {
     homeManagerModules = modules // aliases // {
       default = { imports = builtins.attrValues modules; };
     };
 
-    # Removes what steam-frame-nix wrote outside the Nix store (install.sh
-    # cleanup): nix run github:lhns/steam-frame-nix#cleanup -- --all
-    packages = forSystems (pkgs: {
+    # cleanup: removes what steam-frame-nix wrote outside the Nix store
+    # (install.sh cleanup): nix run github:lhns/steam-frame-nix#cleanup -- --all
+    # pet-*: the VR pet's baked cat (pet-models), its "+" menu icons
+    # (pet-icons) and its desktop preview (nix run …#pet-preview), docs/pet.md.
+    packages = forSystems (pkgs: let pet = petFor pkgs; in {
       cleanup = pkgs.callPackage ./modules/cleanup/package.nix { };
+      pet-models = pet.models;
+      pet-icons = pet.icons;
+      pet-preview = pet.preview;
     });
     apps = nixpkgs.lib.mapAttrs (_: p: {
       cleanup = {
@@ -65,20 +73,27 @@
         program = "${p.cleanup}/bin/steam-frame-nix-cleanup";
         meta.description = "Remove what steam-frame-nix wrote outside the Nix store";
       };
+      pet-preview = {
+        type = "app";
+        program = "${p.pet-preview}/bin/vr-pet-preview";
+        meta.description = "The VR pet in a browser (http://127.0.0.1:8765/)";
+      };
     }) self.packages;
 
     # Tests of the VR keyboard (text model, corrector, swipe decoder on the
     # default German + English dictionary), the controller geometry and touch
     # typing, the extra keys' xdotool allowlist, the Jellyfin mpv shim, the
     # Firefox wrapper, the launchers, install.sh cleanup, the
-    # applications.menu link, the portal config and the screenshots account
-    # detection: nix flake check
+    # applications.menu link, the portal config, the screenshots account
+    # detection and the VR pet (core, SteamVR adapter, CLI, models, icons):
+    # nix flake check
     checks = forSystems (pkgs: {
       applications-menu = import ./modules/applications-menu/check.nix { inherit pkgs; };
       cleanup = import ./modules/cleanup/check.nix { inherit pkgs; };
       firefox = import ./modules/firefox/check.nix { inherit pkgs; };
       jellyfin = import ./modules/jellyfin/check.nix { inherit pkgs; };
       launchers = import ./modules/launchers/check.nix { inherit pkgs; };
+      pet = import ./modules/pet/check.nix { inherit pkgs; };
       portal = import ./modules/portal/check.nix { inherit pkgs; };
       screenshots = import ./modules/screenshots/check.nix { inherit pkgs; };
       vr-keyboard = import ./modules/vr-keyboard/check.nix { inherit pkgs; };

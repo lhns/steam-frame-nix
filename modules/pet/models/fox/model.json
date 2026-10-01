@@ -1,0 +1,101 @@
+{
+  "name": "Fox",
+  "kind": "gltf",
+  "order": 11,
+  "credit": "Fox from the Ultimate Animated Animal Pack by Quaternius, CC0 1.0 (https://quaternius.com/packs/ultimateanimatedanimals.html, mirrored at https://poly.pizza/m/Bc97C66HKi)",
+  "src": {
+    "url": "https://static.poly.pizza/e18e86df-1692-48d8-ac6e-1e25ab4ad574.glb",
+    "hash": "sha256-mRd3HhQUxGVXsBHLqu5t6CqCdgUAgiejZMOGLwvmLdw="
+  },
+  "height": 0.32,
+  "feet": ["FrontLowerLeg.L_end", "FrontLowerLeg.R_end", "BackLowerLeg.L_end", "BackLowerLeg.R_end"],
+  "follow": {
+    "IKFrontLeg.L": "FrontLowerLeg.L", "IKFrontLeg.R": "FrontLowerLeg.R",
+    "IKBackLeg.L": "BackLowerLeg.L", "IKBackLeg.R": "BackLowerLeg.R"
+  },
+  "zones": {
+    "scruff": "Neck2", "head": "Head", "back": "Torso2",
+    "chin": { "bone": "Head", "at": "joint" }, "tailBase": { "bone": "Tail1", "at": "joint" }
+  },
+  "keys": {
+    "stand": { "from": "Idle" },
+    "sit": {
+      "from": "Idle",
+      "rot": { "Back": [-38, 0, 0], "Neck1": [6, 0, 0], "Neck2": [2, 0, 0], "Neck3": [24, 0, 0], "Tail1": [55, 30, 0], "Tail3": [0, 22, 0], "Tail5": [0, 25, 0], "Tail7": [0, 25, 0] },
+      "aim": {
+        "FrontUpperLeg.L": [0.03, -1, 0.05], "FrontUpperLeg.R": [-0.03, -1, 0.05],
+        "FrontLowerLeg.L": [0, -1, 0.08], "FrontLowerLeg.R": [0, -1, 0.08],
+        "BackLeg.L": [0.2, -0.3, 1], "BackLeg.R": [-0.2, -0.3, 1],
+        "BackUpperLeg.L": [0.05, -0.35, -1], "BackUpperLeg.R": [-0.05, -0.35, -1],
+        "BackLowerLeg.L": [0.05, -0.2, 1], "BackLowerLeg.R": [-0.05, -0.2, 1]
+      }
+    },
+    "lie": {
+      "from": "Idle",
+      "rot": { "Neck1": [8, 0, 0], "Tail1": [20, 20, 0], "Tail3": [0, 22, 0], "Tail5": [0, 22, 0], "Tail7": [0, 22, 0] },
+      "aim": {
+        "FrontUpperLeg.L": [0.05, -1, -0.45], "FrontUpperLeg.R": [-0.05, -1, -0.45],
+        "FrontLowerLeg.L": [0.02, -0.12, 1], "FrontLowerLeg.R": [-0.02, -0.12, 1],
+        "BackLeg.L": [0.55, -0.55, 0.8], "BackLeg.R": [-0.55, -0.55, 0.8],
+        "BackUpperLeg.L": [0.15, -0.35, -1], "BackUpperLeg.R": [-0.15, -0.35, -1],
+        "BackLowerLeg.L": [0.05, -0.1, 1], "BackLowerLeg.R": [-0.05, -0.1, 1]
+      }
+    },
+    "sleep": {
+      "from": "Idle",
+      "rot": { "Neck1": [32, 0, 0], "Neck2": [24, -4, -2], "Neck3": [-26, 10, 12], "Ear2.L": [20, 0, 0], "Ear2.R": [20, 0, 0],
+        "Tail1": [20, 35, 0], "Tail3": [0, 35, 0], "Tail5": [0, 35, 0], "Tail7": [0, 30, 0] },
+      "aim": {
+        "FrontUpperLeg.L": [0.05, -1, -0.45], "FrontUpperLeg.R": [-0.05, -1, -0.45],
+        "FrontLowerLeg.L": [0.02, -0.12, 1], "FrontLowerLeg.R": [-0.02, -0.12, 1],
+        "BackLeg.L": [0.55, -0.55, 0.8], "BackLeg.R": [-0.55, -0.55, 0.8],
+        "BackUpperLeg.L": [0.15, -0.35, -1], "BackUpperLeg.R": [-0.15, -0.35, -1],
+        "BackLowerLeg.L": [0.05, -0.1, 1], "BackLowerLeg.R": [-0.05, -0.1, 1]
+      }
+    },
+    "dangle": {
+      "from": "Idle",
+      "rot": { "Body": [-62, 0, 0], "Neck1": [14, 0, 0], "Neck2": [4, 0, 0], "Neck3": [32, 0, 0], "Tail1": [40, 0, 0] },
+      "aim": {
+        "FrontUpperLeg.L": [0.05, -1, 0.15], "FrontUpperLeg.R": [-0.05, -1, 0.15],
+        "FrontLowerLeg.L": [0.02, -1, 0.2], "FrontLowerLeg.R": [-0.02, -1, 0.2],
+        "BackLeg.L": [0.08, -1, 0.3], "BackLeg.R": [-0.08, -1, 0.3],
+        "BackUpperLeg.L": [0.03, -1, -0.1], "BackUpperLeg.R": [-0.03, -1, -0.1],
+        "BackLowerLeg.L": [0, -1, 0.25], "BackLowerLeg.R": [0, -1, 0.25]
+      }
+    }
+  },
+  "clips": {
+    "idle": { "clip": "Idle", "fps": 12 },
+    "walk": "Walk",
+    "walkstart": { "blend": ["stand", "walk"], "seconds": 0.3 },
+    "sit": { "key": "sit", "seconds": 3, "layers": [{ "bone": "Torso2", "scale": [0.025, 0, 0.025], "period": 3 }] },
+    "sitdown": { "blend": ["stand", "sit"], "seconds": 0.9 },
+    "standup": { "reverse": "sitdown" },
+    "lie": { "key": "lie", "seconds": 3, "layers": [{ "bone": "Torso2", "scale": [0.03, 0, 0.03], "period": 3 }] },
+    "liedown": { "blend": ["stand", "lie"], "seconds": 1.1 },
+    "sleep": { "key": "sleep", "seconds": 4, "fps": 8, "layers": [{ "bone": "Torso2", "scale": [0.04, 0, 0.04], "period": 4 }] },
+    "curl": { "blend": ["lie", "sleep"], "seconds": 1.2 },
+    "purr": { "key": "stand", "seconds": 1.2, "fps": 24, "layers": [
+      { "bone": "Tail1", "rot": [0, 22, 0], "period": 0.4 }, { "bone": "Tail2", "rot": [0, 14, 0], "period": 0.4, "phase": 0.9 },
+      { "bone": "Neck2", "rot": [0, 0, 3], "period": 1.2 }, { "bone": "Neck3", "rot": [0, 0, 7], "period": 1.2 }] },
+    "sitpurr": { "key": "sit", "seconds": 1.2, "fps": 24, "layers": [
+      { "bone": "Tail1", "rot": [0, 22, 0], "period": 0.4 }, { "bone": "Tail2", "rot": [0, 14, 0], "period": 0.4, "phase": 0.9 },
+      { "bone": "Neck2", "rot": [0, 0, 3], "period": 1.2 }, { "bone": "Neck3", "rot": [0, 0, 7], "period": 1.2 }] },
+    "liepurr": { "key": "lie", "seconds": 1.2, "fps": 24, "layers": [
+      { "bone": "Tail1", "rot": [0, 22, 0], "period": 0.4 }, { "bone": "Tail2", "rot": [0, 14, 0], "period": 0.4, "phase": 0.9 },
+      { "bone": "Neck2", "rot": [0, 0, 3], "period": 1.2 }, { "bone": "Neck3", "rot": [0, 0, 7], "period": 1.2 }] },
+    "dangle": { "key": "dangle", "hang": true, "seconds": 2, "layers": [{ "bone": "Body", "rot": [0, 0, 4], "period": 2 }] },
+    "fall": { "clip": "Jump_ToIdle", "hold": 0.5 },
+    "land": { "clip": "Jump_ToIdle", "start": 0.5 },
+    "startle": { "clip": "Idle_HitReact_Left", "loop": false },
+    "sniff": { "clip": "Eating", "fps": 12, "loop": false },
+    "look": { "clip": "Idle_2_HeadLow", "fps": 12, "loop": false }
+  },
+  "species": {
+    "actions": {
+      "sniff": { "pose": "stand", "weight": 1.2, "cooldown": 45 },
+      "look": { "pose": "stand", "weight": 1, "cooldown": 30 }
+    }
+  }
+}

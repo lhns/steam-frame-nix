@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VR Cat Preview</title>
+<style>
+  :root { color-scheme: dark; --bg: #15171a; --panel: #1f2328e6; --fg: #e6e6e6; --dim: #9aa0a6; --accent: #f0a04b; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px/1.4 system-ui, sans-serif; overflow: hidden; }
+  canvas { display: block; }
+  #panel { position: fixed; top: 10px; right: 10px; width: 430px; max-height: calc(100% - 20px); overflow-x: hidden; overflow-y: auto; background: var(--panel);
+           border-radius: 8px; padding: 10px 12px; box-sizing: border-box; }
+  #panel h1 { font-size: 14px; margin: 0 0 6px; color: var(--accent); }
+  #panel label { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+  #panel select, #panel button { font: inherit; }
+  #panel .row { display: flex; gap: 6px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
+  #state { white-space: pre; font: 12px/1.35 ui-monospace, monospace; color: var(--fg); background: #0005; padding: 6px; border-radius: 4px; }
+  #help { color: var(--dim); font-size: 12px; margin-top: 8px; }
+  #help b { color: var(--fg); font-weight: 600; }
+  #loading { position: fixed; inset: 0; display: grid; place-items: center; font-size: 16px; color: var(--dim); }
+  #log { white-space: pre-wrap; font: 11px/1.3 ui-monospace, monospace; color: var(--dim); max-height: 120px; overflow: auto; }
+</style>
+</head>
+<body>
+<div id="loading">loading baked frames…</div>
+<div id="panel">
+  <h1>VR pet preview</h1>
+  <div id="state"></div>
+  <div class="row">
+    <select id="cmd">
+      <option>stand</option><option>sit</option><option>lie</option><option>sleep</option>
+      <option>wander</option><option>follow</option><option>turn</option><option>groom</option>
+      <option>stretch</option><option>shake</option><option>purr</option><option>startle</option><option>drop</option>
+      <option>dangle</option><option>summon</option>
+    </select>
+    <button id="go">force</button>
+  </div>
+  <div class="row">
+    <button id="show">show</button>
+    <label><input id="summonshow" type="checkbox"> summon on show</label>
+    <span id="hiddenv"></span>
+  </div>
+  <div class="row">
+    <select id="clip"><option value="">clip: from the core</option></select>
+    <select id="model"></select>
+  </div>
+  <label>time scale <input id="speed" type="range" min="0" max="4" step="0.1" value="1"> <span id="speedv">1.0</span></label>
+  <label><input id="demo" type="checkbox"> demo tour</label>
+  <label><input id="handmode" type="checkbox" checked> hand on the mouse cursor (H)</label>
+  <label><input id="reach" type="checkbox" checked> petting reach (green)</label>
+  <label><input id="zones" type="checkbox"> zones (scruff, head, back, chin, tail)</label>
+  <label><input id="paths" type="checkbox" checked> waypoints / follow radius</label>
+  <label><input id="third" type="checkbox"> observer camera (V)</label>
+  <div id="help">
+    <b>mouse</b> moves the right hand (on the plane through the cat; <b>wheel</b> nearer/farther) ·
+    stroke <b>slowly</b> over head/back to pet · swipe <b>fast</b> past it to startle ·
+    <b>press on the grip bar</b> above the cat and move to drag it by the scruff (the laser in VR; <b>wheel</b> nearer/farther), release to drop ·
+    <b>right-drag</b> look (<b>double-click</b> captures the mouse, Esc releases) ·
+    press and release on the <b>X</b> below the grip bar to hide the cat, <b>show</b> brings it back ·
+    <b>⋯</b> next to it opens the menu (coats and animals, Summon, Sit, Lie down, Sleep) ·
+    <b>WASD</b> walk · <b>Shift</b> run · <b>C</b> crouch · <b>V</b> observer camera
+  </div>
+  <div id="log"></div>
+</div>
+<script src="core.js"></script>
+<script type="module" src="preview.js"></script>
+</body>
+</html>
