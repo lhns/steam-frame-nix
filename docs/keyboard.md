@@ -2,7 +2,8 @@
 
 Three patches of Steam's VR keyboard: [extra keys](#extra-keys),
 [swipe and suggestions](#swipe-and-suggestions) and
-[touch typing](#touch-typing). They work together or alone. Options: [README, Options](../README.md#options) (`keyboard.vr.*`).
+[touch typing](#touch-typing). They work together or alone. Options:
+[README, Options](../README.md#options) (`keyboard.vr.*`).
 The keyboard layout of the Steam session itself is a separate fix
 ([keyboard layout](session.md#keyboard-layout)).
 
@@ -184,10 +185,8 @@ has the letters.
   30 px; the trigger as a tiebreak), and while its laser events pause
   (60 ms) the path comes from that laser's hit per frame. The bridge
   samples at full rate from the press to the release (asked for by the
-  patch) and costs nothing while the keyboard is hidden. Without fresh
-  frames (option off, relay or SteamVR gone) only laser events count, as
-  before. A second press during a swipe is Steam's (a tap): one text
-  field, one word at a time.
+  patch). Without fresh frames (option off, relay or SteamVR gone) only
+  laser events count, as before.
 - F-keys: `function-keys.js` decides what the strip shows; the suggestion
   state is kept as it is while F1–F12 are shown. AltGr changes reach the
   strip through a `componentDidUpdate` on the keyboard instance (with a
@@ -231,8 +230,8 @@ the trigger.
 - A haptic tick on contact (`haptics`), routed by SteamVR like the
   keyboard's other ticks.
 
-**Caveats:** moving the keyboard pauses touches for 0.3 s. The extra keys' Delete repeat and the swipe patch's gestures react
-to the laser only. Depends on Steam and SteamVR UI internals (see
+**Caveats:** moving the keyboard pauses touches for 0.3 s. The extra keys'
+Delete repeat and the swipe patch's gestures react to the laser only. Depends on Steam and SteamVR UI internals (see
 [after a Steam update](ui-patches.md#after-a-steam-update)).
 
 **Remove when** Steam's VR keyboard gets touch input.

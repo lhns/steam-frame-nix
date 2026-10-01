@@ -10,9 +10,10 @@
 //   started on at release. With both lasers on the keyboard the pressing one
 //   may get no touchmoves; its path then comes from the controller bridge
 //   (gesture-input.js: the hand whose laser hit the press point; full rate
-//   asked for from the press to the release). Once a press leaves its first key we drop that
-//   key from Steam's pending touches (m_mapTouched) and cancel its long press
-//   (Steam's own touch-end cleanup, minus the typing), then decode the path.
+//   asked for from the press to the release). Once a press leaves its first
+//   key we drop that key from Steam's pending touches (m_mapTouched) and
+//   cancel its long press (Steam's own touch-end cleanup, minus the typing),
+//   then decode the path.
 // - Output: one character or "Backspace" per HandleVirtualKeyDown, the path
 //   of Steam's own keys (incl. extraKeys' xdotool fallback for non-ASCII,
 //   which is async: we pause after such characters).

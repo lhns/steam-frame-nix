@@ -30,7 +30,7 @@
 // attribution. No fresh frames at the press: touch events only, as without
 // the bridge.
 (() => {
-  const VERSION = 2;
+  const VERSION = 3;
   const STALE = 150, GAP = 60, TOL = 30, AGREE = 40, FAR = 60, WAIT = 250, LATE = 60;
 
   function create({ now = () => performance.now() } = {}) {
@@ -89,7 +89,6 @@
       VERSION,
       get owner() { return owner; },
       get hand() { return hand; },
-      get mode() { return mode; },
       stats,
       // { phase, id, x, y, target } if the event concerns the gesture (or may
       // start one: phase 'down'), else null. An 'up' or 'cancel' ends the
@@ -148,7 +147,6 @@
         if (!hand) { waitUntil = touchAt + WAIT; refs = [[c.x, c.y]]; }
         return hand;
       },
-      release() { reset(); },
       // A bridge frame (null: bridge lost). Returns [x, y] to add to the path, or null.
       frame(f) {
         const t = now();

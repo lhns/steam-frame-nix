@@ -3,17 +3,16 @@
 // extraArgs (like lib/hooks.js): installs window.__sfuiControllers unless an
 // equal or newer VERSION is there (a newer one takes over the subscribers)
 // and evaluates to it. relay.mjs calls frame(f) with bridge-patch.js's
-// frames and lost() when the SteamVR side goes away.
+// frames (cadence there) and lost() when the SteamVR side goes away.
 //   subscribe(fn) -> unsubscribe   fn(frame) per frame, fn(null) when lost
 //   last                           the last frame (null: none / lost)
 //   demand(ms)                     full rate for the next ms (0: end), e.g.
 //                                  during a laser press; via the relay's
 //                                  CDP binding __sfuiCtlIn
+//   errors                         { count, last } of throwing subscribers
 // Each frame's hand points (tip, ray) get the keyboard page's px: x, y
 // (CSS px of the keyboard popup) and onKeyboard (inside the page), if the
-// keyboard popup exists. Frames come at up to ~90 Hz while a hand's tip is
-// within 10 cm of the keyboard or its trigger is pulled, else every 1 s, and
-// only while SteamVR shows the keyboard (then one with keyboard null).
+// keyboard popup exists.
 (() => {
   const VERSION = 2;
   const G = globalThis;
