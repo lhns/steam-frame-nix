@@ -195,6 +195,7 @@ these two files ([`template/`](template), with more comments):
   home.homeDirectory = homeDirectory;
   home.stateVersion = "26.05";
   targets.genericLinux.enable = true;
+  targets.genericLinux.gpu.enable = false;  # no GPU drivers for Nix GUI apps (their setup is a root service)
   programs.home-manager.enable = true;
   programs.git = {                    # SteamOS's git, Home Manager writes its config
     enable = true;

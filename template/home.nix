@@ -7,7 +7,11 @@
   home.stateVersion = "26.05";
 
   targets.genericLinux.enable = true;  # non-NixOS integration
+  # Nix-built GUI apps without GPU drivers; steam-frame-nix doesn't need
+  # them and the setup would write a root service under /etc:
+  targets.genericLinux.gpu.enable = false;
   programs.home-manager.enable = true; # the `home-manager` command
+  news.display = "silent";             # `home-manager news` lists them
 
   # git credentials for HTTPS (`install.sh install --clone` uses them):
   # github.com through the GitHub CLI (gh auth login), other hosts from
