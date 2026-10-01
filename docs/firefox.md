@@ -81,8 +81,9 @@ profile's `user.js` to `/app/etc/firefox/steam-frame-nix-desktop-user.js`
 (a sandbox path) right before starting Firefox, waits for it, and once it
 has exited and the profile is no longer in use removes the link and the
 value Firefox stored from it in `prefs.js`. A second launch that just hands
-a URL to the running Firefox leaves both in place. After a crash, the next
-launch or `steam-frame-nix-cleanup` (on switch) removes them.
+a URL to the running Firefox leaves both in place. After a crash (or if
+`prefs.js` can't be rewritten), the next launch or `steam-frame-nix-cleanup`
+(on switch) removes them.
 
 ### Older versions
 

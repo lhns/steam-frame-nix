@@ -8,7 +8,8 @@
 # no longer in use (a second launch that only hands its URL to the running
 # Firefox returns at once) removes the link and the value Firefox stored from
 # it in prefs.js. A user.js of the user's own is never touched. After a crash
-# the next launch or steam-frame-nix-cleanup finishes the removal.
+# (or a failed rewrite of prefs.js) the next launch or steam-frame-nix-cleanup
+# finishes the removal.
 { lib, writeShellScript, coreutils, findutils, gnugrep
 , profileDir             # shell word, e.g. "$HOME/.var/app/…/desktop"
 , desktopFix ? false
@@ -33,9 +34,13 @@ writeShellScript "firefox-wrapper" (''
   sfn_unlink() {
     ours && ! inUse || return 0
     if [ -f "$prof/prefs.js" ] && grep -qF "$pats" "$prof/prefs.js"; then
-      grep -vF "$pats" "$prof/prefs.js" > "$prof/prefs.js.sfn" || true
-      cat "$prof/prefs.js.sfn" > "$prof/prefs.js"
+      # If that fails (grep status 2, a failed write, e.g. a full disk),
+      # prefs.js and the link stay for the next try.
+      { grep -vF "$pats" "$prof/prefs.js"; [ $? -le 1 ]; } > "$prof/prefs.js.sfn" &&
+        cat "$prof/prefs.js.sfn" > "$prof/prefs.js"
+      ok=$?
       rm -f "$prof/prefs.js.sfn"
+      [ $ok = 0 ] || return 0
     fi
     rm -f "$u"
   }

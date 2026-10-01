@@ -1,8 +1,9 @@
 # Checks of the Firefox wrapper's desktop profile user.js (wrapper.nix)
 # against a fake flatpak: the link exists only while Firefox runs, a second
 # launch that hands over to the running Firefox doesn't remove it, the value
-# Firefox stored from it leaves prefs.js once the profile is unlocked, a
-# user.js of the user's own is never touched, the profile manager action and
+# Firefox stored from it leaves prefs.js once the profile is unlocked (not
+# lost if prefs.js can't be rewritten), a user.js of the user's own is never
+# touched, the profile manager action and
 # the Steam session get no --profile.
 { pkgs }:
 let
@@ -60,6 +61,17 @@ pkgs.runCommand "firefox-check" { nativeBuildInputs = [ pkgs.findutils pkgs.gnug
   [ "$(cat $p/user.js)" = 'user_pref("mine", 1);' ] || fail "own user.js changed"
   grep -q ignore-widgets $p/prefs.js || fail "prefs.js changed with an own user.js"
   rm $p/user.js
+
+  # prefs.js can't be rewritten: it and the link stay; the next launch retries
+  echo 'user_pref("other", 1);' > $p/prefs.js
+  mkdir $p/prefs.js.sfn
+  ${launcher} || true
+  grep -q other $p/prefs.js && grep -q ignore-widgets $p/prefs.js || fail "prefs.js lost on a write error"
+  [ -L $p/user.js ] || fail "link removed on a write error"
+  rmdir $p/prefs.js.sfn
+  ${launcher} || true
+  [ "$(cat $p/prefs.js)" = 'user_pref("other", 1);' ] || fail "retry: $(cat $p/prefs.js)"
+  [ ! -L $p/user.js ] || fail "retry left the link"
 
   # profile manager action: no --profile, no link
   : > $FAKE/log
