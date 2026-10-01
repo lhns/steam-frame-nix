@@ -1,8 +1,8 @@
 # Checks of steamFrame.launchers (lib.nix, rewrite.awk, generate.sh) on
 # copies of real entries (fixtures/sources: Element, KRDC, Firefox, gedit
 # (DBusActivatable) from /var/lib/flatpak, Jellyfin from the user
-# installation, Claude from the claude-desktop package) and two made-up ones
-# (quoting, an Exec without anchor):
+# installation) and three made-up ones (quoting, an Exec without anchor, an
+# Electron app from a fake package):
 # - the rewritten entries equal fixtures/expected (X-SteamFrameNix-Source
 #   compared separately) and pass desktop-file-validate;
 # - the generator: unchanged sources change nothing (mtimes kept, no touch of
@@ -19,9 +19,9 @@ let
   src = ./fixtures/sources;
   shim = "/nix/store/00000000000000000000000000000000-mpv-hwdec-shim";
 
-  fakeClaude = pkgs.runCommand "claude-desktop-fixture" { } ''
+  fakeApp = pkgs.runCommand "example-app-fixture" { } ''
     mkdir -p $out/share/applications
-    cp ${src}/com.anthropic.Claude.desktop $out/share/applications/
+    cp ${src}/org.example.App.desktop $out/share/applications/
   '';
   noEntry = pkgs.runCommand "no-entry-fixture" { } "mkdir -p $out/share/applications";
 
@@ -58,10 +58,10 @@ let
           args = [ "a b" "50%" "q\"uote" "$HOME" "back\\slash" "back`tick" "" ];
           settings.Keywords = "x;";
         };
-        "com.anthropic.Claude" = {
-          source.package = fakeClaude;
+        "org.example.App" = {
+          source.package = fakeApp;
           keyring = { enable = true; electron = true; };
-          defaultFor = [ "x-scheme-handler/claude" ];
+          defaultFor = [ "x-scheme-handler/example" ];
         };
       };
     } ];
@@ -81,14 +81,14 @@ let
     applicationsDir = "/nonexistent";
     exportDirs = [ "/nonexistent" ];
   };
-  claude = L.packageEntry all."com.anthropic.Claude";
-  missing = pkgs.testers.testBuildFailure (L.packageEntry (all."com.anthropic.Claude" // {
-    source = all."com.anthropic.Claude".source // { package = noEntry; };
+  app = L.packageEntry all."org.example.App";
+  missing = pkgs.testers.testBuildFailure (L.packageEntry (all."org.example.App" // {
+    source = all."org.example.App".source // { package = noEntry; };
   }));
 in
 pkgs.runCommand "launchers-check" {
   nativeBuildInputs = [ generator pkgs.desktop-file-utils pkgs.diffutils ];
-  passthru = { inherit generator claude; };
+  passthru = { inherit generator app; };
 } ''
   set -euo pipefail
   fail() { echo "FAIL: $*" >&2; exit 1; }
@@ -127,12 +127,12 @@ pkgs.runCommand "launchers-check" {
     [ $id = org.example.NoAnchor ] && continue
     cp $out_dir/$id.desktop $out/actual/
   done
-  cp ${claude} $out/actual/com.anthropic.Claude.desktop
+  cp ${app} $out/actual/org.example.App.desktop
   grep -qx "X-SteamFrameNix-Source=$root/user/org.jellyfin.JellyfinDesktop.desktop" $out/actual/org.jellyfin.JellyfinDesktop.desktop \
     || fail "Jellyfin not from the user installation"
   grep -qx "X-SteamFrameNix-Source=$root/system/org.kde.krdc.desktop" $out/actual/org.kde.krdc.desktop || fail "KRDC source"
   grep -qx "X-SteamFrameNix-Source=${src}/org.example.Quoting.desktop" $out/actual/org.example.Quoting.desktop || fail "file source"
-  grep -qx "X-SteamFrameNix-Source=${fakeClaude}/share/applications/com.anthropic.Claude.desktop" $out/actual/com.anthropic.Claude.desktop || fail "package source"
+  grep -qx "X-SteamFrameNix-Source=${fakeApp}/share/applications/org.example.App.desktop" $out/actual/org.example.App.desktop || fail "package source"
   sed -i 's|^X-SteamFrameNix-Source=.*|X-SteamFrameNix-Source=@SOURCE@|' $out/actual/*.desktop
   desktop-file-validate --no-hints $out/actual/*.desktop || fail "desktop-file-validate"
   for f in ${./fixtures/expected}/*.desktop; do
@@ -185,7 +185,7 @@ pkgs.runCommand "launchers-check" {
   [ "$(mt $root/apps)" != 1000000000 ] || fail "removal didn't touch the applications dir"
 
   # a package without the entry: the build fails
-  [ -e ${missing}/testBuildFailure.log ] && grep -q "has no share/applications/com.anthropic.Claude.desktop" ${missing}/testBuildFailure.log \
+  [ -e ${missing}/testBuildFailure.log ] && grep -q "has no share/applications/org.example.App.desktop" ${missing}/testBuildFailure.log \
     || fail "package without the entry built"
   echo ok
 ''

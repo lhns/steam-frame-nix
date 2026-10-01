@@ -25,7 +25,7 @@ in {
     steamUserId = lib.mkOption {
       type = lib.types.nullOr (lib.types.strMatching "[1-9][0-9]*");
       default = null;
-      example = "80511808";
+      example = "12345678";
       description = ''
         Steam account ID: the folder name in ~/.local/share/Steam/userdata.
         `null`: the account last logged in, found at runtime.

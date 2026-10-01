@@ -45,7 +45,7 @@ in rec {
         package = lib.mkOption {
           type = lib.types.nullOr lib.types.package;
           default = null;
-          example = lib.literalExpression "pkgs.claude-desktop";
+          example = lib.literalExpression "pkgs.signal-desktop";
           description = ''
             Nix package whose `share/applications/<desktop ID>.desktop` is
             rewritten at build time (the build fails if it has none).

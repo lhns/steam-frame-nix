@@ -19,16 +19,16 @@ pkgs.runCommand "screenshots-check" { nativeBuildInputs = [ script ]; } ''
 
   steam-frame-nix-screenshots 2>&1 | grep -q "doesn't exist" || fail "no runtime dir"
   [ ! -e run ] || fail "runtime dir created"
-  mkdir -p run $S/config $S/userdata/0 $S/userdata/80511808
+  mkdir -p run $S/config $S/userdata/0 $S/userdata/12345678
 
   # the only account folder ("0" is not an account)
-  steam-frame-nix-screenshots; expect 80511808 "userdata"
+  steam-frame-nix-screenshots; expect 12345678 "userdata"
 
   # MostRecent wins over a later timestamp
   cat > $S/config/loginusers.vdf <<'VDF'
 "users"
 {
-	"76561198040777536"
+	"76561197972611406"
 	{
 		"AccountName"		"a"
 		"MostRecent"		"1"
@@ -42,7 +42,7 @@ pkgs.runCommand "screenshots-check" { nativeBuildInputs = [ script ]; } ''
 	}
 }
 VDF
-  steam-frame-nix-screenshots; expect 80511808 "MostRecent"
+  steam-frame-nix-screenshots; expect 12345678 "MostRecent"
   # unchanged: not rewritten
   res=$(steam-frame-nix-screenshots 2>&1); [ -z "$res" ] || fail "rewrote: $res"
 

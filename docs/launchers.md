@@ -27,7 +27,7 @@ the Frame's [two sessions](../README.md#two-sessions):
   reads through the Secret Service `org.freedesktop.secrets` (KRDC: "Password
   not found").
 - **Login callbacks:** SSO logins come back through a URL scheme
-  (`io.element.desktop://`, `claude://`) opened by the portal. Unless the app
+  (`io.element.desktop://`, `signalcaptcha://`) opened by the portal. Unless the app
   is the default and a recommended handler, the portal opens an app chooser,
   which isn't shown in VR.
 
@@ -80,11 +80,11 @@ A program from a Nix package, from the package's own entry
 
 ```nix
 { pkgs, ... }: {
-  home.packages = [ pkgs.claude-desktop ];
-  steamFrame.launchers."com.anthropic.Claude" = {
-    source.package = pkgs.claude-desktop;
+  home.packages = [ pkgs.signal-desktop ];
+  steamFrame.launchers.signal = {
+    source.package = pkgs.signal-desktop;
     keyring = { enable = true; electron = true; };
-    defaultFor = [ "x-scheme-handler/claude" ];  # login callback
+    defaultFor = [ "x-scheme-handler/sgnl" "x-scheme-handler/signalcaptcha" ];
   };
 }
 ```

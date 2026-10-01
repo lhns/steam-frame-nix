@@ -1,0 +1,26 @@
+[Desktop Entry]
+Name=Example App
+Comment=A made-up Electron app from a Nix package
+GenericName=Example
+Keywords=Example;Test;
+Exec=env DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus /nix/store/00000000000000000000000000000000-example-app-1.0/bin/example-app --password-store=kwallet6 %U
+Icon=example-app
+Type=Application
+StartupNotify=true
+# Matches the Wayland app_id / X11 WM_CLASS Electron derives from
+# package.json desktopName, so docks group windows under this entry.
+StartupWMClass=org.example.App
+# second-instance just focuses the main window
+SingleMainWindow=true
+Categories=Utility;Development;
+MimeType=x-scheme-handler/example;
+Actions=NewWindow;NewSession;
+X-SteamFrameNix-Source=@SOURCE@
+
+[Desktop Action NewWindow]
+Name=New Window
+Exec=env DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus /nix/store/00000000000000000000000000000000-example-app-1.0/bin/example-app --password-store=kwallet6 "example://app/new?surface=window&source=desktop_action"
+
+[Desktop Action NewSession]
+Name=New Example Session
+Exec=env DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus /nix/store/00000000000000000000000000000000-example-app-1.0/bin/example-app --password-store=kwallet6 "example://session/new?source=desktop_action"

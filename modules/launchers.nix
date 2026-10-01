@@ -41,10 +41,10 @@ let
         keyring = { enable = true; electron = true; };
         defaultFor = [ "x-scheme-handler/element" "x-scheme-handler/io.element.desktop" ];
       };
-      steamFrame.launchers."com.anthropic.Claude" = {
-        source.package = pkgs.claude-desktop;
+      steamFrame.launchers.signal = {
+        source.package = pkgs.signal-desktop;
         keyring = { enable = true; electron = true; };
-        defaultFor = [ "x-scheme-handler/claude" ];
+        defaultFor = [ "x-scheme-handler/sgnl" ];
       };
     (schemeHandlers = [ "x" ] -> defaultFor = [ "x-scheme-handler/x" ];
     flatpakArgs, args, mimeTypes, settings keep their meaning; name, icon,
@@ -63,10 +63,10 @@ in {
           defaultFor = [ "x-scheme-handler/element" "x-scheme-handler/io.element.desktop" ];
         };
         "org.kde.krdc".keyring.enable = true;
-        "com.anthropic.Claude" = {
-          source.package = pkgs.claude-desktop;
+        signal = {
+          source.package = pkgs.signal-desktop;
           keyring = { enable = true; electron = true; };
-          defaultFor = [ "x-scheme-handler/claude" ];
+          defaultFor = [ "x-scheme-handler/sgnl" ];
         };
       }
     '';

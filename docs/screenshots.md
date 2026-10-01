@@ -25,7 +25,7 @@ in `…/760/screenshots.vdf`). The JPG is the only copy that stays.
 
 ```nix
 steamFrame.screenshots.enable = true;
-# steamFrame.screenshots.steamUserId = "80511808";   # optional
+# steamFrame.screenshots.steamUserId = "12345678";   # optional
 ```
 
 The account ID is found at runtime: the account last logged in to Steam
