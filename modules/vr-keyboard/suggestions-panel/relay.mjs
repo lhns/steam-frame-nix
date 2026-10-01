@@ -30,6 +30,9 @@ function cleanStyle(st) {
 }
 const show = (state) => { lastState = state; live.vr?.(`window.__sfuiKbdStrip?.show(${JSON.stringify(state)})`); };
 const resync = () => live.steam?.('window.__sfuiSwipe?.remote?.sync()');
+// New contexts come in bursts; the injector re-patches ~3 s after the last.
+let resyncTimer = null;
+const resyncSoon = () => { clearTimeout(resyncTimer); resyncTimer = setTimeout(resync, 3500); };
 
 function forward(side, payload) {
   let msg;
@@ -55,7 +58,7 @@ async function connect(side) {
   ws.onmessage = (e) => {
     const m = JSON.parse(e.data);
     if (m.method === 'Runtime.bindingCalled' && m.params.name === cfg.binding) forward(side, m.params.payload);
-    else if (m.method === 'Runtime.executionContextCreated') setTimeout(resync, 3500);   // the injector re-patches after ~3 s
+    else if (m.method === 'Runtime.executionContextCreated') resyncSoon();
   };
   const closed = new Promise((res) => { ws.onclose = res; });
   send('Runtime.enable');
