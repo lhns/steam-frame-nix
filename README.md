@@ -518,8 +518,8 @@ session itself) keep running until you log out or reboot: `uninstall` lists
 them and removes Nix without waiting. If Nix's uninstaller fails, the rest
 still runs (the `~/.config/home-manager` link goes) except the per-user Nix
 state, and the closing message says to reboot and run `uninstall` again.
-Your configuration, `*.hm-backup-*` files, app data, Flatpaks and the GitHub
-CLI login (`~/.config/gh`) stay.
+Your configuration, `*.hm-backup-*` files (the closing message names both),
+app data, Flatpaks and the GitHub CLI login (`~/.config/gh`) stay.
 
 To drop steam-frame-nix from a Home Manager configuration you keep, first
 run `steam-frame-nix-cleanup --all`, then remove it and switch. Or set Home

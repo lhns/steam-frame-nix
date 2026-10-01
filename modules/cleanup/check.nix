@@ -541,7 +541,7 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
   chmod +x $root/nix-installer
   uninst() { # mounted: 1|0
     local m=$1
-    : > $LOG; rm -rf $HOME/.config; mkdir -p $HOME/.config; ln -s $HOME/cfg $HOME/.config/home-manager
+    : > $LOG; rm -rf $HOME/.config; mkdir -p $HOME/.config; ln -s ''${CFG:-$HOME/cfg} $HOME/.config/home-manager
     (STEAM_FRAME_NIX_PROC=$P STEAM_FRAME_NIX_SYSTEM_RUNTIME=$root/run-system; . $INSTALL
      ASSUME_YES=1 NIX_INSTALLER_BIN=$root/nix-installer
      # sudo without root: systemctl only logged
@@ -556,7 +556,7 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
   res=$(uninst 1) || fail "uninstall failed: $res"
   echo "$res"
   for p in "zsh (PID 30)" "app (PID 40)" "cwd (PID 41)" "fd (PID 42)" "keep running until you log out or reboot"; do has "$res" "$p"; done
-  for p in "PID 31" "PID 32" "PID 43" "PID $$" "Not done yet"; do hasnt "$res" "$p"; done
+  for p in "PID 31" "PID 32" "PID 43" "PID $$" "Not done yet" "Your configuration" "hm-backup" "Flatpak"; do hasnt "$res" "$p"; done
   log=$(cat $LOG)
   has "$log" "nix-installer uninstall --no-confirm"
   has "$log" "LazyUnmount=yes"     # the drop-in was there while it ran
@@ -573,6 +573,15 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
   res=$(RC=term uninst 1) && fail "interrupted uninstall succeeded: $res"
   has "$(cat $LOG)" "LazyUnmount=yes"
   gone $D
+  # the closing message: the configuration and the files Home Manager renamed
+  mkdir -p $HOME/cfg $HOME/nix-config $HOME/.cache; touch $HOME/cfg/flake.nix $HOME/nix-config/flake.nix
+  touch $HOME/.bashrc.hm-backup-20260101-000000 $HOME/.cache/x.hm-backup-20260101-000000
+  res=$(uninst 0) || fail "uninstall failed: $res"
+  has "$res" "Your configuration stays in ~/cfg (install --flake ~/cfg uses it again)."
+  has "$res" "Home Manager kept these files it had renamed when it was installed:"
+  has "$res" "  - ~/.bashrc.hm-backup-20260101-000000"; hasnt "$res" "x.hm-backup"
+  res=$(CFG=$HOME/nix-config uninst 0) || fail "uninstall failed: $res"
+  has "$res" "Your configuration stays in ~/nix-config (install uses it again)."
   SH
   echo "H ok"
   touch $out

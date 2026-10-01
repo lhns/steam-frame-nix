@@ -126,6 +126,10 @@ EOF
 
 # --- helpers ----------------------------------------------------------------
 
+tilde() { # path, as ~/... below $HOME
+  if [[ $1 == "$HOME" || $1 == "$HOME"/* ]]; then printf '%s\n' "~${1#"$HOME"}"; else printf '%s\n' "$1"; fi
+}
+
 have_tty() { { : <"$SFN_TTY"; } 2>/dev/null; }
 
 confirm() { # question [default answer: n|y]
@@ -1298,6 +1302,13 @@ remove_path() {
   if [[ -e $1 || -L $1 ]]; then rm -rf -- "$1"; info "removed $1"; fi
 }
 
+# Files Home Manager renamed out of its way (hm_activate's -b); kept.
+hm_backups() {
+  { find "$HOME" -maxdepth 4 \( -path "$HOME/.cache" -o -path "$HOME/.var" -o -path "$HOME/.steam" \
+      -o -path "$HOME/.local/share/Steam" -o -path "$HOME/.local/share/docker" \) -prune \
+      -o -name '*.hm-backup-*' -print 2>/dev/null || true; } | LC_ALL=C sort
+}
+
 remove_leftovers() { # keep_nix
   step "Removing per-user leftovers"
   local state="${XDG_STATE_HOME:-$HOME/.local/state}"
@@ -1345,6 +1356,11 @@ cmd_uninstall() {
   fi
   confirm "Continue?" || die "aborted"
 
+  # The configuration, for the closing message (its link goes).
+  local cfg=$DEFAULT_CONFIG_DIR again=install f backups=()
+  if [[ -L $HM_CONFIG_LINK ]]; then cfg="$(readlink -f "$HM_CONFIG_LINK" || true)"
+  elif [[ -d $HM_CONFIG_LINK ]]; then cfg=$HM_CONFIG_LINK; fi
+
   load_nix
   stop_hm_services
   cmd_cleanup --all
@@ -1372,15 +1388,17 @@ cmd_uninstall() {
   remove_leftovers "$keep_nix"
 
   step "Done"
-  cat <<EOF
-
-Intentionally left in place:
-  - your configuration (e.g. $DEFAULT_CONFIG_DIR, also when cloned)
-  - files Home Manager renamed to *.hm-backup-<time>
-  - app data, e.g. ~/.local/share/docker, Firefox profiles, and Flatpak apps
-Log out or reboot: running sessions drop the removed tweaks, and programs
-that were started from Nix restart without it.
-EOF
+  echo
+  if [[ -n $cfg && -e $cfg/flake.nix ]]; then
+    [[ $cfg -ef $DEFAULT_CONFIG_DIR || $cfg -ef $HM_CONFIG_LINK ]] || again="install --flake $(tilde "$cfg")"
+    echo "Your configuration stays in $(tilde "$cfg") ($again uses it again)."
+  fi
+  mapfile -t backups < <(hm_backups)
+  if (( ${#backups[@]} )); then
+    echo "Home Manager kept these files it had renamed when it was installed:"
+    for f in "${backups[@]}"; do printf '  - %s\n' "$(tilde "$f")"; done
+  fi
+  echo "Log out or reboot: programs that were started from Nix restart without it."
   if (( ${#CLEAN_DEFERRED[@]} || nix_failed )); then
     printf '\nNot done yet:\n'
     (( ${#CLEAN_DEFERRED[@]} )) && printf '  - %s\n' "${CLEAN_DEFERRED[@]}"
