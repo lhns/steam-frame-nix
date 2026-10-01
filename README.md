@@ -6,7 +6,7 @@ work around quirks of the Frame's [two graphical sessions](#two-sessions)
 (portal, KDE app menu, keyboard layout, clipboard, KDE wallet, Firefox),
 enable hardware video decoding in Jellyfin, run rootless Docker, and extend
 Steam's and SteamVR's UIs at runtime (VR keyboard, "+" menu, dashboard
-windows, Steam close button, window curvature, window controls).
+windows, Steam close button, window curvature, window controls, a VR pet).
 
 Everything is declarative: files are links into the Nix store, UI patches
 live in memory. The few things that have to be written elsewhere at runtime
@@ -48,6 +48,7 @@ configuration, limitations and how it works.
 - [Steam close button](docs/steam-close-button.md) (`dashboard.steamCloseButton`): an X that hides the Steam window.
 - [Window curvature](docs/window-curvature.md) (`dashboard.windowCurvature`): adjustable curvature per window.
 - [Window control bar](docs/window-control-bar.md) (`dashboard.frameControls`): move controls between bar and three-dot menu.
+- [VR pet](docs/pet.md) (`pet`): a cat (five coats), Shiba Inu, Fox or Dachshund in the scene that walks around you, can be picked up and petted; "Pet" in the "+" menu, the `vr-pet` command, your own models.
 - [SteamVR debugger](docs/steamvr-debugger.md) (`steamvrDebugger`, automatic): SteamVR's DevTools port for these, set only while SteamVR runs.
 
 **Apps:**
@@ -194,6 +195,7 @@ these two files ([`template/`](template), with more comments):
       windowCurvature.enable = true;
       frameControls.enable = true;
     };
+    pet.enable = true;                        # VR pet (bakes ~0.5 GB of models)
     firefox.enable = true;
     firefox.disableAv1 = true;
     firefox.defaultBrowser = true;
@@ -217,7 +219,7 @@ home-manager switch --flake .#steamos  # manual setup, from the flake's director
 In your own flake, add the input as above and
 `steam-frame-nix.homeManagerModules.default` to the modules. `default`
 imports all modules; single ones:
-`homeManagerModules.{session,portal,applications-menu,keyboard-layout,vr-keyboard-extra-keys,vr-keyboard,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,cleanup,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox,jellyfin,launchers,docker,screenshots}`
+`homeManagerModules.{session,portal,applications-menu,keyboard-layout,vr-keyboard-extra-keys,vr-keyboard,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,cleanup,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox,jellyfin,launchers,docker,screenshots,pet}`
 (`steam-keyboard-patch` and `keyring` still work as the former names of
 `vr-keyboard-extra-keys` and `launchers`). Every module imports `cleanup` (see
 [Changes outside Nix](#changes-outside-nix-exceptions)); which file is
@@ -303,6 +305,13 @@ which: [Repository layout](docs/development.md).
 | `steamFrame.dashboard.frameControls.inBar` | list of control names | `[ ]` | Controls that start in the bar: `keyboard`, `float`, `dashboard`, `theater`, `dockLeft`, `dockRight`, `close`, `curvature`, `"icon:<n>"`. |
 | `steamFrame.dashboard.frameControls.inMenu` | list of control names | `[ ]` | Controls that start in the three-dot menu. |
 | `steamFrame.dashboard.frameControls.floatInTheater` | bool | `false` | "Float" control on theater windows. |
+| `steamFrame.pet.enable` | bool | `false` | A 3D pet in SteamVR's scene, the `vr-pet` command and "Pet" in the "+" menu, see [VR pet](docs/pet.md); the first switch bakes its models (~0.5 GB in the store). |
+| `steamFrame.pet.defaultModel` | null or str | `null` | Model id shown until another is picked; `null`: the spec's `"default": true` (the Ginger cat). |
+| `steamFrame.pet.extraModels` | attrs of path or attrs | `{ }` | Your own models by id: a folder with a `model.json`, or the spec as an attrset (files as paths), see [VR pet models](docs/pet-models.md). |
+| `steamFrame.pet.options` | attrs | `{ }` | Behaviour options of `modules/pet/core.js` (`DEFAULTS` there), e.g. `{ walkSpeed = 0.3; follow = 3; }`. |
+| `steamFrame.pet.fps` | int, 4-60 | `24` | Animation frames per second (baked frames and scene graph updates): smoother, but more frames loaded in vrcompositor. |
+| `steamFrame.pet.mount` | `"dynamic"`, `"all"` | `"dynamic"` | Baked frames kept mounted in the scene graph: the clips needed now or next, or all of them. |
+| `steamFrame.pet.debug.demo` | bool | `false` | Demo tour: cycles through all poses and activities. |
 | `steamFrame.steamvrDebugger.enable` | bool | automatic | SteamVR dashboard DevTools on `127.0.0.1:8087` (set only while SteamVR runs); on when a dashboard patch is, see [SteamVR debugger](docs/steamvr-debugger.md). |
 | `steamFrame.clipboardSync.enable` | bool | `true` | Clipboard bridge between the Steam session and the nested desktop. |
 | `steamFrame.clipboardSync.package` | package | built from `dnut/clipboard-sync` | The clipboard-sync package. |
@@ -371,11 +380,12 @@ lives in memory (the UI patches). These are written at runtime:
 | `VRWebHelper.DebuggerEnabled` in `~/.config/openvr/config/steamvr.vrsettings` | [SteamVR debugger](docs/steamvr-debugger.md) | only while SteamVR runs | SteamVR stopping (runtime drop-in below); `steam-frame-nix-cleanup` while SteamVR is stopped |
 | `~/.local/state/steam-frame-nix/steamvr-debugger.armed` | SteamVR debugger: the key's previous value | while SteamVR runs; after a power loss until the next SteamVR start or cleanup | SteamVR stopping; `steam-frame-nix-cleanup` |
 | `/run/user/1000/systemd/user/steamvr.service.d/50-steam-frame-nix-debugger.conf`, `/run/user/1000/steam-frame-nix/steamvr-debugger-restore` | SteamVR debugger: puts the key back when SteamVR stops, without Nix | until reboot (tmpfs) | reboot; `steam-frame-nix-cleanup` while SteamVR is stopped and the debugger is off |
-| `~/.local/state/steam-frame-nix/ui-patches/<name>.json` | Saved choices of dashboard patches ([persistent state](docs/ui-patches.md#persistent-state)): window control bar placements (`frame-controls`), "Steam hidden" (`steam-close-button`). SteamOS's `steamvr.service` deletes `~/.cache/SteamVR` (the dashboard's own browser storage) on every SteamVR start. | until removed: kept when a patch is disabled (the choices come back when you enable it again) | `steam-frame-nix-cleanup --all`, `install.sh uninstall` |
+| `~/.local/state/steam-frame-nix/ui-patches/<name>.json` | Saved choices of dashboard patches ([persistent state](docs/ui-patches.md#persistent-state)): window control bar placements (`frame-controls`), "Steam hidden" (`steam-close-button`), the VR pet's spot, pose, model and whether it is hidden (`vr-pet`). SteamOS's `steamvr.service` deletes `~/.cache/SteamVR` (the dashboard's own browser storage) on every SteamVR start. | until removed: kept when a patch is disabled (the choices come back when you enable it again) | `steam-frame-nix-cleanup --all`, `install.sh uninstall` |
 | `/run/user/1000/steam-frame-nix/applications/<id>.desktop` (with `.<id>.desktop.sum`, `.lock`) | [Launchers](docs/launchers.md) of Flatpaks and host files; `~/.local/share/applications/<id>.desktop` is a Home Manager link to it | until reboot (tmpfs), written again at login | reboot; the next switch or rewrite when the launcher or its app is gone; `steam-frame-nix-cleanup --all` |
 | `/run/user/1000/steam-frame-nix/screenshots` | [SteamVR screenshots](docs/screenshots.md#how-it-works) without `steamUserId`: link to the current account's folder; `~/Pictures/<name>` is a Home Manager link to it | until reboot (tmpfs), written again at login | reboot; `steam-frame-nix-cleanup` once unused |
+| `/run/user/1000/steam-frame-nix/vr-pet/icon.png` (with `.lock`) | [VR pet](docs/pet.md#how-it-works): link to the current model's "+" menu icon; `~/.local/share/icons/hicolor/256x256/apps/vr-pet.png` is a Home Manager link to it | until reboot (tmpfs), written again at login | reboot; `steam-frame-nix-cleanup` once unused |
 | mtime of `~/.local/share/applications` | [Launchers](docs/launchers.md#how-it-works): a running Steam rescans the "+" menu | only the directory's timestamp | nothing to remove |
-| mtime of `~/.local/share/icons/hicolor` | [icon fallbacks](docs/launcher-menu.md#icon-fallbacks): a running Steam rescans icons | only the directory's timestamp | nothing to remove |
+| mtime of `~/.local/share/icons/hicolor` | [icon fallbacks](docs/launcher-menu.md#icon-fallbacks), [VR pet](docs/pet.md#how-it-works) icon: a running Steam rescans icons | only the directory's timestamp | nothing to remove |
 
 **`steam-frame-nix-cleanup`** (`install.sh cleanup`,
 `steamFrame.cleanup.package`) knows everything any version of
@@ -477,6 +487,44 @@ Manager's `uninstall = true;` in the configuration that still imports
 steam-frame-nix and switch: its activation runs `cleanup --all` while Home
 Manager removes its files. (`home-manager uninstall` alone doesn't load
 steam-frame-nix's modules, so it can't clean up after them.)
+
+## Credits
+
+The [VR pet](docs/pet.md)'s models are not in this repository: Nix fetches
+them at build time from the URLs pinned (with their hashes) in
+`modules/pet/package.nix` and `modules/pet/models/<id>/model.json`, and
+bakes them into the store.
+
+- **Toon Cat FREE** by [Omabuarts Studio](https://sketchfab.com/omabuarts)
+  ([model](https://sketchfab.com/3d-models/toon-cat-free-b2bd1ee7858444bda366110a2d960386)),
+  [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/): the cat (mesh,
+  texture, rig, walk) and its coats. Modified: recoloured coats (Tuxedo,
+  Blue, Cream, Snow), retargeted and hand-keyed animations, baked to one OBJ
+  per frame. Fetched from a third-party GitHub mirror
+  ([DevTakao/threejs-cat](https://github.com/DevTakao/threejs-cat), pinned
+  commit and hash).
+- **Tuxedo Cat Animated 2.0** by [DreamNoms](https://sketchfab.com/DreamNoms)
+  ([model](https://sketchfab.com/3d-models/tuxedo-cat-animated-20-783fcb78b55b4394a212c2b6392e1113)),
+  [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/): only its
+  SitDown, IdleSit and StandUp clips, retargeted onto the Toon Cat and
+  baked. Fetched from a third-party GitHub mirror
+  ([xialin-he/xialin-he.github.io](https://github.com/xialin-he/xialin-he.github.io),
+  pinned commit and hash).
+- **Shiba Inu** and **Fox** from the
+  [Ultimate Animated Animal Pack](https://quaternius.com/packs/ultimateanimatedanimals.html)
+  by [Quaternius](https://quaternius.com),
+  [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) (credited
+  anyway). Modified: clips sampled per frame, sit, lie, sleep and the
+  held-by-the-scruff pose hand-keyed, a wagging tail and breathing added,
+  material colours turned into a texture. Fetched from the Poly Pizza
+  mirror ([Shiba Inu](https://poly.pizza/m/y4wdQpg767),
+  [Fox](https://poly.pizza/m/Bc97C66HKi), pinned hashes).
+- **Dachshund:** the Quaternius Shiba Inu (CC0 1.0), reshaped (longer back
+  and ears, shorter legs) and recoloured black and tan.
+- **three.js** (desktop preview only), [MIT](https://github.com/mrdoob/three.js/blob/dev/LICENSE),
+  fetched from npm.
+
+The baked cat's store output carries a short `CREDITS.md` pointing here.
 
 ## License
 

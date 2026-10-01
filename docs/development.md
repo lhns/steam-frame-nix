@@ -35,7 +35,7 @@ Where things run:
 ## Repository layout
 
 ```text
-flake.nix                      homeManagerModules, packages/apps (cleanup), checks, template
+flake.nix                      homeManagerModules, packages/apps (cleanup, pet-*), checks, template
 install.sh                     install / uninstall / cleanup (curl | bash; also the
                                steam-frame-nix-cleanup package and the debugger arm step)
 template/                      `nix flake init -t` / installer config: flake.nix, home.nix
@@ -129,6 +129,19 @@ modules/
   steam-close-button.nix, steam-close-button/   SteamVR: X on the Steam window
   window-curvature.nix, window-curvature/       SteamVR: curvature wheel
   frame-controls.nix, frame-controls/           SteamVR: window control bar
+  pet.nix                      the VR pet (pet): patch, CLI, "+" menu entry, icon units
+  pet/
+    package.nix                build: bakes, catalog, patch, CLI, icons, preview, tests
+    core.js                    SteamVR+preview+test (in the patch): behaviour, interaction
+    systemui.js, unpatch.js    SteamVR: draws the pet in the scene graph, grip bar, menu
+    cli.mjs                    app: `vr-pet` over DevTools (also the "+" menu entry)
+    icon.sh                    service steam-frame-nix-pet-icon (+ .path), switch:
+                               <runtimeDir>/steam-frame-nix/vr-pet/icon.png -> model icon
+    bake.py, bake_gltf.py, rig.py  build: the cat's / a glTF animal's frames (OBJ per frame)
+    index.py, skin.py, thumb.py    build: catalog (models.json), coats, thumbnails, icons
+    models/<id>/model.json     build: the built-in models (spec: docs/pet-models.md)
+    preview/                   dev: desktop preview (`nix run .#pet-preview`)
+    check.nix, tests/          test: core, adapter, CLI, models, icons, private-model guard
 ```
 
 ## Runtime names
@@ -151,6 +164,7 @@ they are kept even where a file name says more:
 | `steamvr-debugger` | `steamvrDebugger` | | `steamvr-webhelper-debugger` |
 | `launchers` | `launchers` | | `steam-frame-nix-launchers` (`.service`, `.path`) |
 | `screenshots` | `screenshots` | | `steam-frame-nix-screenshots` (`.service`, `.path`) |
+| `pet` | `pet` | `vr-pet` (SteamVR, state) | `steam-ui-patches`, `steam-frame-nix-pet-icon` (`.service`, `.path`) |
 | `docker` | `docker` | | `docker` |
 
 Log of all patches:

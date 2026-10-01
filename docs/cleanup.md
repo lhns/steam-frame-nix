@@ -27,6 +27,7 @@ is reported as "left alone" and never touched:
 | `ui-state`: `~/.local/state/steam-frame-nix/ui-patches/<name>.json` | the dashboard patches' saved choices; `--all` only, never `--orphans`; stray `*.json.tmp` files |
 | `launchers`: `/run/user/1000/steam-frame-nix/applications` | the entries of [launchers](launchers.md) (tmpfs); `--all` only (switches remove those of removed launchers themselves) |
 | `screenshots`: `/run/user/1000/steam-frame-nix/screenshots` | a link to `*/userdata/*/760/remote/250820/screenshots` ([SteamVR screenshots](screenshots.md)); kept by `--orphans --keep screenshots` (while `steamUserId` is unset) |
+| `pet`: `/run/user/1000/steam-frame-nix/vr-pet` | `icon.png`, a link to `*-vr-pet-icons/*.png` in the store ([VR pet](pet.md#how-it-works)), its empty `.lock` and stray `.icon.tmp.*` links, then the directory if empty; kept by `--orphans --keep pet` (while `pet.enable`) |
 | `dirs` | `~/.local/state/steam-frame-nix` and `/run/user/1000/steam-frame-nix` when empty |
 
 ### Left by older versions

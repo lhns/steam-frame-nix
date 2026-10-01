@@ -54,6 +54,9 @@
   #     # move it between the bar and the three-dot menu:
   #     frameControls.enable = true;
   #   };
+  #   # A 3D cat or dog in SteamVR's scene; "Pet" in the "+" menu (the
+  #   # first switch bakes its models, about 0.5 GB):
+  #   pet.enable = true;
   #   firefox.enable = true;             # launcher for the Firefox Flatpak
   #   # the Frame has no AV1 decoder: sites send VP9/H.264 (hardware):
   #   firefox.disableAv1 = true;
