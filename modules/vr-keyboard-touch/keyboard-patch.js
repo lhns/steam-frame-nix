@@ -17,7 +17,7 @@
 // "cancel" (no pose), frames stopping for STALE_MS, the keyboard moving or
 // closing end a touch without typing. Debugging: __sfuiTouchTypeLog.
 ((find, sigs, opts, hooks, TR, HUB) => {
-  const VERSION = 2;
+  const VERSION = 3;
   const G = window;
   const STALE_MS = 1000;                           // Steam's UI thread can stall frames for ~0.3 s
   const SNAP = 3;                                   // SteamVR overlay haptic effect (1 ButtonEnter, 3 Snap)
@@ -47,13 +47,9 @@
     const p = [...(G.g_PopupManager?.GetPopups?.() || [])].find((x) => x.window?.document.querySelector('[data-key]'));
     return p?.window ?? null;
   }
-  // Steam's handlers read target, changedTouches, touches and the touches'
-  // target / clientX / clientY.
-  const event = (t, inst) => ({
-    type: 'touch', target: t.target, changedTouches: [t],
-    touches: [...touches.values()].filter((e) => e.inst === inst && e.t !== t).map((e) => e.t),
-    preventDefault() {}, stopPropagation() {},
-  });
+  // Steam's handlers read target, changedTouches, touches (tracker.js
+  // touchEvent) and the touches' target / clientX / clientY.
+  const others = (t, inst) => [...touches.values()].filter((e) => e.inst === inst && e.t !== t).map((e) => e.t);
 
   function end(hand, { cancel = false, u, v } = {}) {
     const e = touches.get(hand);
@@ -64,7 +60,7 @@
     const win = e.doc.defaultView, x = u * win?.innerWidth, y = v * win?.innerWidth;
     if (!cancel && x >= 0 && y >= 0 && x < win.innerWidth && y < win.innerHeight) Object.assign(e.t, { clientX: x, clientY: y, pageX: x, pageY: y });
     if (cancel) e.inst.m_mapTouched.delete(e.t.target);         // Steam types only keys still in m_mapTouched
-    try { e.inst.HandleTouchEnd(event(e.t, e.inst)); } catch (err) { log('end-error', String(err)); }
+    try { e.inst.HandleTouchEnd(TR.touchEvent(e.t, others(e.t, e.inst), false)); } catch (err) { log('end-error', String(err)); }
     log(hand, cancel ? 'cancel' : 'up', e.t.target.getAttribute('data-key'));
   }
 
@@ -79,7 +75,7 @@
     if (!inst) { log(hand, 'miss', Math.round(x), Math.round(y)); return; }
     const t = { identifier: ID[hand], target: keyEl, clientX: x, clientY: y, pageX: x, pageY: y };
     touches.set(hand, { t, inst, doc });
-    try { inst.HandleTouchStart(event(t, inst)); } catch (err) { log('start-error', String(err)); end(hand, { cancel: true }); return; }
+    try { inst.HandleTouchStart(TR.touchEvent(t, others(t, inst), true)); } catch (err) { log('start-error', String(err)); end(hand, { cancel: true }); return; }
     if (opts.haptics) win.SteamClient?.OpenVR?.TriggerOverlayHapticEffect?.(SNAP, 0);
     log(hand, 'down', keyEl.getAttribute('data-key'), Math.round(x), Math.round(y));
   }

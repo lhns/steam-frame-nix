@@ -1,6 +1,6 @@
 // tracker.js: when a controller's tip touches a key (vr-keyboard-touch.nix;
 // argument of keyboard-patch.js, tested by tests/tracker.test.mjs).
-// Evaluates to { VERSION, DEFAULTS, createTracker }.
+// Evaluates to { VERSION, DEFAULTS, createTracker, touchEvent }.
 //
 // createTracker(opts): one hand. update(sample, tMs) with the tip relative
 // to the keyboard ({ u, v, d } of vr-keyboard-controllers' geometry.js:
@@ -16,8 +16,14 @@
 // A press needs the tip in front by arm (re-armed) since the last one, so
 // tracking jitter at the surface can't repeat it, and the tip coming from
 // behind or around the keyboard never presses.
+//
+// touchEvent(t, others, starting): what Steam's HandleTouchStart /
+// HandleTouchEnd read, shaped like a DOM TouchEvent: changedTouches [t];
+// touches: the touches down, with t at its start, without it at its end.
+// Steam's UpdateTouchState counts `touches` per key for the pressed
+// highlight and starts the long press (Backspace repeat, accents) there.
 (() => {
-  const VERSION = 1;
+  const VERSION = 2;
   const DEFAULTS = {
     depth: 0,             // m behind the drawn surface where a touch registers
     arm: 0.005,           // m in front of it to re-arm
@@ -62,5 +68,11 @@
     return { update, get pressed() { return pressed; } };
   }
 
-  return { VERSION, DEFAULTS, createTracker };
+  const touchEvent = (t, others, starting) => ({
+    type: starting ? 'touchstart' : 'touchend', target: t.target, changedTouches: [t],
+    touches: starting ? [...others, t] : [...others],
+    preventDefault() {}, stopPropagation() {},
+  });
+
+  return { VERSION, DEFAULTS, createTracker, touchEvent };
 })()

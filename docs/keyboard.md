@@ -231,7 +231,7 @@ to the laser only. Depends on Steam and SteamVR UI internals (see
 
 **Tests:** `nix flake check` (checks `vr-keyboard-controllers`: tip and
 laser relative to the keyboard; `vr-keyboard-touch`: contact, hysteresis,
-two hands).
+two hands, the touch list Steam's highlight and long press read).
 
 **Debugging:** `window.__sfuiTouchTypeLog` (`SharedJSContext`: presses,
 misses), `__sfuiControllers.last` (the last frame), and in `systemui`

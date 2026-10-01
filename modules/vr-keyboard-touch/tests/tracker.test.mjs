@@ -139,4 +139,37 @@ test('two hands: independent, overlapping presses', () => {
   assert.deepEqual(evs, ['L:down:f', 'R:down:h', 'R:up', 'R:down:g', 'R:up', 'L:up']);
 });
 
+// Steam's keyboard as far as touches go (chunk~2dcc5aaf7.js): HandleTouchStart
+// adds the changed touches' targets to m_mapTouched, then UpdateTouchState
+// counts `touches` per key (rgLayoutTouchCount: the pressed highlight) and
+// starts the long press for a touched key; HandleTouchEnd types a key still in
+// m_mapTouched and recounts.
+function steamKeyboard() {
+  const kb = { m_mapTouched: new Set(), count: {}, longPress: null, typed: [] };
+  const update = (touches) => {
+    kb.count = {};
+    for (const t of touches) {
+      kb.count[t.target.key] = (kb.count[t.target.key] ?? 0) + 1;
+      if (kb.m_mapTouched.has(t.target)) kb.longPress = t.target.key;
+    }
+  };
+  kb.HandleTouchStart = (e) => { for (const t of e.changedTouches) kb.m_mapTouched.add(t.target); update(e.touches); };
+  kb.HandleTouchEnd = (e) => {
+    for (const t of e.changedTouches) { if (kb.m_mapTouched.has(t.target)) kb.typed.push(t.target.key); kb.m_mapTouched.delete(t.target); }
+    kb.longPress = null; update(e.touches);
+  };
+  return kb;
+}
+test('touchEvent: the touched key is counted (highlight, long press) until its release', () => {
+  const kb = steamKeyboard(), g = { target: { key: 'g' } }, sh = { target: { key: 'Shift' } };
+  kb.HandleTouchStart(TR.touchEvent(sh, [], true));
+  assert.deepEqual(kb.count, { Shift: 1 });
+  kb.HandleTouchStart(TR.touchEvent(g, [sh], true));               // second hand
+  assert.deepEqual(kb.count, { Shift: 1, g: 1 }); assert.equal(kb.longPress, 'g');
+  kb.HandleTouchEnd(TR.touchEvent(g, [sh], false));
+  assert.deepEqual(kb.count, { Shift: 1 }); assert.deepEqual(kb.typed, ['g']);
+  kb.HandleTouchEnd(TR.touchEvent(sh, [], false));
+  assert.deepEqual(kb.count, {}); assert.deepEqual(kb.typed, ['g', 'Shift']);
+});
+
 console.log(`${passed} tests passed`);
