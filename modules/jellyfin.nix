@@ -66,8 +66,9 @@ in {
         });
       defaultText = lib.literalMD "`flatpak run … org.jellyfin.JellyfinDesktop` with the options";
       description = ''
-        About the command line the launcher runs (for a terminal; the same
-        as `steamFrame.launchers."org.jellyfin.JellyfinDesktop".command`).
+        Approximately the command line the launcher runs, for a terminal
+        (the same as
+        `steamFrame.launchers."org.jellyfin.JellyfinDesktop".command`).
       '';
     };
   };

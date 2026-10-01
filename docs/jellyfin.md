@@ -21,8 +21,8 @@ which
 
 A [launcher](launchers.md) (the Flatpak's own entry, rewritten under its
 ID, so the KDE menu and the "+" menu start it) runs the Flatpak with device
-access (`devices=all`)
-and makes mpv use `hwdec` (default `v4l2m2m-copy,auto-copy`); explicit
+access (`devices=all`) and makes mpv use `hwdec` (default
+`v4l2m2m-copy,auto-copy`) instead of Jellyfin's `auto*` value; explicit
 values such as `no` stay. mpv tries the listed decoders in order and falls
 back to software decoding per stream. With the default, 1080p H.264 plays
 at ~15-20 % CPU. Changes take effect at the next start of Jellyfin.
@@ -79,7 +79,7 @@ flatpak run --branch=stable --arch=aarch64 --command=jellyfin-desktop \
   --env=SFN_MPV_HWDEC=v4l2m2m-copy,auto-copy org.jellyfin.JellyfinDesktop
 ```
 
-(`command` is about this line, with the store path and without the
+(`command` is approximately this line, with the store path and without the
 entry's `--branch`/`--arch`/`--command`.)
 
 Older versions used a Flatpak override (via nix-flatpak or a Home Manager
