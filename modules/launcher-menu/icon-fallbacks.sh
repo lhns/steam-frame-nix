@@ -75,7 +75,8 @@ for d in "${data_dirs[@]}"; do
     id=${f#"$d/applications/"}; id=${id//\//-}
     [[ -z ${seen[$id]:-} ]] || continue
     seen[$id]=1
-    icon=$(entry_icon "$f")
+    # Unreadable, e.g. a launcher's link while its app isn't installed.
+    icon=$(entry_icon "$f" 2>/dev/null) || continue
     [[ -n $icon && -z ${configured[$icon]:-} && -z ${missing[$icon]:-} ]] || continue
     if ! resolves "$icon" >/dev/null && in_breeze "$icon"; then missing[$icon]=${id%.desktop}; fi
   done < <(find -L "$d/applications" -name '*.desktop' -print0 2>/dev/null)
