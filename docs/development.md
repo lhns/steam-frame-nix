@@ -111,6 +111,18 @@ modules/
     dictionary.nix, gen-dict.py  build: dictionary from wordfreq + Hunspell
     check.nix, tests/          test (also built before the patch): text model,
                                corrector, swipe-decoder accuracy, gesture input
+  vr-keyboard-controllers.nix  controller bridge for keyboard features (internal option)
+  vr-keyboard-controllers/
+    bridge-patch.js, unpatch.js  SteamVR: keyboard pose, tips, laser hits, triggers
+    geometry.js                SteamVR (argument of bridge-patch.js): tip/laser -> keyboard
+    hub.js                     Steam (argument of consumer patches): __sfuiControllers
+    relay.mjs                  service vr-keyboard-controllers-relay: frames SteamVR -> Steam
+    check.nix, tests/          test: geometry, hub
+  vr-keyboard-touch.nix        touch typing (keyboard.vr.touchTyping)
+  vr-keyboard-touch/
+    keyboard-patch.js, keyboard-unpatch.js  Steam: presses touched keys
+    tracker.js                 Steam (argument of keyboard-patch.js): contact, hysteresis
+    check.nix, tests/          test (also built before the patch): touch paths
   dashboard-windows.nix, dashboard-windows/     SteamVR: window scale/distance limits
   steam-close-button.nix, steam-close-button/   SteamVR: X on the Steam window
   window-curvature.nix, window-curvature/       SteamVR: curvature wheel
@@ -128,6 +140,8 @@ they are kept even where a file name says more:
 | `launcher-menu` | `launcherMenu` | `launcher-menu-{order,pinned-desktop,launch,grid,show-all}` (Steam) | `steam-ui-patches` |
 | `vr-keyboard` | `keyboard.vr` | `vr-keyboard` (Steam), `vr-keyboard-panel` = `suggestions-panel/` (SteamVR) | `steam-ui-patches`, `vr-keyboard-relay` |
 | `vr-keyboard-extra-keys` | `keyboard.vr.extraKeys` | `steam-keyboard-patch` (Steam) | `steam-keyboard-patch` |
+| `vr-keyboard-touch` | `keyboard.vr.touchTyping` | `vr-keyboard-touch` (Steam) | `steam-ui-patches` |
+| `vr-keyboard-controllers` | (internal, `keyboard.vr.controllers`) | `vr-keyboard-controllers` (SteamVR) | `steam-ui-patches`, `vr-keyboard-controllers-relay` |
 | `dashboard-windows` | `dashboard.windows` | `dashboard-windows` (SteamVR) | `steam-ui-patches` |
 | `steam-close-button` | `dashboard.steamCloseButton` | `steam-close-button` (SteamVR, state) | `steam-ui-patches` |
 | `window-curvature` | `dashboard.windowCurvature` | `window-curvature` (SteamVR) | `steam-ui-patches` |
@@ -137,7 +151,7 @@ they are kept even where a file name says more:
 | `screenshots` | `screenshots` | | `steam-frame-nix-screenshots` (`.service`, `.path`) |
 
 Log of all patches:
-`journalctl --user -u steam-ui-patches -u steam-keyboard-patch -u vr-keyboard-relay`.
+`journalctl --user -u steam-ui-patches -u steam-keyboard-patch -u vr-keyboard-relay -u vr-keyboard-controllers-relay`.
 
 ## Checks
 

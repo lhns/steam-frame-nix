@@ -1,8 +1,8 @@
 # VR keyboard
 
-Two patches of Steam's VR keyboard: [extra keys](#extra-keys) and
-[swipe and suggestions](#swipe-and-suggestions). They work together or
-alone. Options: [README, Options](../README.md#options) (`keyboard.vr.*`).
+Three patches of Steam's VR keyboard: [extra keys](#extra-keys),
+[swipe and suggestions](#swipe-and-suggestions) and
+[touch typing](#touch-typing). They work together or alone. Options: [README, Options](../README.md#options) (`keyboard.vr.*`).
 The keyboard layout of the Steam session itself is a separate fix
 ([keyboard layout](session.md#keyboard-layout)).
 
@@ -173,3 +173,66 @@ configured dictionary.
 
 **Debugging:** `window.__sfuiSwipeLog` and `__sfuiSwipePaths` in Steam's
 SharedJSContext (replay swipes with `scripts/vr-keyboard-replay.mjs`).
+
+## Touch typing
+
+`keyboard.vr.touchTyping.enable`, module `vr-keyboard-touch`.
+
+**Problem:** Steam's VR keyboard can only be typed on with the laser and
+the trigger.
+
+**What you get:**
+
+- Touch a key with the controller's tip, the point the laser starts from,
+  to press it; both hands, also at once (e.g. Shift held by one hand).
+  The key lights up on contact and is typed when the tip comes back out,
+  like a laser press: holding Backspace repeats, holding a letter opens its
+  accents.
+- A press needs the tip to pass through the keyboard's surface from the
+  front (`depth`: that far behind it; default `0`). It ends when the tip is
+  pulled back 1 cm from its deepest point. The next press needs the tip
+  5 mm in front of the surface again, so resting on a key doesn't repeat it.
+  Pointing, the tip behind the keyboard, or coming in from the side
+  presses nothing.
+- The lasers work as before, also while touching.
+- A haptic tick on contact (`haptics`), routed by SteamVR like the
+  keyboard's other ticks.
+
+**Caveats:** moving the keyboard pauses touches for 0.3 s. The extra keys' Delete repeat and the swipe patch's gestures react
+to the laser only. Depends on Steam and SteamVR UI internals (see
+[after a Steam update](ui-patches.md#after-a-steam-update)).
+
+**Remove when** Steam's VR keyboard gets touch input.
+
+### How it works
+
+- **Controller bridge** (module `vr-keyboard-controllers`, turned on by
+  touch typing; meant for other keyboard features too): a patch of SteamVR's
+  `systemui` page (port 8087, [SteamVR debugger](steamvr-debugger.md),
+  turned on automatically). It reads the keyboard's pose with SteamVR's own
+  scene graph query (`SGQueryService.requestSGTransform` on an empty
+  transform of ours inside the keyboard's mount; every 250 ms) and both
+  controllers' poses (`VRHTML.GetPose`). The tip is the device pose times
+  the render model's `tip` component; the laser mouse uses the same
+  `/pose/tip`. For each hand it computes the tip and the laser's hit
+  relative to the keyboard, plus the trigger from the render model's
+  animated `trigger` component (not yet verified). The
+  `vr-keyboard-controllers-relay` user service carries these frames to
+  Steam's `SharedJSContext`: up to ~90 Hz (45 Hz and more under load)
+  while a hand is within 10 cm of the keyboard, its laser is on it or its
+  trigger is pulled, else every 250 ms, and only while SteamVR shows the
+  keyboard. The laser hit matches SteamVR's laser to a few px.
+- **Touch typing** (patch `vr-keyboard-touch`, `SharedJSContext`): per hand
+  `tracker.js` turns the tip's path into press and release, then calls the
+  keyboard's own `HandleTouchStart` / `HandleTouchEnd` with the key under
+  the contact point. No input is synthesized.
+- Found by signature (entries `vr-keyboard-touch`,
+  `vr-keyboard-controllers`).
+
+**Tests:** `nix flake check` (checks `vr-keyboard-controllers`: tip and
+laser relative to the keyboard; `vr-keyboard-touch`: contact, hysteresis,
+two hands).
+
+**Debugging:** `window.__sfuiTouchTypeLog` (`SharedJSContext`: presses,
+misses), `__sfuiControllers.last` (the last frame), and in `systemui`
+`__sfuiCtl.log` and `__sfuiCtl.last`.

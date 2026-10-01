@@ -35,6 +35,7 @@ configuration, limitations and how it works.
 
 - [Extra keys](docs/keyboard.md#extra-keys) (`keyboard.vr.extraKeys`): Esc/Ctrl/Alt, arrows, Delete, Shift+Tab, real chords and AltGr/non-ASCII characters.
 - [Swipe and suggestions](docs/keyboard.md#swipe-and-suggestions) (`keyboard.vr`): swipe typing, corrections, completions, Backspace drag.
+- [Touch typing](docs/keyboard.md#touch-typing) (`keyboard.vr.touchTyping`): press keys by touching them with the controller's tip, both hands.
 
 **VR "+" menu** ([docs/launcher-menu.md](docs/launcher-menu.md)):
 
@@ -260,6 +261,9 @@ which: [Repository layout](docs/development.md).
 | `steamFrame.keyboard.vr.backspaceDrag.wordDetentPixels` | int | `90` | Extra travel across a word border (`0`: none). |
 | `steamFrame.keyboard.vr.haptics` | bool | `true` | Haptic ticks for drag steps, word detents and picks. |
 | `steamFrame.keyboard.vr.checks` | package, read-only | | The tests, built with the configured dictionary. |
+| `steamFrame.keyboard.vr.touchTyping.enable` | bool | `false` | Touch typing: a key is pressed when a controller's tip touches it, both hands; the lasers work as before, see [Touch typing](docs/keyboard.md#touch-typing). |
+| `steamFrame.keyboard.vr.touchTyping.depth` | number | `0` | How far behind the keyboard's surface a touch registers (cm, `-2` to `5`; negative: in front). |
+| `steamFrame.keyboard.vr.touchTyping.haptics` | bool | `true` | A haptic tick when a touch presses a key. |
 | `steamFrame.uiPatches.patches` | list of submodules | `[ ]` | Runtime patches of Steam's web UIs, see [UI patches](docs/ui-patches.md#defining-a-patch). Fields below. |
 | `steamFrame.uiPatches.patches.*.name` | str | required | Unique name (log). |
 | `steamFrame.uiPatches.patches.*.endpoint` | str | `"http://127.0.0.1:8080"` | DevTools base URL, `/json/list` polled every 5 s: Steam 8080, SteamVR 8087. |

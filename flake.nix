@@ -18,6 +18,8 @@
       keyboard-layout = ./modules/keyboard-layout.nix;
       vr-keyboard-extra-keys = ./modules/vr-keyboard-extra-keys.nix;
       vr-keyboard = ./modules/vr-keyboard.nix;
+      vr-keyboard-controllers = ./modules/vr-keyboard-controllers.nix;
+      vr-keyboard-touch = ./modules/vr-keyboard-touch.nix;
       hidden-apps = ./modules/hidden-apps.nix;
       steam-ui-patches = ./modules/steam-ui-patches.nix;
       launcher-menu = ./modules/launcher-menu.nix;
@@ -66,10 +68,11 @@
     }) self.packages;
 
     # Tests of the VR keyboard (text model, corrector, swipe decoder on the
-    # default German + English dictionary), the extra keys' xdotool
-    # allowlist, the Jellyfin mpv shim, the Firefox wrapper, the launchers,
-    # install.sh cleanup, the applications.menu link, the portal config and
-    # the screenshots account detection: nix flake check
+    # default German + English dictionary), the controller geometry and touch
+    # typing, the extra keys' xdotool allowlist, the Jellyfin mpv shim, the
+    # Firefox wrapper, the launchers, install.sh cleanup, the
+    # applications.menu link, the portal config and the screenshots account
+    # detection: nix flake check
     checks = forSystems (pkgs: {
       applications-menu = import ./modules/applications-menu/check.nix { inherit pkgs; };
       cleanup = import ./modules/cleanup/check.nix { inherit pkgs; };
@@ -80,6 +83,8 @@
       screenshots = import ./modules/screenshots/check.nix { inherit pkgs; };
       vr-keyboard = import ./modules/vr-keyboard/check.nix { inherit pkgs; };
       vr-keyboard-extra-keys = import ./modules/vr-keyboard-extra-keys/check.nix { inherit pkgs; };
+      vr-keyboard-controllers = import ./modules/vr-keyboard-controllers/check.nix { inherit pkgs; };
+      vr-keyboard-touch = import ./modules/vr-keyboard-touch/check.nix { inherit pkgs; };
     });
 
     # nix flake init -t github:lhns/steam-frame-nix

@@ -486,6 +486,36 @@
           "module": { "includes": ["\"valve.steam.gamepadui.keyboard\""] }
         }
       }
+    },
+    "vr-keyboard-touch": {
+      "bundle": "steamui",
+      "modules": {
+        "vrStatus": {
+          "module": { "includes": ["get VRKeyboardStatus()"] },
+          "exports": { "holder": { "type": "object", "getters": ["VRKeyboardStatus"] } },
+          "expects": ["bIsOpen:"]
+        },
+        "keyboardComponent": {
+          "checkOnly": true,
+          "module": { "includes": ["TypeKeyInternal(", "m_mapTouched", "HandleTouchStart(", "HandleTouchEnd(", "ElementFromTouch("] },
+          "expects": ["\"data-key\"", "MouseHoverBlockerHack", "StartLongPressTimer(", "LongPressTimerExpired("]
+        }
+      }
+    },
+    "vr-keyboard-controllers": {
+      "bundle": "vrwebui-systemui",
+      "modules": {
+        "sgQuery": {
+          "checkOnly": true,
+          "module": { "includes": ["window.SGQueryService=", "transform_request"] },
+          "expects": ["requestSGTransform("]
+        },
+        "keyboardMount": {
+          "checkOnly": true,
+          "module": { "includes": ["m_sKeyboardOverlayKey", "GrabHandleTint", "k_nKeyboardGrabTransformOffset"] },
+          "expects": ["mountedId"]
+        }
+      }
     }
   }
 }
