@@ -3,7 +3,8 @@
 // ids or minified names (which change with every Steam update). Like Decky
 // Loader's @decky/ui finders and Vencord's `find`.
 //
-// Also small helpers every patch needs (resolvePatch, ensureStyle, logger).
+// Also small helpers every patch needs (resolvePatch, ensureStyle, logger,
+// keyboardPopup).
 //
 // A single expression: installs window.__sfuiFind (unless an equal or newer
 // VERSION is there) and evaluates to it; mkPatch passes it as `find`.
@@ -41,7 +42,7 @@
 // Every lookup must match exactly once; otherwise a FinderError names the
 // signature, the part that failed and the candidates.
 (() => {
-  const VERSION = 2;
+  const VERSION = 3;
   const G = globalThis;
   const have = G.__sfuiFind;
   if (have && have.version >= VERSION) return have;
@@ -280,6 +281,10 @@
     if (s.textContent !== css) s.textContent = css;
     return s;
   }
+  // Steam's VR keyboard popup (the g_PopupManager popup with [data-key]
+  // elements), or null.
+  const keyboardPopup = () =>
+    [...(G.g_PopupManager?.GetPopups?.() || [])].find((p) => p.window?.document.querySelector('[data-key]')) ?? null;
   // log(msg, data?) appending { t, msg, data } to buf, keeping the last max.
   const logger = (buf, max = 200) => (msg, data) => {
     buf.push({ t: new Date().toISOString().slice(11, 23), msg, ...(data !== undefined ? { data } : {}) });
@@ -290,7 +295,7 @@
     version: VERSION, FinderError, fnSource, matchText, matchValue, kindOf,
     getWebpackRequire, findAllModules, findModule, findAllExports, findExport, resolve, resolveAll,
     fiberOf, propsOf, findFiberUp, findFiberDown, findInReactTree, cache, requires,
-    resolvePatch, ensureStyle, logger,
+    resolvePatch, ensureStyle, logger, keyboardPopup,
   };
   G.__sfuiFind = lib;
   return lib;

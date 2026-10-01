@@ -125,8 +125,8 @@ Every signature must match exactly once, otherwise the patch changes nothing
 and reports it: `resolvePatch` returns e.g. `signature not found, Steam left
 unpatched: layouts.currentLayout (module 40222): ambiguous export,
 candidates r_, xy` as the patch's result. Results are cached per page. The
-library also has `ensureStyle(doc, id, css)` and `logger(buffer)` (a capped
-debug log).
+library also has `ensureStyle(doc, id, css)`, `logger(buffer)` (a capped
+debug log) and `keyboardPopup()` (Steam's VR keyboard popup or `null`).
 
 Signatures live in `modules/steam-ui-patches/lib/signatures.json`, shared
 by patches and the offline checker. An entry can also list `expects` (strings the patch relies

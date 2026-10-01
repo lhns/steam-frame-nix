@@ -17,7 +17,7 @@
 // "cancel" (no pose), frames stopping for STALE_MS, the keyboard moving or
 // closing end a touch without typing. Debugging: __sfuiTouchTypeLog.
 ((find, sigs, opts, hooks, TR, HUB) => {
-  const VERSION = 3;
+  const VERSION = 4;
   const G = window;
   const STALE_MS = 1000;                           // Steam's UI thread can stall frames for ~0.3 s
   const SNAP = 3;                                   // SteamVR overlay haptic effect (1 ButtonEnter, 3 Snap)
@@ -43,10 +43,6 @@
     typeof f.stateNode?.HandleTouchEnd === 'function' && f.stateNode.m_mapTouched instanceof Set, 200)?.stateNode;
   const touches = new Map();                        // hand -> { t, inst, doc }
 
-  function keyboardWindow() {
-    const p = [...(G.g_PopupManager?.GetPopups?.() || [])].find((x) => x.window?.document.querySelector('[data-key]'));
-    return p?.window ?? null;
-  }
   // Steam's handlers read target, changedTouches, touches (tracker.js
   // touchEvent) and the touches' target / clientX / clientY.
   const others = (t, inst) => [...touches.values()].filter((e) => e.inst === inst && e.t !== t).map((e) => e.t);
@@ -66,7 +62,7 @@
 
   function down(hand, u, v) {
     end(hand, { cancel: true });
-    const win = keyboardWindow();
+    const win = find.keyboardPopup()?.window;
     if (!win) return;
     const doc = win.document, x = u * win.innerWidth, y = v * win.innerWidth;
     const el = doc.elementsFromPoint(x, y).find((e) => e.id !== 'MouseHoverBlockerHack');

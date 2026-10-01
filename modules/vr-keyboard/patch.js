@@ -36,7 +36,7 @@
 // Steam's events. Debugging: __sfuiSwipeLog, __sfuiSwipePaths
 // (scripts/vr-keyboard-replay.mjs).
 ((find, sigs, opts, hooks, D, T, C, DICT, P, HUB, F) => {
-  const VERSION = 28;
+  const VERSION = 29;
   const G = window;
   const O = opts;
 
@@ -67,7 +67,7 @@
     return `Steam internals changed, keyboard left stock: ${e.message}`;
   }
 
-  const popup = [...(g_PopupManager.GetPopups?.() || [])].find((p) => p.window?.document.querySelector('[data-key]'));
+  const popup = find.keyboardPopup();
   if (!popup) return 'no keyboard popup yet';
   const doc = popup.window.document;
   const stamp = `${VERSION}:${P.VERSION}:${HUB?.version} ${JSON.stringify(O)}`;   // new code or options: re-attach

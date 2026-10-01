@@ -23,7 +23,7 @@
 // mkPatch patch (see steam-ui-patches/lib/default.nix); no options. On a
 // signature mismatch it returns an error and changes nothing. Idempotent.
 ((find, sigs) => {
-  const VERSION = 23;
+  const VERSION = 24;
   const send = (msg) => window.__vrkbdKey && window.__vrkbdKey(msg);
   const mods = find.resolvePatch('webpackChunksteamui', sigs);
   if (typeof mods === 'string') return mods;
@@ -185,8 +185,7 @@
   });
 
   // ---- keyboard component -------------------------------------------------------
-  const kbPopup = [...(g_PopupManager.GetPopups?.() || [])]
-    .find((p) => p.window?.document.querySelector('[data-key]'));
+  const kbPopup = find.keyboardPopup();
   if (!kbPopup) return 'no keyboard popup yet';
   const doc = kbPopup.window.document;
   // The keyboard component: nearest fiber above a key whose instance has TypeKeyInternal.
