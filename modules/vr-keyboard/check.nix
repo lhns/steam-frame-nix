@@ -1,6 +1,7 @@
 # Tests of the VR keyboard (flake check `vr-keyboard`, also built before the
 # patch by vr-keyboard.nix with the configured dictionary): text model,
-# gesture input (two controllers), corrector and swipe-decoder accuracy
+# gesture input (two controllers, the controller bridge's path), corrector
+# and swipe-decoder accuracy
 # (tests/*.test.mjs). The accuracy
 # thresholds (German keyboard geometry, German and English words) fail the
 # build only for German + English dictionaries, the default here.

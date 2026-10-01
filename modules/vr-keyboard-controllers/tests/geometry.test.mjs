@@ -1,5 +1,5 @@
 // geometry.js (tip and laser relative to the keyboard) and hub.js (page px,
-// subscribers). usage: node geometry.test.mjs <geometry.js> <hub.js>
+// subscribers, demand). usage: node geometry.test.mjs <geometry.js> <hub.js>
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 
@@ -75,6 +75,15 @@ test('hub: page px and onKeyboard, subscribers, lost', () => {
   HUB.frame({ seq: 2, t: 6, keyboard: null, hands: { left: null, right: null } });
   assert.equal(got.length, 2);
   assert.equal((0, eval)(readFileSync(process.argv[3], 'utf8')), HUB, 'same version: kept');
+});
+test('hub: demand(ms) through the relay binding, clamped; none without it', () => {
+  const sent = [];
+  globalThis.__sfuiCtlIn = (s) => sent.push(JSON.parse(s));
+  HUB.demand(800); HUB.demand(0); HUB.demand(1e9);
+  assert.deepEqual(sent, [{ fast: 800 }, { fast: 0 }, { fast: 5000 }]);
+  delete globalThis.__sfuiCtlIn;
+  HUB.demand(800);                                 // no relay: nothing, no error
+  assert.equal(HUB.errors.count, 0);
 });
 
 console.log(`${passed} tests passed`);

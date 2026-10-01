@@ -103,7 +103,8 @@ default):
   not swiped.
   With both controllers on the keyboard, a swipe follows only the
   controller that pressed; the other one's laser doesn't enter its path,
-  and its presses meanwhile are plain taps.
+  and its presses meanwhile are plain taps. Both hands can swipe, one word
+  at a time (`swipe.twoHanded`, below).
 - **Suggestions** never change text by themselves: a finished tapped word
   that isn't in the dictionary gets corrections (itself first;
   `autocorrect`), a word being tapped gets completions (the typed letters
@@ -144,9 +145,7 @@ via its xdotool helper).
 changes them the keyboard stays stock (see
 [after a Steam update](ui-patches.md#after-a-steam-update)). Accented words
 of other languages are in the dictionary but only swipable where the layout
-has the letters. With two controllers on the keyboard, SteamVR sometimes
-sends no laser movement for a press (seen for the controller that didn't
-own the keyboard's cursor just before): that press stays a tap.
+has the letters.
 
 **Remove when** Steam's VR keyboard gets swipe typing and suggestions.
 
@@ -164,15 +163,31 @@ own the keyboard's cursor just before): that press stays a tap.
   port 8087), fed by the `vr-keyboard-relay` user service
   (`suggestions-panel/relay.mjs`) between the two pages.
   With `inside` neither the panel nor the relay runs.
+- **Two controllers** (`swipe.twoHanded`, default on): with both lasers on
+  the keyboard SteamVR forwards per poll only one laser's movement, so the
+  pressing one may get none and its swipe would become a tap. The swipe
+  then follows that controller through the
+  [controller bridge](#how-it-works-2) (turned on by this option): a press
+  is attributed to the hand whose laser hit is nearest to it (within
+  30 px; the trigger as a tiebreak), and while its laser events pause
+  (60 ms) the path comes from that laser's hit per frame. The bridge
+  samples at full rate from the press to the release (asked for by the
+  patch) and costs nothing while the keyboard is hidden. Without fresh
+  frames (option off, relay or SteamVR gone) only laser events count, as
+  before. A second press during a swipe is Steam's (a tap): one text
+  field, one word at a time.
 - Found by signature (entries `vr-keyboard`, `vr-keyboard-panel`).
 
 **Tests:** `nix flake check` (checks `vr-keyboard`: text model, corrector,
 decoder accuracy on German + English,
-gesture input from two controllers) and `keyboard.vr.checks` for the
+gesture input from two controllers, also with synthetic bridge frames:
+a pressing hand without laser events, attribution, a stale bridge) and
+`keyboard.vr.checks` for the
 configured dictionary.
 
 **Debugging:** `window.__sfuiSwipeLog` and `__sfuiSwipePaths` in Steam's
-SharedJSContext (replay swipes with `scripts/vr-keyboard-replay.mjs`).
+SharedJSContext (replay swipes with `scripts/vr-keyboard-replay.mjs`;
+`__sfuiSwipePaths[i].src`: the hand, touch and bridge points).
 
 ## Touch typing
 
@@ -207,7 +222,7 @@ to the laser only. Depends on Steam and SteamVR UI internals (see
 ### How it works
 
 - **Controller bridge** (module `vr-keyboard-controllers`, turned on by
-  touch typing; meant for other keyboard features too): a patch of SteamVR's
+  touch typing and `swipe.twoHanded`): a patch of SteamVR's
   `systemui` page (port 8087, [SteamVR debugger](steamvr-debugger.md),
   turned on automatically). It reads the keyboard's pose with SteamVR's own
   scene graph query (`SGQueryService.requestSGTransform` on an empty
@@ -219,8 +234,10 @@ to the laser only. Depends on Steam and SteamVR UI internals (see
   animated `trigger` component (not yet verified). The
   `vr-keyboard-controllers-relay` user service carries these frames to
   Steam's `SharedJSContext`: up to ~90 Hz (45 Hz and more under load)
-  while a hand's tip is within 10 cm of the keyboard or its trigger is
-  pulled, else every second; nothing while the keyboard is hidden. The
+  while a hand's tip is within 10 cm of the keyboard, its trigger is
+  pulled or Steam asks for it (`__sfuiControllers.demand(ms)`, back through
+  the relay: the swipe patch during a press), else every second; nothing
+  while the keyboard is hidden. The
   laser hit matches SteamVR's laser to a few px.
 - **Touch typing** (patch `vr-keyboard-touch`, `SharedJSContext`): per hand
   `tracker.js` turns the tip's path into press and release, then calls the

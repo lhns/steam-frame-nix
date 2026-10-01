@@ -1,12 +1,16 @@
 // Gestures and suggestions for Steam's VR keyboard (vr-keyboard.nix),
 // injected into Steam's SharedJSContext (8080). The keyboard is a popup of
 // that context ("SteamVR - Keyboard"); everything works on its document.
-// mkPatch convention plus five more arguments: swipe-decoder.js,
-// textmodel.js, corrector.js, the dictionary text ("word<TAB>zipf*10\n...")
-// and gesture-input.js.
+// mkPatch convention plus six more arguments: swipe-decoder.js,
+// textmodel.js, corrector.js, the dictionary text ("word<TAB>zipf*10\n..."),
+// gesture-input.js and vr-keyboard-controllers' hub.js (null without
+// swipe.twoHanded).
 //
 // - Swipe: the laser arrives as touch events; Steam types the key a touch
-//   started on at release. Once a press leaves its first key we drop that
+//   started on at release. With both lasers on the keyboard the pressing one
+//   may get no touchmoves; its path then comes from the controller bridge
+//   (gesture-input.js: the hand whose laser hit the press point; full rate
+//   asked for from the press to the release). Once a press leaves its first key we drop that
 //   key from Steam's pending touches (m_mapTouched) and cancel its long press
 //   (Steam's own touch-end cleanup, minus the typing), then decode the path.
 // - Output: one character or "Backspace" per HandleVirtualKeyDown, the path
@@ -28,8 +32,8 @@
 // missing the keyboard stays stock. Only passive listeners; never blocks
 // Steam's events. Debugging: __sfuiSwipeLog, __sfuiSwipePaths
 // (scripts/vr-keyboard-replay.mjs).
-((find, sigs, opts, hooks, D, T, C, DICT, P) => {
-  const VERSION = 25;
+((find, sigs, opts, hooks, D, T, C, DICT, P, HUB) => {
+  const VERSION = 26;
   const G = window;
   const O = opts;
 
@@ -63,7 +67,7 @@
   const popup = [...(g_PopupManager.GetPopups?.() || [])].find((p) => p.window?.document.querySelector('[data-key]'));
   if (!popup) return 'no keyboard popup yet';
   const doc = popup.window.document;
-  const stamp = `${VERSION} ${JSON.stringify(O)}`;   // new code or options: re-attach
+  const stamp = `${VERSION}:${P.VERSION}:${HUB?.version} ${JSON.stringify(O)}`;   // new code or options: re-attach
   if (doc.__sfuiSwipe === stamp && S.docs.has(doc)) return 'unchanged';
   S.docs.get(doc)?.();
   S.docs.delete(doc);
@@ -382,7 +386,7 @@
     // mouse from pointer events, or mouse events if there are none). The
     // other controller's hover, a second press: ignored (Steam's, as stock).
     let down = null;
-    const input = P.create();
+    const input = P.create({ now: () => G.performance.now() });
     const keyOf = (t) => t?.closest?.('[data-key]');
     const stripIndexOf = (t) => {
       const el = t?.closest?.('#sfui-swipe-strip > div');
@@ -404,7 +408,9 @@
       if (!c) return;
       if (down?.active) clearTrail();            // its release was missed
       down = start(c);
-      if (down) input.claim(c);
+      if (!down) return;
+      const hand = input.claim(c);
+      if (bridge) { demand(); log('press', c.id, hand ?? '-'); }
     }
     function start({ x, y, target }) {
       const si = stripIndexOf(target);
@@ -442,8 +448,10 @@
     }
     function onMove(e) {
       const c = input.read(e);
-      if (!c || !down || down.kind === 'strip') return;
-      const { x, y } = c;
+      if (c) move(c.x, c.y);
+    }
+    function move(x, y) {
+      if (!down || down.kind === 'strip') return;
       if (down.kind === 'backspace') { backspaceMove(down, x); return; }
       const q = down.pts[down.pts.length - 1];
       if (Math.hypot(x - q[0], y - q[1]) < 2) return;
@@ -457,10 +465,12 @@
       drawTrail(down.pts, 'rgba(26, 159, 255, 0.75)');
     }
     function onUp(e) {
+      const st = { ...input.stats, hand: input.hand };
       const c = input.read(e);
       if (!c) return;
       const { x, y } = c, d = down;
       down = null;
+      if (bridge) { endDemand(); if (d) d.src = st; }
       if (d?.kind === 'strip') {                  // released anywhere on the strip: the button pressed
         if (strip.contains(at(x, y))) pick(d.index);
         return;
@@ -481,7 +491,8 @@
       try { results = D.decode(d.lay.dec, d.pts, { max: O.count, unit: d.lay.unit }); } catch (err) { log('decode-error', String(err)); }
       log('decode', results.map((r) => r.word).join(' '));
       const paths = (G.__sfuiSwipePaths ??= []);
-      paths.push({ unit: d.lay.unit, keys: d.lay.keys, pts: d.pts.map(([x, y]) => [Math.round(x), Math.round(y)]), top: results.map((r) => r.word) });
+      paths.push({ unit: d.lay.unit, keys: d.lay.keys, pts: d.pts.map(([x, y]) => [Math.round(x), Math.round(y)]), top: results.map((r) => r.word), src: d.src });
+      if (d.src) log('path', d.src.hand ?? '-', `touch ${d.src.touch}`, `bridge ${d.src.bridge}`, d.src.late ? 'late' : '', d.src.switches ? `switches ${d.src.switches}` : '');
       if (paths.length > 20) paths.shift();
       if (!results.length) { drawTrail(d.pts, 'rgba(255, 80, 80, 0.75)', 400); return; }
       fadeTimer = setTimeout(clearTrail, 150);
@@ -491,6 +502,24 @@
       if (!input.read(e)) return;                // another contact; Chromium's touch pointercancel
       if (down?.active) clearTrail();
       down = null;
+      if (bridge) endDemand();
+    }
+
+    // Controller bridge (HUB, swipe.twoHanded): the pressing hand's laser per
+    // frame while its touchmoves pause (gesture-input.js). The bridge sends
+    // full rate only while asked to (a lease, renewed during the gesture).
+    const bridge = HUB && typeof HUB.subscribe === 'function' ? HUB : null;
+    let demandAt = -Infinity;
+    const DEMAND_MS = 800;
+    function demand() { demandAt = G.performance.now(); try { bridge.demand?.(DEMAND_MS); } catch { /* old hub */ } }
+    function endDemand() { if (demandAt > -Infinity) { demandAt = -Infinity; try { bridge.demand?.(0); } catch { /* old hub */ } } }
+    if (bridge) {
+      cleanup.push(bridge.subscribe((f) => {
+        const p = input.frame(f);
+        if (down && input.owner && G.performance.now() - demandAt > DEMAND_MS / 3) demand();
+        if (p) move(p[0], p[1]);
+      }));
+      cleanup.push(endDemand);
     }
     function onHover(e) {
       const si = stripIndexOf(e.target);

@@ -241,6 +241,7 @@ which: [Repository layout](docs/development.md).
 | `steamFrame.keyboard.vr.extraKeys.enable` | bool | `false` | VR keyboard with Esc/Ctrl/Alt, arrows, real chords, AltGr/non-ASCII. |
 | `steamFrame.keyboard.vr.enable` | bool | `false` | Swipe typing, suggestions and Backspace drag on the VR keyboard; the sub-features below are on by default, see [VR keyboard](docs/keyboard.md#swipe-and-suggestions). |
 | `steamFrame.keyboard.vr.swipe.enable` | bool | `true` | Swipe typing. |
+| `steamFrame.keyboard.vr.swipe.twoHanded` | bool | `true` | Swipes also with both lasers on the keyboard: the path from the pressing controller's pose (the controller bridge, sampling during a press while the keyboard is shown). |
 | `steamFrame.keyboard.vr.dictionary.languages` | list of submodules | layout language + English | `{ language; hunspell; words; frequencyOffset; keepFrequentAbove; }`: wordfreq language, `pkgs.hunspellDicts` name (or `null`), most frequent words taken, zipf offset, keep words Hunspell rejects from this zipf on (default `4.0`). Default: the `keyboard.layout` language (de, fr, es, it, nl, pt, sv; 60000) + English (40000, `-0.3`), else English (60000). |
 | `steamFrame.keyboard.vr.dictionary.contractions` | bool | `true` | Words with apostrophes (`couldn't`, `geht's`), swiped by their letters. |
 | `steamFrame.keyboard.vr.dictionary.extraWords` | list of str | `[ ]` | Words always included, casing as given. |

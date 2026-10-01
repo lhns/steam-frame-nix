@@ -2,10 +2,12 @@
 // controller frames from SteamVR's systemui page (bridge-patch.js, 8087; CDP
 // binding __sfuiCtlOut) to Steam's SharedJSContext (hub.js, 8080:
 // __sfuiControllers.frame(frame)). Frames are rebuilt from their numbers
-// (nothing else passes). If the systemui page goes away: lost().
+// (nothing else passes). If the systemui page goes away: lost(). Back from
+// Steam (hub.js demand(ms), CDP binding __sfuiCtlIn): { fast: ms } ->
+// __sfuiCtl.demand(ms) in systemui.
 const SIDES = {
-  steam: { url: 'http://127.0.0.1:8080/json/list', title: 'SharedJSContext' },
-  vr: { url: 'http://127.0.0.1:8087/json/list', title: 'systemui', binding: '__sfuiCtlOut' },
+  steam: { url: 'http://127.0.0.1:8080/json/list', title: 'SharedJSContext', binding: '__sfuiCtlIn', forward: demand },
+  vr: { url: 'http://127.0.0.1:8087/json/list', title: 'systemui', binding: '__sfuiCtlOut', forward },
 };
 const live = {};                                  // side -> evaluate(expression)
 
@@ -32,6 +34,12 @@ function forward(payload) {
   if (m) live.steam?.(`window.__sfuiControllers?.frame(${JSON.stringify(m)})`);
 }
 
+function demand(payload) {
+  let ms;
+  try { ms = num(JSON.parse(payload)?.fast); } catch { return; }
+  if (ms !== null) live.vr?.(`window.__sfuiCtl?.demand?.(${Math.max(0, Math.min(5000, ms))})`);
+}
+
 async function connect(side) {
   const cfg = SIDES[side];
   const list = await (await fetch(cfg.url, { signal: AbortSignal.timeout(3000) })).json();
@@ -43,7 +51,7 @@ async function connect(side) {
   const send = (method, params = {}) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ id: ++id, method, params })); };
   ws.onmessage = (e) => {
     const m = JSON.parse(e.data);
-    if (m.method === 'Runtime.bindingCalled' && m.params.name === cfg.binding) forward(m.params.payload);
+    if (m.method === 'Runtime.bindingCalled' && m.params.name === cfg.binding) cfg.forward(m.params.payload);
   };
   const closed = new Promise((res) => { ws.onclose = res; });
   // No Runtime.enable: bindings work without it, and it would stream the

@@ -1,15 +1,16 @@
 # The controller bridge for VR keyboard features (internal option
 # steamFrame.keyboard.vr.controllers.enable, set by the features using it,
-# e.g. keyboard.vr.touchTyping): both controllers relative to Steam's VR
-# keyboard, from SteamVR's dashboard to Steam's UI.
+# keyboard.vr.touchTyping and keyboard.vr.swipe.twoHanded): both controllers
+# relative to Steam's VR keyboard, from SteamVR's dashboard to Steam's UI.
 # - vr-keyboard-controllers/bridge-patch.js (SteamVR systemui, 8087; patch
 #   "vr-keyboard-controllers"): the keyboard's pose, per hand the tip (where
 #   the laser starts), the laser's hit and the trigger (geometry.js), ~90 Hz
-#   while relevant; CDP binding __sfuiCtlOut.
+#   while relevant or asked for (demand); CDP binding __sfuiCtlOut.
 # - vr-keyboard-controllers/relay.mjs (user service
-#   vr-keyboard-controllers-relay): to Steam's SharedJSContext.
+#   vr-keyboard-controllers-relay): to Steam's SharedJSContext; demand back
+#   (CDP binding __sfuiCtlIn there).
 # - vr-keyboard-controllers/hub.js: window.__sfuiControllers there (page px,
-#   subscribe); consumer patches take it as an extraArg.
+#   subscribe, demand); consumer patches take it as an extraArg.
 # Tests: vr-keyboard-controllers/check.nix (flake check
 # `vr-keyboard-controllers`).
 { config, pkgs, lib, ... }:

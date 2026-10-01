@@ -17,8 +17,9 @@
 //   the laser's hit on the keyboard (geometry.js), the trigger from the
 //   render model's animated "trigger" component (null without one).
 // Frames go out through the CDP binding __sfuiCtlOut(json) at TICK_MS while
-// a hand is relevant (tip within NEAR m of the keyboard or trigger pulled),
-// else every IDLE_MS; one { keyboard: null } frame when the keyboard goes.
+// a hand is relevant (tip within NEAR m of the keyboard or trigger pulled) or
+// Steam asked for it (S.demand(ms), hub.js demand: a laser press), else every
+// IDLE_MS; one { keyboard: null } frame when the keyboard goes.
 // Nothing at all while the keyboard is hidden (one DOM lookup per POLL_MS). Frame (hub.js adds page px):
 //   { seq, t, moving, keyboard: { width } | null,
 //     hands: { left, right: null | { tip: { u, v, d }, ray: { u, v, dist } | null,
@@ -26,7 +27,7 @@
 // Never touches SteamVR's input or the lasers. Debugging: __sfuiCtl.log,
 // __sfuiCtl.last (the last frame).
 ((find, sigs, opts, hooks, GEO) => {
-  const VERSION = 3;
+  const VERSION = 4;
   const G = window;
   const TICK_MS = 11, IDLE_MS = 1000, POLL_MS = 250, MOVE_QUIET_MS = 300, TIP_CACHE_MS = 5000;
   const NEAR = 0.1;                                  // m
@@ -139,7 +140,8 @@
     h.trigger >= 0.5);
 
   // ---- loops ---------------------------------------------------------------------
-  let active = false;
+  let active = false, fastUntil = -Infinity;
+  S.demand = (ms) => { fastUntil = performance.now() + Math.max(0, Math.min(5000, +ms || 0)); };
   const slow = setInterval(() => {
     const parent = findScaled();
     if (!parent) {
@@ -159,7 +161,7 @@
     for (const h of HANDS) {
       try { hands[h] = handFrame(h, now); } catch (e) { hands[h] = null; log('pose', String(e)); }
     }
-    const rel = HANDS.some((h) => relevant(hands[h]));
+    const rel = now < fastUntil || HANDS.some((h) => relevant(hands[h]));
     if (rel || wasRelevant || now - sentAt >= IDLE_MS) {
       send({ seq: ++seq, t: now, moving: now - movedAt < MOVE_QUIET_MS, keyboard: { width: S.kb.width }, hands });
     }

@@ -104,7 +104,7 @@ modules/
     swipe-decoder.js           Steam (argument of patch.js): swipe path -> words
     textmodel.js               Steam (argument of patch.js): what the keyboard typed
     corrector.js               Steam (argument of patch.js): corrections, completions
-    gesture-input.js           Steam (argument of patch.js): a gesture's own events
+    gesture-input.js           Steam (argument of patch.js): a gesture's own events, its hand's bridge path
     suggestions-panel/
       patch.js, unpatch.js     SteamVR: the strip as a panel above/below the keyboard
       relay.mjs                service vr-keyboard-relay: strip state Steam <-> SteamVR
@@ -116,7 +116,7 @@ modules/
     bridge-patch.js, unpatch.js  SteamVR: keyboard pose, tips, laser hits, triggers
     geometry.js                SteamVR (argument of bridge-patch.js): tip/laser -> keyboard
     hub.js                     Steam (argument of consumer patches): __sfuiControllers
-    relay.mjs                  service vr-keyboard-controllers-relay: frames SteamVR -> Steam
+    relay.mjs                  service vr-keyboard-controllers-relay: frames SteamVR -> Steam, demand back
     check.nix, tests/          test: geometry, hub
   vr-keyboard-touch.nix        touch typing (keyboard.vr.touchTyping)
   vr-keyboard-touch/

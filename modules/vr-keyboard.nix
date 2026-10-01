@@ -1,7 +1,9 @@
 # Swipe typing, suggestions and a Backspace drag for Steam's VR keyboard
 # (steamFrame.keyboard.vr; the extra keys are vr-keyboard-extra-keys.nix).
 # - vr-keyboard/patch.js (Steam UI, 8080): swipe gestures (swipe-decoder.js;
-#   gesture-input.js: the events of the laser that pressed),
+#   gesture-input.js: the events of the laser that pressed; with
+#   swipe.twoHanded its path from the controller bridge,
+#   vr-keyboard-controllers.nix, turned on here),
 #   a model of what the keyboard typed (textmodel.js), suggestions (swipe
 #   alternatives, corrections and completions, corrector.js; never changing
 #   text by themselves), Backspace drag (left: delete with a detent at word
@@ -23,6 +25,8 @@ let
 
   on = cfg.enable && (cfg.swipe.enable || cfg.autocorrect.enable || cfg.completions.enable || cfg.backspaceDrag.enable);
   panel = on && cfg.suggestions.position != "inside";
+  twoHanded = on && cfg.swipe.enable && cfg.swipe.twoHanded;
+  noHub = pkgs.writeText "no-controllers.js" "null";
 
   # Default dictionary: the language of keyboard.layout (if listed here) plus
   # English, else English only.
@@ -56,7 +60,8 @@ let
         inherit (cfg.backspaceDrag) wordDetentPixels;
         inherit (cfg) haptics;
       };
-      extraArgs = [ ./vr-keyboard/swipe-decoder.js ./vr-keyboard/textmodel.js ./vr-keyboard/corrector.js dictionaryJs ./vr-keyboard/gesture-input.js ];
+      extraArgs = [ ./vr-keyboard/swipe-decoder.js ./vr-keyboard/textmodel.js ./vr-keyboard/corrector.js dictionaryJs ./vr-keyboard/gesture-input.js
+        (if twoHanded then config.steamFrame.keyboard.vr.controllers.files.hub else noHub) ];
     }} $out
     node --check $out
   '';
@@ -89,7 +94,7 @@ let
     };
   };
 in {
-  imports = [ ./session.nix ./cleanup.nix ./steam-ui-patches.nix ./keyboard-layout.nix ];
+  imports = [ ./session.nix ./cleanup.nix ./steam-ui-patches.nix ./keyboard-layout.nix ./vr-keyboard-controllers.nix ];
 
   options.steamFrame.keyboard.vr = {
     enable = mkEnableOption ''
@@ -98,6 +103,17 @@ in {
       sub-features below are on by default)'';
 
     swipe.enable = mkEnableOption "swipe typing" // { default = true; };
+    swipe.twoHanded = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Swipes also with both lasers on the keyboard: the path comes from the
+        pressing controller's pose when SteamVR forwards no laser movement
+        for it (the controller bridge, sampling during a press while the
+        keyboard is shown). Off: laser events only; such a swipe can become a
+        tap.
+      '';
+    };
 
     dictionary = {
       languages = mkOption {
@@ -210,6 +226,7 @@ in {
         unpatch = ./vr-keyboard/suggestions-panel/unpatch.js;
       };
       steamFrame.session.services.${if panel then "restart" else "stop"} = [ "vr-keyboard-relay.service" ];
+      steamFrame.keyboard.vr.controllers.enable = lib.mkIf twoHanded true;
     }
     (lib.mkIf panel {
       systemd.user.services.vr-keyboard-relay = {

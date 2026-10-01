@@ -6,13 +6,16 @@
 // frames and lost() when the SteamVR side goes away.
 //   subscribe(fn) -> unsubscribe   fn(frame) per frame, fn(null) when lost
 //   last                           the last frame (null: none / lost)
+//   demand(ms)                     full rate for the next ms (0: end), e.g.
+//                                  during a laser press; via the relay's
+//                                  CDP binding __sfuiCtlIn
 // Each frame's hand points (tip, ray) get the keyboard page's px: x, y
 // (CSS px of the keyboard popup) and onKeyboard (inside the page), if the
 // keyboard popup exists. Frames come at up to ~90 Hz while a hand's tip is
 // within 10 cm of the keyboard or its trigger is pulled, else every 1 s, and
 // only while SteamVR shows the keyboard (then one with keyboard null).
 (() => {
-  const VERSION = 1;
+  const VERSION = 2;
   const G = globalThis;
   const have = G.__sfuiControllers;
   if (have && have.version >= VERSION) return have;
@@ -52,6 +55,9 @@
   const hub = {
     version: VERSION, subs, errors, last: null,
     frame, lost: () => deliver(null),
+    demand(ms) {
+      try { G.__sfuiCtlIn?.(JSON.stringify({ fast: Math.max(0, Math.min(5000, +ms || 0)) })); } catch (e) { errors.count++; errors.last = String(e); }
+    },
     subscribe(fn) { subs.add(fn); return () => subs.delete(fn); },
   };
   G.__sfuiControllers = hub;
