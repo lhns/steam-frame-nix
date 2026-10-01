@@ -2,6 +2,7 @@
 # artifact any version wrote (removed or restored) next to look-alikes that
 # aren't ours (left alone), --dry-run changes nothing, a second run changes
 # nothing, SteamVR running defers the debugger key to a runtime drop-in.
+# Also `install.sh restart-check` (what waits for a session/SteamVR restart).
 { pkgs }:
 let
   cleanup = pkgs.callPackage ./package.nix { };
@@ -17,7 +18,11 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq ]; } ''
   cat > $STUB/systemctl <<'SH'
   #!/usr/bin/env bash
   echo "$*" >> "$STUB/log"
-  case "$*" in *"show -p ActiveState --value steamvr.service"*) cat "$STUB/state" ;; esac
+  case "$*" in
+    *"show -p ActiveState --value steamvr.service"*) cat "$STUB/state" ;;
+    *"show -p ActiveState --value gamescope-session.service"*) cat "$STUB/gs-state" ;;
+    *"show -p ControlGroup --value gamescope-session.service"*) echo /gs.service ;;
+  esac
   SH
   chmod +x $STUB/systemctl
   sed -i "1s|.*|#!${pkgs.bash}/bin/bash|" $STUB/systemctl
@@ -27,7 +32,7 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq ]; } ''
   fresh() {
     root=$PWD/$1; rm -rf $root; mkdir -p $root/home $root/run
     HOME=$root/home XDG_RUNTIME_DIR=$root/run STEAM_FRAME_NIX_RUNTIME_DIR=$root/run
-    : > $STUB/log; echo inactive > $STUB/state
+    : > $STUB/log; echo inactive > $STUB/state; echo inactive > $STUB/gs-state
     S=$HOME/.local/state/steam-frame-nix
     V=$HOME/.config/openvr/config/steamvr.vrsettings
     I=$HOME/.local/share/icons/hicolor/scalable/apps
@@ -263,5 +268,37 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq ]; } ''
   bash $root/run/steam-frame-nix/steamvr-debugger-restore
   gone $V $S/steamvr-debugger.armed
   echo "E ok"
+
+  # --- F: restart-check (settings read only at a process start) ---
+  export STEAM_FRAME_NIX_PROC STEAM_FRAME_NIX_CGROUP
+  rc() { bash ${../../install.sh} restart-check 2>&1; }
+  fresh f
+  STEAM_FRAME_NIX_PROC=$root/proc STEAM_FRAME_NIX_CGROUP=$root/cg
+  U=$HOME/.config/systemd/user
+  mkdir -p $U/gamescope-session.service.d $U/steamvr.service.d $root/cg/gs.service $root/proc/net $root/proc/10 $root/proc/11
+  printf '[Service]\nEnvironment=XKB_DEFAULT_LAYOUT=de\n' > $U/gamescope-session.service.d/keyboard.conf
+  printf '[Unit]\nWants=steamvr-webhelper-debugger.service\n' > $U/steamvr.service.d/webhelper-debugger.conf
+  printf '10\n11\n' > $root/cg/gs.service/cgroup.procs
+  : > $root/proc/10/environ; chmod 000 $root/proc/10/environ   # gamescope: unreadable, skipped
+  printf 'HOME=/h\0XKB_DEFAULT_LAYOUT=us\0' > $root/proc/11/environ
+  tcp() { printf '  sl  local_address rem_address   st\n'; for l; do printf '   0: %s 00000000:0000 0A\n' "$l"; done; }
+  tcp 0100007F:1F90 > $root/proc/net/tcp                # only Steam's 8080
+  # nothing runs: nothing waits
+  res=$(rc); [ -z "$res" ] || fail "restart-check while stopped: $res"
+  # fresh install into a running session: both wait
+  echo active > $STUB/gs-state; echo active > $STUB/state
+  res=$(rc); echo "$res"
+  has "$res" "keyboard layout de (the running Steam session has us): from the next start of the Steam session"
+  has "$res" "SteamVR dashboard patches"
+  # after the restarts: nothing waits
+  printf 'XKB_DEFAULT_LAYOUT=de\0' > $root/proc/11/environ
+  tcp 0100007F:1F90 0100007F:1F97 > $root/proc/net/tcp
+  res=$(rc); [ -z "$res" ] || fail "restart-check after restart: $res"
+  # a variant change waits; no layout configured: no check
+  printf '[Service]\nEnvironment=XKB_DEFAULT_LAYOUT=de\nEnvironment=XKB_DEFAULT_VARIANT=nodeadkeys\n' > $U/gamescope-session.service.d/keyboard.conf
+  res=$(rc); has "$res" "keyboard layout de (nodeadkeys) (the running Steam session has de)"
+  rm -r $U/gamescope-session.service.d $U/steamvr.service.d; : > $root/proc/net/tcp
+  res=$(rc); [ -z "$res" ] || fail "restart-check without the drop-ins: $res"
+  echo "F ok"
   touch $out
 ''

@@ -90,6 +90,12 @@ Commands:
       Internal (run before each SteamVR start by steamFrame.steamvrDebugger):
       set VRWebHelper.DebuggerEnabled until SteamVR stops.
 
+  restart-check
+      Internal (run on every switch, and by install): name what of the
+      linked configuration only takes effect after a restart of the Steam
+      session or SteamVR (the keyboard layout, the SteamVR dashboard
+      patches).
+
 Options:
   --yes, -y      Don't ask; answer yes to every question.
   --help, -h     Show this help.
@@ -218,11 +224,13 @@ install_nix() {
 }
 
 uninstall_nix() {
+  local rc=0
   need_sudo
   ro_unlock
   step "Uninstalling Nix"
-  sudo "$NIX_INSTALLER_BIN" uninstall --no-confirm
+  sudo "$NIX_INSTALLER_BIN" uninstall --no-confirm || rc=$?
   ro_relock
+  return "$rc"
 }
 
 ensure_nix() {
@@ -357,6 +365,10 @@ cmd_install() {
   step "Activating Home Manager (conflicting files are renamed to *.$backup)"
   hm switch --flake "$ref" -b "$backup"
 
+  # Settings read only at a process start (the activation warned already).
+  local pending=()
+  mapfile -t pending < <(restart_pending)
+
   local switch_cmd="home-manager switch --flake $ref" edit="your configuration"
   if [[ -n $dir ]]; then
     edit="$dir/home.nix"
@@ -367,6 +379,11 @@ cmd_install() {
   fi
 
   step "Done"
+  if (( ${#pending[@]} )); then
+    printf '\n%sRestart once%s (reboot, or restart the Steam session) for:\n' "$Y" "$N"
+    printf '  - %s\n' "${pending[@]}"
+    printf '%s\n' "  Everything else already works in the running session."
+  fi
   cat <<EOF
 
 Next steps:
@@ -908,6 +925,85 @@ cmd_cleanup() {
   return 0
 }
 
+# --- what waits for a restart -------------------------------------------------
+#
+# Two settings are read only when their process starts, so a switch (or the
+# first install) can't apply them to the running session:
+# - the keyboard layout (keyboard-layout.nix: XKB_DEFAULT_* in a drop-in on
+#   gamescope-session.service), read by gamescope at its start;
+# - SteamVR's DevTools port (steamvr-debugger.nix: a Wants= drop-in on
+#   steamvr.service sets VRWebHelper.DebuggerEnabled before SteamVR starts),
+#   which the dashboard patches (VR pet, the keyboard's suggestion strip, ...)
+#   need.
+# Both are compared with the running session; neither can be applied at
+# runtime (gamescope sends its own keymap to Xwayland again, e.g. whenever
+# the VR keyboard types, and only a SteamVR start opens the port).
+
+SFN_PROC="${STEAM_FRAME_NIX_PROC:-/proc}"
+SFN_CGROUP="${STEAM_FRAME_NIX_CGROUP:-/sys/fs/cgroup}"
+LAYOUT_DROPIN="$USER_UNIT_DIR/gamescope-session.service.d/keyboard.conf"
+DEBUGGER_HM_DROPIN="$USER_UNIT_DIR/steamvr.service.d/webhelper-debugger.conf"
+DEBUGGER_PORT=8087
+
+# Value of Environment=<name>=... in a unit file (empty if unset).
+unit_env() { # file name
+  sed -n "s/^Environment=$2=//p" "$1" 2>/dev/null | tail -n1
+}
+
+# XKB_DEFAULT_<what> of the running gamescope session: from the first
+# process of gamescope-session.service whose environment is readable
+# (gamescope itself isn't: it has capabilities). Fails if unknown.
+session_xkb() { # LAYOUT|VARIANT
+  local cg pid env found=1
+  [[ $(c_systemctl show -p ActiveState --value gamescope-session.service 2>/dev/null) == active ]] || return 1
+  cg="$(c_systemctl show -p ControlGroup --value gamescope-session.service 2>/dev/null)" && [[ -n $cg ]] || return 1
+  [[ -r $SFN_CGROUP$cg/cgroup.procs ]] || return 1
+  while read -r pid; do
+    env="$( { tr '\0' '\n' <"$SFN_PROC/$pid/environ"; } 2>/dev/null)" || continue
+    [[ -n $env ]] || continue
+    sed -n "s/^XKB_DEFAULT_$1=//p" <<<"$env" | tail -n1
+    found=0
+    break
+  done <"$SFN_CGROUP$cg/cgroup.procs"
+  return $found
+}
+
+# Whether something listens on 127.0.0.1/::1/any :<port> (/proc/net/tcp*).
+port_listening() { # port
+  local hex
+  local hex f files=()
+  printf -v hex '%04X' "$1"
+  for f in "$SFN_PROC/net/tcp" "$SFN_PROC/net/tcp6"; do [[ -r $f ]] && files+=("$f"); done
+  (( ${#files[@]} )) || return 1
+  awk -v p=":$hex" 'FNR > 1 && $4 == "0A" && substr($2, length($2) - 4) == p { f = 1 } END { exit !f }' "${files[@]}"
+}
+
+# One line per setting that waits for a restart.
+restart_pending() {
+  local want_l want_v run_l run_v
+  if [[ -e $LAYOUT_DROPIN ]]; then
+    want_l="$(unit_env "$LAYOUT_DROPIN" XKB_DEFAULT_LAYOUT)"
+    want_v="$(unit_env "$LAYOUT_DROPIN" XKB_DEFAULT_VARIANT)"
+    if run_l="$(session_xkb LAYOUT)" && run_v="$(session_xkb VARIANT)" \
+       && [[ $run_l != "$want_l" || $run_v != "$want_v" ]]; then
+      echo "keyboard layout ${want_l:-us}${want_v:+ ($want_v)} (the running Steam session has ${run_l:-us}${run_v:+ ($run_v)}): from the next start of the Steam session"
+    fi
+  fi
+  if [[ -e $DEBUGGER_HM_DROPIN && $(steamvr_state) == running ]] && ! port_listening "$DEBUGGER_PORT"; then
+    echo "SteamVR dashboard patches (e.g. the VR pet, the VR keyboard's suggestion strip; DevTools port $DEBUGGER_PORT not open yet): from the next SteamVR start"
+  fi
+  return 0
+}
+
+cmd_restart_check() {
+  local pending=()
+  need_not_root
+  mapfile -t pending < <(restart_pending)
+  (( ${#pending[@]} )) || return 0
+  warn "steam-frame-nix: some settings take effect only after a restart (reboot once, or restart the Steam session):"
+  printf '  - %s\n' "${pending[@]}" >&2
+}
+
 # --- uninstall --------------------------------------------------------------
 
 # User units installed by Home Manager (unit files resolving into /nix/store).
@@ -1061,10 +1157,17 @@ cmd_uninstall() {
   cmd_cleanup --all
   remove_hm
 
+  # A failed Nix uninstall (e.g. /nix still busy) must not skip the rest:
+  # Home Manager is gone by now, so its config link goes regardless; the
+  # per-user Nix files stay for a Nix that may still be there.
+  local nix_failed=0
   if (( ! keep_nix )); then
     if [[ -x $NIX_INSTALLER_BIN ]]; then
       stop_nix_processes
-      uninstall_nix
+      if ! uninstall_nix; then
+        warn "the Nix uninstall failed (see above)"
+        nix_failed=1 keep_nix=1
+      fi
     elif command -v nix >/dev/null 2>&1; then
       warn "Nix wasn't installed by nix-installer ($NIX_INSTALLER_BIN missing); not removing it"
       keep_nix=1
@@ -1084,10 +1187,14 @@ Intentionally left in place:
   - app data, e.g. ~/.local/share/docker, Firefox profiles, and Flatpak apps
 Log out or reboot so running sessions drop the removed tweaks.
 EOF
-  if (( ${#CLEAN_DEFERRED[@]} )); then
+  if (( ${#CLEAN_DEFERRED[@]} || nix_failed )); then
     printf '\nNot done yet:\n'
-    printf '  - %s\n' "${CLEAN_DEFERRED[@]}"
+    (( ${#CLEAN_DEFERRED[@]} )) && printf '  - %s\n' "${CLEAN_DEFERRED[@]}"
+    (( nix_failed )) && printf '%s\n' \
+      "  - Nix: its uninstaller failed. Reboot (so nothing uses /nix), then run" \
+      "    uninstall again; it also removes ~/.nix-profile and ~/.local/state/nix."
   fi
+  (( ! nix_failed ))
 }
 
 # --- status -----------------------------------------------------------------
@@ -1161,6 +1268,7 @@ main() {
     status) cmd_status "$@" ;;
     cleanup) cmd_cleanup "$@" ;;
     steamvr-debugger-arm) cmd_debugger_arm "$@" ;;
+    restart-check) cmd_restart_check "$@" ;;
     -h|--help|help) usage ;;
     '') usage >&2; exit 2 ;;
     *) printf 'unknown command: %s\n\n' "$cmd" >&2; usage >&2; exit 2 ;;

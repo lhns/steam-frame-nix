@@ -21,8 +21,11 @@ to its previous value when SteamVR stops, also after a rollback or uninstall
 (without Nix). A value you set to `true` yourself is never touched.
 
 **The first time, restart SteamVR once** (e.g. reboot); until then the
-dashboard patches wait. Turned off, the setting is restored at the switch
-(or when SteamVR stops, if it runs).
+dashboard patches wait. SteamVR opens the port only when it starts, so no
+switch or install can do it for a running SteamVR; the switch (and
+`install.sh install` at its end) says so while SteamVR runs without the port
+(`install.sh restart-check`). Turned off, the setting is restored at the
+switch (or when SteamVR stops, if it runs).
 
 ## Security
 

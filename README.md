@@ -81,7 +81,13 @@ The installer installs Nix (skipped if Nix already works), uses
 `~/.config/home-manager` or `--flake <dir-or-flakeref>` (if there is none, it
 creates `~/nix-config` from the [template](template) with your user name) and
 runs `home-manager switch`; what it sets up is listed under
-[Set up by install.sh](#set-up-by-installsh). Re-running it just switches
+[Set up by install.sh](#set-up-by-installsh). Everything works in the running
+session right away, except two settings read only at a process start: the
+[keyboard layout](docs/session.md#keyboard-layout) (next Steam session start)
+and the [SteamVR dashboard patches](docs/steamvr-debugger.md) (VR pet, the VR
+keyboard's suggestion strip, window curvature and the other patches of
+SteamVR's dashboard; next SteamVR start). If you use them, the installer ends
+with "Restart once": reboot once. Re-running it just switches
 again (`--yes` answers every question). Afterwards edit
 `~/nix-config/home.nix` and switch (see [Usage](#usage)).
 
@@ -482,7 +488,10 @@ stops Home Manager's user services (reverting the UI patches), runs
 `cleanup --all`, runs `home-manager uninstall`, then removes Nix and the
 per-user Nix state (see [Set up by install.sh](#set-up-by-installsh)). If
 SteamVR is running, its key is restored when SteamVR stops (the closing
-message says so). Your configuration, `*.hm-backup-*` files, app data and
+message says so). If Nix's own uninstaller fails (e.g. something still uses
+`/nix`), the rest still runs (the `~/.config/home-manager` link goes) except
+the per-user Nix state, and the closing message says to reboot and run
+`uninstall` again. Your configuration, `*.hm-backup-*` files, app data and
 Flatpaks stay.
 
 To drop steam-frame-nix from a Home Manager configuration you keep, first

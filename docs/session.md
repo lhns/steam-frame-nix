@@ -23,6 +23,9 @@ running") and skips `reloadSystemd`.
 - After every switch this module reloads the Steam session's user manager
   and applies `session.services.start` / `stop` / `restart`, which other
   modules fill (you can add your own units).
+- Then it names what the running session can't pick up until a restart:
+  the [keyboard layout](#keyboard-layout) and the
+  [SteamVR debugger](steamvr-debugger.md) of the dashboard patches.
 
 **Configuration:** apps that keep secrets in the wallet get a
 [launcher](launchers.md) with `keyring.enable`. Another app that must reach
@@ -104,7 +107,11 @@ the link dangles, which is the same as no menu.
 `~/.config/environment.d` isn't read on the Frame.
 
 **What you get:** the layout in the Steam session, from the next Steam
-session start. The layout also picks the
+session start (e.g. reboot): gamescope reads it only when it starts, and
+sends its own keymap to the X apps again whenever the VR keyboard types, so
+it can't be set in a running session. While the running session has another
+layout, the switch (and `install.sh install` at its end) says so
+(`install.sh restart-check`). The layout also picks the
 [VR keyboard](keyboard.md#swipe-and-suggestions)'s default dictionary
 language.
 

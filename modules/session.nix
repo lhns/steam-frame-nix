@@ -6,10 +6,17 @@
 # home-manager's reloadSystemd is skipped ("User systemd daemon not running"),
 # so `steamFrameUserServices` does it against the outer session: always
 # daemon-reload, then start/stop/restart the units in `session.services`.
-{ config, lib, ... }:
+# Then `steamFrameRestartCheck` (`install.sh restart-check`) names what the
+# running session can't pick up (read only at a process start): the keyboard
+# layout, the SteamVR dashboard patches' DevTools port.
+{ config, lib, pkgs, ... }:
 let
   cfg = config.steamFrame.session;
   units = lib.escapeShellArgs;
+  restartCheck = pkgs.callPackage ./cleanup/package.nix {
+    name = "steam-frame-nix-restart-check";
+    command = "restart-check";
+  };
   rename = from: to: lib.mkRenamedOptionModule ([ "steamFrame" ] ++ from) [ "steamFrame" "session" to ];
 in {
   imports = [
@@ -91,6 +98,12 @@ in {
 
   # In a subshell: the outer session's environment must not leak into
   # activation steps that run later.
+  # Read-only; a warning, never a failed switch.
+  config.home.activation.steamFrameRestartCheck = lib.hm.dag.entryAfter [ "steamFrameUserServices" ] ''
+    STEAM_FRAME_NIX_RUNTIME_DIR=${lib.escapeShellArg cfg.runtimeDir} XDG_CONFIG_HOME=${lib.escapeShellArg config.xdg.configHome} \
+      ${lib.getExe restartCheck} || true
+  '';
+
   config.home.activation.steamFrameUserServices = lib.hm.dag.entryAfter [ "reloadSystemd" ] (''
     (
     export XDG_RUNTIME_DIR=${lib.escapeShellArg cfg.runtimeDir} DBUS_SESSION_BUS_ADDRESS=${lib.escapeShellArg cfg.bus}
