@@ -7,7 +7,7 @@
 //               shift) with one key; or shift+Tab
 //  type:<char>  one character Steam's key emulation can't produce: non-ASCII
 //               (äöüß€§°´…) or | @ { [ ] } \ ~ ^ `
-//  down:<mod> / up:<mod>   hold/release ctrl or alt (checked in the helper)
+//  down:<mod> / up:<mod>   hold/release ctrl or alt
 const SPECIAL = new Set(['Escape', 'Delete', 'Home', 'End', 'Prior', 'Next', 'Left', 'Right', 'Up', 'Down',
   ...Array.from({ length: 12 }, (_, i) => `F${i + 1}`)]);
 const KEY = /^([a-z0-9]|space|BackSpace|Tab|period|comma|minus|plus|numbersign|less|slash|ssharp|udiaeresis|odiaeresis|adiaeresis)$/;
@@ -27,3 +27,5 @@ export function allowedChar(c) {
   const cp = c.codePointAt(0);
   return (cp > 0xa0 && !/\s|\p{C}/u.test(c)) || '|@{[]}\\~^`'.includes(c);
 }
+
+export const allowedMod = (m) => m === 'ctrl' || m === 'alt';

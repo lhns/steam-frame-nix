@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 
-const { allowedCombo, allowedChar } = await import(pathToFileURL(process.argv[2]).href);
+const { allowedCombo, allowedChar, allowedMod } = await import(pathToFileURL(process.argv[2]).href);
 const accept = ['shift+Tab', 'ctrl+Tab', 'ctrl+shift+Tab', 'ctrl+shift+t', 'alt+f',
   'shift+Left', 'Escape', 'Delete', 'shift+End', 'ctrl+BackSpace'];
 // F-keys (keyboard.vr.functionKeys): any of them with any modifiers.
@@ -14,8 +14,12 @@ const reject = ['Tab', 'shift+a', 'a', 'Return', 'shift+Return', 'ctrl+Return', 
   'F0', 'F13', 'F24', 'f5', 'super+F4', 'ctrl+ctrl+F5', 'F5+Return', 'ctrl+alt+shift+Return'];
 const acceptChar = ['ä', '€', '|', '@', '\\', '`'];
 const rejectChar = ['a', 'A', '1', ' ', '\n', '\t', 'ab', ' '];
+const acceptMod = ['ctrl', 'alt'];
+const rejectMod = ['shift', 'super', 'Control_L', 'constructor', '__proto__', 'toString', ''];
 for (const c of accept) assert.equal(allowedCombo(c), true, `accepts key:${c}`);
 for (const c of reject) assert.equal(allowedCombo(c), false, `rejects key:${c}`);
 for (const c of acceptChar) assert.equal(allowedChar(c), true, `accepts type:${c}`);
 for (const c of rejectChar) assert.equal(allowedChar(c), false, `rejects type:${JSON.stringify(c)}`);
-console.log(`allowlist: ${accept.length + reject.length + acceptChar.length + rejectChar.length} cases passed`);
+for (const m of acceptMod) assert.equal(allowedMod(m), true, `accepts down:${m}`);
+for (const m of rejectMod) assert.equal(allowedMod(m), false, `rejects down:${m}`);
+console.log(`allowlist: ${accept.length + reject.length + acceptChar.length + rejectChar.length + acceptMod.length + rejectMod.length} cases passed`);

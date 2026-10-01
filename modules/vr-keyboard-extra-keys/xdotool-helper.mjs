@@ -8,7 +8,7 @@
 // usage: node xdotool-helper.mjs <patch.js> <unpatch.js> [xdotool]
 import { readFileSync } from 'node:fs';
 import { execFile } from 'node:child_process';
-import { allowedCombo, allowedChar } from './allowlist.mjs';
+import { allowedCombo, allowedChar, allowedMod } from './allowlist.mjs';
 
 const [, , patchPath, unpatchPath, xdotool = 'xdotool'] = process.argv;
 const PATCH = readFileSync(patchPath, 'utf8');
@@ -37,7 +37,7 @@ function handle(msg) {
     return xdo(['key', '--', [...parts.filter((m) => !held.has(m)), key].join('+')]);
   }
   if (op === 'type' && allowedChar(arg)) return xdo(['type', '--', arg]);
-  if ((op === 'down' || op === 'up') && MODKEY[arg]) {
+  if ((op === 'down' || op === 'up') && allowedMod(arg)) {
     if (op === 'down') held.add(arg); else held.delete(arg);
     return xdo([op === 'down' ? 'keydown' : 'keyup', MODKEY[arg]]);
   }
