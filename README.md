@@ -396,6 +396,8 @@ versions left: [docs/cleanup.md](docs/cleanup.md).
 
 - The UI patches (Steam, SteamVR dashboard, VR keyboard) live in the pages'
   memory; stopping `steam-ui-patches` / `steam-keyboard-patch` reverts them.
+  The VR keyboard's relays (`vr-keyboard-relay`,
+  `vr-keyboard-controllers-relay`) only pass messages and keep nothing.
 - clipboard-sync runs from KDE autostart (a Home Manager link).
 - Firefox: the desktop profile's `user.js` link exists only while its
   Firefox runs (see [Firefox](docs/firefox.md#how-it-works)).
