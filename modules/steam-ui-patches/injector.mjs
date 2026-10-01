@@ -7,6 +7,7 @@
 //     "reinjectMs": 15000,   // periodic re-injection
 //     "debounceMs": 3000,    // delay after a burst of new JS contexts
 //     "unpatchTimeoutMs": 2000,
+//     "stateDir": "...",     // optional, for manual runs (default below)
 //     "patches": [ { "name": "launcher-menu-order",
 //                    "endpoint": "http://127.0.0.1:8080",
 //                    "target": { "title": "SharedJSContext" }, // or titleRegex / urlRegex
@@ -150,7 +151,8 @@ function open(endpoint, target, list) {
     await call('Runtime.enable');
     if (stateful.size) await call('Runtime.addBinding', { name: BINDING });
     await inject().catch((e) => console.error(`${tag} inject:`, e.message));
-    timer = setInterval(() => inject().catch(() => {}), REINJECT);
+    // Closed while attaching: onclose already ran, so no timer.
+    if (ws.readyState === WebSocket.OPEN) timer = setInterval(() => inject().catch(() => {}), REINJECT);
   };
   ws.onmessage = (e) => {
     const m = JSON.parse(e.data);
