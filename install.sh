@@ -7,7 +7,7 @@
 #   curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- cleanup --all
 #
 # Run `install.sh --help` for details. Works from a file or piped into bash
-# (prompts read from /dev/tty).
+# (prompts read from /dev/tty; tests: STEAM_FRAME_NIX_TTY).
 set -euo pipefail
 
 TEMPLATE="${STEAM_FRAME_NIX_TEMPLATE:-github:lhns/steam-frame-nix}"
@@ -28,11 +28,13 @@ USER_NAME="$(id -un)"
 USER_ID="$(id -u)"
 OUTER_RUNTIME_DIR="${STEAM_FRAME_NIX_RUNTIME_DIR:-/run/user/$USER_ID}"
 SFN_PROC="${STEAM_FRAME_NIX_PROC:-/proc}"   # tests: a fake /proc
+SFN_TTY="${STEAM_FRAME_NIX_TTY:-/dev/tty}"
 # Runtime drop-in for the uninstall (tests: another directory).
 NIX_MOUNT_DROPIN="${STEAM_FRAME_NIX_SYSTEM_RUNTIME:-/run/systemd/system}/nix.mount.d/50-steam-frame-nix-lazy-unmount.conf"
 
 ASSUME_YES=0
 RO_RELOCK=0
+CLONE_TMP=''
 
 # --- output -----------------------------------------------------------------
 
@@ -59,9 +61,14 @@ Commands:
         --clone given        your config's git repository (git@host:owner/repo,
                              https://..., github:owner/repo), cloned into
                              --dir (default ~/nix-config) on branch --ref,
-                             then used like --flake <dir>; an existing clone
-                             of the same repository is reused (and pulled
-                             with --ff-only after asking)
+                             then used like --flake <dir>. Without a Home
+                             Manager configuration it activates the template
+                             first, so git clones with its credential helpers
+                             (gh, ~/.git-credentials); if that fails it offers
+                             'gh auth login'. Only a missing directory or the
+                             unchanged template is replaced by the clone;
+                             anything else there is used as it is (a rerun
+                             after a failed switch just switches)
         otherwise            ~/.config/home-manager
         neither exists       a new config in ~/nix-config from the
                              steam-frame-nix template, linked to
@@ -119,15 +126,15 @@ EOF
 
 # --- helpers ----------------------------------------------------------------
 
-have_tty() { { : </dev/tty; } 2>/dev/null; }
+have_tty() { { : <"$SFN_TTY"; } 2>/dev/null; }
 
-confirm() {
+confirm() { # question [default answer: n|y]
   (( ASSUME_YES )) && return 0
   have_tty || die "no terminal to ask \"$1\"; re-run with --yes"
-  local reply=''
-  printf '%s [y/N] ' "$1" >/dev/tty
-  read -r reply </dev/tty || true
-  [[ $reply == [yY]* ]]
+  local reply='' def=${2:-n}
+  printf '%s [%s] ' "$1" "$([[ $def == y ]] && echo Y/n || echo y/N)" >"$SFN_TTY"
+  read -r reply <"$SFN_TTY" || true
+  [[ ${reply:-$def} == [yY]* ]]
 }
 
 need_not_root() {
@@ -166,7 +173,11 @@ ro_relock() {
   sudo steamos-readonly enable || warn "could not re-enable it; run: sudo steamos-readonly enable"
 }
 
-trap ro_relock EXIT
+on_exit() {
+  [[ -z $CLONE_TMP ]] || rm -rf -- "$CLONE_TMP"   # an unfinished --clone
+  ro_relock
+}
+trap on_exit EXIT
 trap 'exit 130' INT TERM
 
 # Make nix available in this shell, with flakes enabled for our own calls.
@@ -282,7 +293,7 @@ ensure_nix() {
   step "Checking Nix"
   load_nix
   if nix_works; then
-    info "$(nix --version)"
+    info "$(nix --version): installed already"
   else
     if [[ -e $NIX_RECEIPT ]]; then
       warn "Nix is installed ($NIX_RECEIPT) but not working"
@@ -315,7 +326,27 @@ set_let() { # file name value
   sed -i "s|^\( *$name = \)\"[^\"]*\";|\1\"$value\";|" "$file"
 }
 
-create_config() {
+# Marker of a configuration create_config made: the hash of its files, in
+# .git (never a file of the configuration). `install --clone` replaces
+# such a configuration while it is unchanged (template_untouched).
+TEMPLATE_MARK=steam-frame-nix-template
+
+# Hash of a configuration's files (without .git).
+config_hash() {
+  (cd "$1" && find . -path ./.git -prune -o ! -type d -print0 | LC_ALL=C sort -z \
+     | xargs -0 -r sha256sum | sha256sum) | cut -d' ' -f1
+}
+
+# Whether <dir> is the template as create_config made it: the marker
+# matches its files, at most one commit.
+template_untouched() { # dir
+  local m=$1/.git/$TEMPLATE_MARK n
+  [[ -f $m ]] || return 1
+  n="$(git -C "$1" rev-list --count HEAD 2>/dev/null || echo 0)"
+  [[ $(<"$m") == "$(config_hash "$1")" ]] && (( n <= 1 ))
+}
+
+create_config() { # dir [question]
   local dir=$1 system
   if [[ -e $dir ]] && [[ -n $(ls -A "$dir" 2>/dev/null) ]]; then
     if [[ -e $dir/flake.nix ]]; then
@@ -326,7 +357,7 @@ create_config() {
   [[ $USER_NAME =~ ^[a-z_][a-z0-9_-]*$ ]] || die "unsupported user name '$USER_NAME' for the template"
   [[ $HOME =~ ^/[A-Za-z0-9._/-]+$ ]] || die "unsupported home directory '$HOME' for the template"
 
-  confirm "No Home Manager configuration found. Create one in $dir from the steam-frame-nix template?" \
+  confirm "${2:-No Home Manager configuration found. Create one in $dir from the steam-frame-nix template?}" \
     || die "aborted; pass --flake <your config> to use an existing one"
 
   step "Creating a Home Manager configuration in $dir"
@@ -344,6 +375,7 @@ create_config() {
     git -C "$dir" add -A
     nix flake lock "$dir"
     git -C "$dir" add flake.lock
+    config_hash "$dir" >"$dir/.git/$TEMPLATE_MARK"
   else
     warn "git not found; $dir is used as a plain directory"
     nix flake lock "$dir"
@@ -371,42 +403,99 @@ clone_url() {
   esac
 }
 
-# host/path of a git URL, to compare SSH and HTTPS forms of one repository.
-repo_id() {
-  local u=$1
-  case $u in
-    *://*) u=${u#*://}; u=${u#*@} ;;
-    *@*:*) u=${u#*@}; u=${u/://} ;;
-  esac
-  u=${u%/}; u=${u%.git}
-  printf '%s\n' "${u,,}"
+# git with its credential helpers but without asking for a password.
+git_noprompt() {
+  local -x GIT_TERMINAL_PROMPT=0
+  git_any "$@"
 }
 
-# Clone the config (--clone), or reuse an existing clone of the same repository.
+# Whether git has a credential helper (the template's: gh, store).
+git_has_helpers() {
+  git_any config --global --get-regexp '^credential\..*helper$' 2>/dev/null \
+    | awk 'NF > 1 { f = 1 } END { exit !f }'
+}
+
+# `gh auth login` with gh from the Home Manager profile (the template's),
+# for an HTTPS URL on github.com and only with a terminal.
+gh_login() { # url
+  local gh=$HM_PROFILE/home-path/bin/gh
+  [[ $1 == https://github.com/* ]] && have_tty || return 1
+  [[ -x $gh ]] || gh="$(command -v gh)" || return 1
+  confirm "Log in to GitHub now with 'gh auth login'?" y || return 1
+  "$gh" auth login --hostname github.com --git-protocol https <"$SFN_TTY"
+}
+
+# --clone: <dir> missing (or empty) or the untouched template gets the clone
+# of <url>; anything else in <dir> is used as it is (also the clone of an
+# earlier run whose switch failed). Each step checks whether an earlier run
+# did it already:
+#   - without a Home Manager configuration (or with the template in <dir>
+#     linked), the template is created in <dir> and activated, so git has
+#     the credential helpers (skipped if they are there);
+#   - <url> is cloned next to <dir> (on failure the template stays active
+#     in <dir>); the template is removed and the clone takes its place.
 clone_config() { # url dir ref
-  local url dir=$2 ref=$3 origin branch
+  local url dir=$2 ref=$3 tmpl=0 parent link=''
   url="$(clone_url "$1")"
   if [[ -e $dir ]] && [[ -n $(ls -A "$dir" 2>/dev/null) ]]; then
-    [[ $(git_any -C "$dir" rev-parse --show-toplevel 2>/dev/null) -ef $dir ]] \
-      && origin="$(git_any -C "$dir" config --get remote.origin.url)" \
-      || die "$dir exists and is not a git clone; move it away or pass --dir <path>"
-    [[ $(repo_id "$origin") == "$(repo_id "$url")" ]] \
-      || die "$dir is a clone of $origin, not $url; move it away or pass --dir <path>"
-    branch="$(git_any -C "$dir" symbolic-ref --short -q HEAD || true)"
-    [[ -z $ref || $branch == "$ref" ]] \
-      || die "$dir is on ${branch:-a detached HEAD}, not $ref; check out $ref there first"
-    step "Using the existing clone in $dir"
-    if confirm "Update it with 'git pull --ff-only'?"; then
-      git_any -C "$dir" pull --ff-only \
-        || warn "git pull failed; using $dir as it is"
+    if ! template_untouched "$dir"; then
+      step "$dir already exists and isn't the untouched template: using it as it is (not cloning)"
+      return 0
     fi
-    return 0
+    tmpl=1
   fi
-  step "Cloning $url into $dir"
-  mkdir -p "${dir%/*}"
-  git_any clone ${ref:+--branch "$ref"} -- "$url" "$dir" || die "git clone failed. \
-For a private repository use an SSH URL (git@github.com:owner/repo) with a key \
-your account knows, or HTTPS credentials (e.g. 'gh auth login')."
+
+  # The template, for git's credential helpers.
+  if [[ -L $HM_CONFIG_LINK || -e $HM_CONFIG_LINK ]]; then
+    link="$(readlink -f "$HM_CONFIG_LINK" || true)"
+  fi
+  if (( ! tmpl )) && [[ -z $link ]]; then
+    create_config "$dir" "No Home Manager configuration found. First activate the steam-frame-nix template from $dir (git's credential helpers, e.g. 'gh auth login'), then replace it with the clone of $url?"
+    tmpl=1
+    hm_activate "$dir#$USER_NAME" || die "the switch to the template failed (see above); run install --clone again to continue"
+  elif (( tmpl )) && [[ -z $link || $link -ef $dir ]]; then
+    if [[ -z $link ]]; then
+      mkdir -p "${HM_CONFIG_LINK%/*}"
+      ln -s "$dir" "$HM_CONFIG_LINK"
+      info "linked $HM_CONFIG_LINK -> $dir"
+    fi
+    if [[ -n $link ]] && hm_installed && git_has_helpers; then
+      step "The template in $dir is active with git's credential helpers (skipped)"
+    else
+      hm_activate "$dir#$USER_NAME" || die "the switch to the template failed (see above); run install --clone again to continue"
+    fi
+  fi
+
+  parent="$(mkdir -p "${dir%/*}" && cd "${dir%/*}" && pwd)"
+  CLONE_TMP="$(mktemp -d "$parent/.${dir##*/}.clone.XXXXXX")"
+  chmod "$(umask -S)" "$CLONE_TMP"
+  step "Cloning $url"
+  if ! git_noprompt clone ${ref:+--branch "$ref"} -- "$url" "$CLONE_TMP" \
+     && ! { gh_login "$url" && git_noprompt clone ${ref:+--branch "$ref"} -- "$url" "$CLONE_TMP"; }; then
+    (( tmpl )) && warn "the steam-frame-nix template stays active in $dir; install --clone replaces it while it is unchanged"
+    die "git clone failed. For a private repository log in to GitHub with \
+'gh auth login' or use an SSH URL (git@github.com:owner/repo) with a key \
+your account knows, then run install --clone again: it continues where it stopped."
+  fi
+  if (( tmpl )); then
+    template_untouched "$dir" || die "$dir was changed while cloning; the clone is not used"
+    rm -rf -- "$dir"
+    info "removed the template in $dir (only needed for the clone)"
+  elif [[ -d $dir ]]; then
+    rmdir -- "$dir"   # empty
+  fi
+  mv -T -- "$CLONE_TMP" "$dir"
+  CLONE_TMP=''
+  info "cloned into $dir"
+}
+
+# home-manager switch; files in its way are renamed to *.hm-backup-<time>
+# (unique per run: Home Manager aborts if a backup from an earlier run exists).
+hm_activate() { # flake ref
+  local backup
+  backup="hm-backup-$(date +%Y%m%d-%H%M%S)"
+  step "Activating Home Manager (conflicting files are renamed to *.$backup)"
+  hm switch --flake "$1" -b "$backup"
 }
 
 cmd_install() {
@@ -475,11 +564,7 @@ cmd_install() {
     [[ -z $untracked ]] || warn "untracked files are invisible to the flake (git add them): $(echo "$untracked" | tr '\n' ' ')"
   fi
 
-  # Unique per run: Home Manager aborts if a backup from an earlier run exists.
-  local backup
-  backup="hm-backup-$(date +%Y%m%d-%H%M%S)"
-  step "Activating Home Manager (conflicting files are renamed to *.$backup)"
-  hm switch --flake "$ref" -b "$backup"
+  hm_activate "$ref" || die "home-manager switch failed (see above)${clone:+; fix $dir and run install --clone again: it continues with this switch}"
 
   # Settings read only at a process start (the activation warned already).
   local pending=()

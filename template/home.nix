@@ -9,6 +9,17 @@
   targets.genericLinux.enable = true;  # non-NixOS integration
   programs.home-manager.enable = true; # the `home-manager` command
 
+  # git credentials for HTTPS (`install.sh install --clone` uses them):
+  # GitHub through the GitHub CLI (log in once: gh auth login, works with
+  # 2FA), other hosts from ~/.git-credentials. git itself is SteamOS's;
+  # Home Manager only writes its config. Remove to manage git yourself.
+  programs.git = {
+    enable = true;
+    package = null;
+    settings.credential.helper = "store";
+  };
+  programs.gh.enable = true;
+
   # Packages for your user, e.g.:
   # home.packages = with pkgs; [ htop ripgrep ];
 

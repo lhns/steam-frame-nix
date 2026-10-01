@@ -3,8 +3,9 @@
 # aren't ours (left alone), --dry-run changes nothing, a second run changes
 # nothing, SteamVR running defers the debugger key to a runtime drop-in.
 # Also `install.sh restart-check` (what waits for a session/SteamVR restart).
-# Also `install.sh install --clone` (argument parsing and the clone step),
-# against local bare repositories through a logging git, without network.
+# Also `install.sh install` (the template) and `install --clone` (parsing,
+# the template's credential helper, clone, reruns), against local bare
+# repositories through a logging git and a fake nix, without network.
 # Also `install.sh uninstall` removing Nix while programs from the Nix store
 # run (a fake /proc, a logging nix-installer).
 { pkgs }:
@@ -305,34 +306,98 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
   res=$(rc); [ -z "$res" ] || fail "restart-check without the drop-ins: $res"
   echo "F ok"
 
-  # --- G: install --clone ---
+  # --- G: install from the template, install --clone ---
   INSTALL=${../../install.sh}
+  GIT=${pkgs.git}/bin/git   # not G: install.sh has G (a colour)
   export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
   fresh g
   R=$root/remotes; mkdir -p $R
-  for repo in config other; do
+  for repo in config other private; do
     git init -q -b main $R/src-$repo
     echo "{ outputs = _: { }; }" > $R/src-$repo/flake.nix
+    # a configuration that keeps git's credential helper
+    [ $repo = other ] || echo '{ programs.git.settings.credential.helper = "store"; }' > $R/src-$repo/home.nix
     git -C $R/src-$repo add -A; git -C $R/src-$repo commit -qm init
     git -C $R/src-$repo branch dev
     git clone -q --bare $R/src-$repo $R/$repo.git
   done
-  # The URL forms reach the bare repositories; a git that logs its arguments.
-  export GIT_CONFIG_GLOBAL=$root/gitconfig GITLOG=$root/gitlog
+  # The URL forms reach the bare repositories.
+  export GIT_CONFIG_GLOBAL=$root/gitconfig LOG=$root/log GH_LOGIN=$root/gh-login GIT
+  export STEAM_FRAME_NIX_TTY=$root/no-tty   # none; a file for "a terminal"
   git config --global url."file://$R/config.git".insteadOf https://github.com/owner/config.git
   git config --global --add url."file://$R/config.git".insteadOf git@github.com:owner/config
   git config --global url."file://$R/other.git".insteadOf https://example.org/other.git
+  git config --global url."file://$R/private.git".insteadOf https://github.com/owner/private.git
+  : > $root/tty
   mkdir -p $root/bin
-  printf '#!%s\necho "$*" >> "$GITLOG"\nexec %s "$@"\n' ${pkgs.bash}/bin/bash ${pkgs.git}/bin/git > $root/bin/git
-  chmod +x $root/bin/git
+  # git that logs its arguments; clone never prompts, and https://github.com
+  # needs a credential helper (private.git also a gh login)
+  cat > $root/bin/git <<'SH'
+  #!/bin/sh
+  if [ "$1" = clone ]; then
+    echo "$* (prompt=$GIT_TERMINAL_PROMPT)" >> "$LOG"
+    url=; prev=; for a; do [ "$prev" = -- ] && url=$a; prev=$a; done
+    [ "$GIT_TERMINAL_PROMPT" = 0 ] || { echo "fatal: would ask for a password" >&2; exit 128; }
+    case $url in https://github.com/*)
+      "$GIT" config --global credential.helper >/dev/null \
+        || { echo "fatal: could not read Username: terminal prompts disabled" >&2; exit 128; } ;;
+    esac
+    case $url in *private.git) [ -e "$GH_LOGIN" ] || { echo "fatal: Authentication failed" >&2; exit 128; } ;; esac
+  else
+    echo "$*" >> "$LOG"
+  fi
+  exec "$GIT" "$@"
+  SH
+  # nix: works; the template from this repository
+  cat > $root/bin/nix <<'SH'
+  #!/bin/sh
+  case "$1 $2" in
+    "--version "*) echo "nix (Nix) 2.0" ;;
+    "store info") ;;
+    "config show") echo "flakes nix-command" ;;
+    "flake init") cp -r --no-preserve=mode "$TEMPLATE_SRC"/. . ;;
+    "flake lock") echo '{}' > "$3/flake.lock" ;;
+    "eval --impure") printf aarch64-linux ;;
+    *) echo "nix $*: not faked" >&2; exit 1 ;;
+  esac
+  SH
+  sed -i "1s|.*|#!${pkgs.bash}/bin/bash|" $root/bin/git $root/bin/nix
+  chmod +x $root/bin/git $root/bin/nix
+  export TEMPLATE_SRC=${../../template}
   PATH=$root/bin:$PATH
+  # gh in the Home Manager profile: logs in
+  GH=$HOME/.local/state/nix/profiles/home-manager/home-path/bin/gh
+  mkdir -p ''${GH%/*}
+  printf '#!%s\necho "gh $*" >> "$LOG"; : > "$GH_LOGIN"\n' ${pkgs.bash}/bin/bash > $GH
+  chmod +x $GH
   # sourced: run one function with fresh state
   sfn() { (. $INSTALL; "$@"); }
-  # install with Nix, curl and home-manager stubbed
+  # install with curl stubbed; home-manager writes git's credential helper
+  # like Home Manager would (if the configuration has it); a switch to a
+  # clone fails while $root/fail-switch exists
   inst() {
-    : > $GITLOG
-    (. $INSTALL; ASSUME_YES=1; ensure_nix() { :; }; curl() { :; }; hm() { echo "hm $*"; }; cmd_install "$@")
+    : > $LOG
+    (. $INSTALL; ASSUME_YES=1; curl() { :; }; install_nix() { echo "nix install"; }
+     hm() {
+       echo "hm $*" | tee -a $LOG
+       if grep -qs 'credential.helper = "store"' "''${3%%#*}/home.nix"; then
+         $GIT config --global credential.helper store
+       else
+         $GIT config --global --unset-all credential.helper || true
+       fi
+       [[ $3 == *#* || ! -e $root/fail-switch ]]
+     }
+     cmd_install "$@")
   }
+  nohelper() { $GIT config --global --unset-all credential.helper || true; }
+  # <dir> is a clone on <branch>, without marker; no temporary clone left
+  clone_ok() { # dir branch
+    [ "$($GIT -C $1 branch --show-current)" = $2 ] || fail "$1: branch"
+    [ -n "$($GIT -C $1 config --get remote.origin.url)" ] || fail "$1: not a clone"
+    [ ! -e $1/.git/steam-frame-nix-template ] || fail "$1: template marker left"
+    [ -z "$(find ''${1%/*} -maxdepth 1 -name '.*.clone.*')" ] || fail "temporary clone left"
+  }
+  switched_to_template() { grep -q '^hm switch --flake [^ ]*#' $LOG; }
 
   # parsing
   res=$(bash $INSTALL install --clone github:owner/config --flake /x 2>&1) && fail "--clone --flake accepted"
@@ -344,48 +409,109 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
   res=$(bash $INSTALL install --clone 2>&1) && fail "--clone without URL accepted"
   [ "$(sfn clone_url github:owner/config)" = https://github.com/owner/config.git ] || fail clone_url
   [ "$(sfn clone_url git@github.com:owner/config)" = git@github.com:owner/config ] || fail clone_url-ssh
-  [ "$(sfn repo_id git@GitHub.com:owner/config.git)" = "$(sfn repo_id https://github.com/owner/config/)" ] || fail repo_id
-  [ "$(sfn repo_id ssh://git@github.com/owner/config)" = github.com/owner/config ] || fail repo_id-ssh
 
-  # each URL form: the git command, the flake dir, the link
+  # a plain install: the template, its marker in .git
+  res=$(inst)
+  has "$res" "installed already"; hasnt "$res" "nix install"
+  has "$res" "hm switch --flake $HOME/nix-config#$(id -un) -b"
+  grep -q "steamFrame" $HOME/nix-config/home.nix || fail "no template"
+  [ -s $HOME/nix-config/.git/steam-frame-nix-template ] || fail "no template marker"
+  ! $GIT -C $HOME/nix-config status --porcelain | grep -v '^A ' || fail "marker visible to git"
+  # --clone replaces it (unchanged; active with the helpers: no switch to it)
+  res=$(inst --clone github:owner/config)
+  has "$res" "(skipped)"
+  ! switched_to_template || fail "template switched again: $(cat $LOG)"
+  has "$res" "removed the template in $HOME/nix-config"
+  clone_ok $HOME/nix-config main
+
+  # each URL form: template switch, clone (never prompting), the clone
+  # replaces the template, switch to it
   for url in github:owner/config https://github.com/owner/config.git git@github.com:owner/config; do
-    rm -rf $HOME/nix-config $HOME/.config/home-manager
+    rm -rf $HOME/nix-config $HOME/.config/home-manager; nohelper
     res=$(inst --clone $url)
     want=$(sfn clone_url $url)
-    grep -qxF -- "clone -- $want $HOME/nix-config" $GITLOG || fail "$url: git: $(cat $GITLOG)"
-    has "$res" "hm switch --flake $HOME/nix-config -b"
+    l1=$(grep -n "^hm switch --flake $HOME/nix-config#" $LOG | cut -d: -f1)
+    l2=$(grep -nF "clone -- $want $HOME/.nix-config.clone." $LOG | cut -d: -f1)
+    l3=$(grep -n "^hm switch --flake $HOME/nix-config -b" $LOG | cut -d: -f1)
+    [ -n "$l1" ] && [ -n "$l2" ] && [ -n "$l3" ] && [ $l1 -lt $l2 ] && [ $l2 -lt $l3 ] || fail "$url: order: $(cat $LOG)"
+    grep -q "^clone .*(prompt=0)$" $LOG || fail "$url: clone may prompt"
     [ "$(readlink $HOME/.config/home-manager)" = $HOME/nix-config ] || fail "$url: link"
-    [ "$(git -C $HOME/nix-config branch --show-current)" = main ] || fail "$url: branch"
+    clone_ok $HOME/nix-config main
   done
 
-  # reuse: same repository in another URL form, pulled (--yes)
-  res=$(inst --clone https://github.com/owner/config.git)
-  has "$res" "Using the existing clone in $HOME/nix-config"
-  grep -qxF -- "-C $HOME/nix-config pull --ff-only" $GITLOG || fail "no pull: $(cat $GITLOG)"
-  ! grep -q "^clone" $GITLOG || fail "cloned again"
+  # an existing directory that isn't the template (here a clone of another
+  # repository): used as it is, no clone, no template
+  res=$(inst --clone https://example.org/other.git)
+  has "$res" "$HOME/nix-config already exists and isn't the untouched template: using it as it is (not cloning)"
+  ! grep -q "^clone" $LOG || fail "cloned over an existing directory"
+  ! switched_to_template || fail "template over an existing directory"
   has "$res" "hm switch --flake $HOME/nix-config -b"
+  [ "$($GIT -C $HOME/nix-config config --get remote.origin.url)" = git@github.com:owner/config ] || fail "existing directory changed"
 
-  # --dir (relative) and --ref; the existing link stays
+  # --dir (relative) and --ref; an active configuration: no template, the
+  # existing link stays
   res=$(cd $HOME && inst --clone github:owner/config --dir cfg --ref dev)
-  grep -qxF -- "clone --branch dev -- https://github.com/owner/config.git $HOME/cfg" $GITLOG || fail "ref: $(cat $GITLOG)"
-  [ "$(git -C $HOME/cfg branch --show-current)" = dev ] || fail "ref branch"
+  grep -qF "clone --branch dev -- https://github.com/owner/config.git $HOME/.cfg.clone." $LOG || fail "ref: $(cat $LOG)"
+  ! switched_to_template || fail "template with a configuration"
+  clone_ok $HOME/cfg dev
   has "$res" "hm switch --flake $HOME/cfg -b"
   [ "$(readlink $HOME/.config/home-manager)" = $HOME/nix-config ] || fail "link replaced"
-  res=$(inst --clone github:owner/config --dir $HOME/cfg --ref main 2>&1) && fail "other branch reused"
-  has "$res" "is on dev, not main"
-
-  # refused: another repository, not a clone, a subdirectory of a clone
-  res=$(inst --clone https://example.org/other.git 2>&1) && fail "other repo reused"
-  has "$res" "is a clone of git@github.com:owner/config, not https://example.org/other.git"
+  # not a configuration: not cloned over, kept (and no flake to switch to)
   mkdir $HOME/plain; echo x > $HOME/plain/x
   res=$(inst --clone github:owner/config --dir $HOME/plain 2>&1) && fail "plain dir used"
-  has "$res" "is not a git clone"
-  mkdir $HOME/cfg/sub; echo x > $HOME/cfg/sub/x
-  res=$(inst --clone github:owner/config --dir $HOME/cfg/sub 2>&1) && fail "subdir used"
-  has "$res" "is not a git clone"
-  # a failed clone: the hint
+  has "$res" "using it as it is (not cloning)"
+  has "$res" "has no flake.nix"
+  there $HOME/plain/x
+  # a failed clone: the hint, nothing left
   res=$(inst --clone https://example.org/missing.git --dir $HOME/m 2>&1) && fail "missing repo"
   has "$res" "gh auth login"
+  gone $HOME/m
+  [ -z "$(find $HOME -maxdepth 1 -name '.m.clone.*')" ] || fail "temporary clone left"
+
+  # a failed clone (no login, no terminal: gh isn't offered): the template
+  # stays active in ~/nix-config, with its marker
+  rm -rf $HOME/nix-config $HOME/.config/home-manager; nohelper
+  res=$(inst --clone https://github.com/owner/private.git 2>&1) && fail "private repo cloned"
+  has "$res" "the steam-frame-nix template stays active in $HOME/nix-config"
+  has "$res" "gh auth login"
+  ! grep -q "^gh " $LOG || fail "gh without a terminal"
+  grep -q "steamFrame" $HOME/nix-config/home.nix || fail "template gone"
+  [ -s $HOME/nix-config/.git/steam-frame-nix-template ] || fail "template marker gone"
+  [ "$(readlink $HOME/.config/home-manager)" = $HOME/nix-config ] || fail "template link"
+  [ -z "$(find $HOME -maxdepth 1 -name '.nix-config.clone.*')" ] || fail "temporary clone left"
+  # the rerun (a terminal): no Nix install, no template switch; gh auth
+  # login, the clone again, the switch
+  res=$(STEAM_FRAME_NIX_TTY=$root/tty inst --clone https://github.com/owner/private.git)
+  has "$res" "installed already"; hasnt "$res" "nix install"
+  has "$res" "(skipped)"
+  ! switched_to_template || fail "template switched again: $(cat $LOG)"
+  grep -qxF "gh auth login --hostname github.com --git-protocol https" $LOG || fail "no gh login: $(cat $LOG)"
+  [ "$(grep -c '^clone ' $LOG)" = 2 ] || fail "clone not retried: $(cat $LOG)"
+  has "$res" "hm switch --flake $HOME/nix-config -b"
+  clone_ok $HOME/nix-config main
+
+  # a changed template is used as it is
+  rm -rf $HOME/nix-config $HOME/.config/home-manager $GH_LOGIN; nohelper
+  inst --clone https://github.com/owner/private.git >/dev/null 2>&1 && fail "private repo cloned"
+  echo "# mine" >> $HOME/nix-config/home.nix
+  res=$(inst --clone github:owner/config)
+  has "$res" "using it as it is (not cloning)"
+  ! grep -q "^clone" $LOG || fail "cloned over a changed template"
+  has "$res" "hm switch --flake $HOME/nix-config -b"
+  grep -q "# mine" $HOME/nix-config/home.nix || fail "changed template touched"
+
+  # a failed switch to the clone: the clone stays, the rerun only switches
+  rm -rf $HOME/nix-config $HOME/.config/home-manager; nohelper
+  touch $root/fail-switch
+  res=$(inst --clone github:owner/config 2>&1) && fail "failed switch passed"
+  has "$res" "it continues with this switch"
+  clone_ok $HOME/nix-config main
+  rm $root/fail-switch
+  res=$(inst --clone github:owner/config)
+  has "$res" "(not cloning)"
+  ! grep -q "^clone" $LOG || fail "cloned again"
+  ! switched_to_template || fail "template switched again"
+  [ "$(grep -c '^hm ' $LOG)" = 1 ] || fail "switches: $(cat $LOG)"
   echo "G ok"
 
   # --- H: uninstall: Nix goes while programs from the store still run ---
