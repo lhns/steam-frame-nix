@@ -1,8 +1,9 @@
 // Gestures and suggestions for Steam's VR keyboard (vr-keyboard.nix),
 // injected into Steam's SharedJSContext (8080). The keyboard is a popup of
 // that context ("SteamVR - Keyboard"); everything works on its document.
-// mkPatch convention plus four more arguments: swipe-decoder.js,
-// textmodel.js, corrector.js and the dictionary text ("word<TAB>zipf*10\n...").
+// mkPatch convention plus five more arguments: swipe-decoder.js,
+// textmodel.js, corrector.js, the dictionary text ("word<TAB>zipf*10\n...")
+// and gesture-input.js.
 //
 // - Swipe: the laser arrives as touch events; Steam types the key a touch
 //   started on at release. Once a press leaves its first key we drop that
@@ -27,8 +28,8 @@
 // missing the keyboard stays stock. Only passive listeners; never blocks
 // Steam's events. Debugging: __sfuiSwipeLog, __sfuiSwipePaths
 // (scripts/vr-keyboard-replay.mjs).
-((find, sigs, opts, hooks, D, T, C, DICT) => {
-  const VERSION = 24;
+((find, sigs, opts, hooks, D, T, C, DICT, P) => {
+  const VERSION = 25;
   const G = window;
   const O = opts;
 
@@ -376,25 +377,18 @@
 
     // ---- gestures ------------------------------------------------------------------
     // down: { kind: 'strip', index } | { kind: 'backspace', ... } | { kind: 'key', ... }.
-    // Touch is read from touch events (they go on after Chromium's
-    // pointercancel); a mouse from pointer events, or mouse events if there
-    // are no pointer events.
-    let down = null, sawPointer = false;
+    // input (gesture-input.js): the events of the contact that started it
+    // (a touch per laser press, they go on after Chromium's pointercancel; a
+    // mouse from pointer events, or mouse events if there are none). The
+    // other controller's hover, a second press: ignored (Steam's, as stock).
+    let down = null;
+    const input = P.create();
     const keyOf = (t) => t?.closest?.('[data-key]');
     const stripIndexOf = (t) => {
       const el = t?.closest?.('#sfui-swipe-strip > div');
       return el && strip.contains(el) ? +el.dataset.index : -1;
     };
     const at = (x, y) => doc.elementFromPoint(x, y);
-    function point(e) {
-      if (e.type.startsWith('touch')) {
-        const t = e.type === 'touchend' || e.type === 'touchcancel' ? e.changedTouches[0] : e.touches[0];
-        return t && !(e.type === 'touchstart' && e.touches.length > 1) ? [t.clientX, t.clientY, t.target] : null;
-      }
-      if (e.type.startsWith('pointer')) { sawPointer = true; if (e.pointerType === 'touch') return null; }
-      else if (sawPointer) return null;
-      return [e.clientX, e.clientY, e.target];
-    }
     // Keep Steam from typing the pressed key at release and from its long press.
     function takeOver(d) {
       const inst = d.inst;
@@ -406,22 +400,24 @@
       } catch (e) { log('takeover-error', String(e)); }
     }
     function onDown(e) {
-      const p = point(e);
-      if (!p) return;
-      const [x, y, target] = p;
+      const c = input.read(e);
+      if (!c) return;
+      if (down?.active) clearTrail();            // its release was missed
+      down = start(c);
+      if (down) input.claim(c);
+    }
+    function start({ x, y, target }) {
       const si = stripIndexOf(target);
-      if (si !== -1) { down = { kind: 'strip', index: si }; return; }
+      if (si !== -1) return { kind: 'strip', index: si };
       const keyEl = keyOf(target), key = keyEl?.getAttribute('data-key'), inst = keyEl && kbInst(keyEl);
-      down = null;
-      if (!inst) return;
+      if (!inst) return null;
       hookInst(inst);
       if (key === 'Backspace' && O.pixelsPerChar > 0) {
-        down = { kind: 'backspace', keyEl, inst, x0: x, active: false, planned: 0,
+        return { kind: 'backspace', keyEl, inst, x0: x, active: false, planned: 0,
           g: model.dragStart({ px: O.pixelsPerChar, detentPx: O.wordDetentPixels }) };
-      } else if (O.swipe && isLetter(key)) {
-        const lay = currentLayout();
-        if (lay) down = { kind: 'key', key, keyEl, inst, lay, pts: [[x, y]], active: false };
       }
+      const lay = O.swipe && isLetter(key) && currentLayout();
+      return lay ? { kind: 'key', key, keyEl, inst, lay, pts: [[x, y]], active: false } : null;
     }
     // Backspace drag: a character per px of leftward travel (the first at px;
     // releasing before is Steam's tap), a detent of detentPx at a word border;
@@ -445,9 +441,9 @@
       }
     }
     function onMove(e) {
-      const p = point(e);
-      if (!p || !down || down.kind === 'strip') return;
-      const [x, y] = p;
+      const c = input.read(e);
+      if (!c || !down || down.kind === 'strip') return;
+      const { x, y } = c;
       if (down.kind === 'backspace') { backspaceMove(down, x); return; }
       const q = down.pts[down.pts.length - 1];
       if (Math.hypot(x - q[0], y - q[1]) < 2) return;
@@ -461,9 +457,9 @@
       drawTrail(down.pts, 'rgba(26, 159, 255, 0.75)');
     }
     function onUp(e) {
-      const p = point(e);
-      if (!p) return;
-      const [x, y] = p, d = down;
+      const c = input.read(e);
+      if (!c) return;
+      const { x, y } = c, d = down;
       down = null;
       if (d?.kind === 'strip') {                  // released anywhere on the strip: the button pressed
         if (strip.contains(at(x, y))) pick(d.index);
@@ -492,7 +488,7 @@
       commit(d.inst, results);
     }
     function onCancel(e) {
-      if (e.type === 'pointercancel' && e.pointerType === 'touch') return;   // touch events go on
+      if (!input.read(e)) return;                // another contact; Chromium's touch pointercancel
       if (down?.active) clearTrail();
       down = null;
     }

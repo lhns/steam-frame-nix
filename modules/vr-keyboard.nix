@@ -1,6 +1,7 @@
 # Swipe typing, suggestions and a Backspace drag for Steam's VR keyboard
 # (steamFrame.keyboard.vr; the extra keys are vr-keyboard-extra-keys.nix).
-# - vr-keyboard/patch.js (Steam UI, 8080): swipe gestures (swipe-decoder.js),
+# - vr-keyboard/patch.js (Steam UI, 8080): swipe gestures (swipe-decoder.js;
+#   gesture-input.js: the events of the laser that pressed),
 #   a model of what the keyboard typed (textmodel.js), suggestions (swipe
 #   alternatives, corrections and completions, corrector.js; never changing
 #   text by themselves), Backspace drag (left: delete with a detent at word
@@ -55,7 +56,7 @@ let
         inherit (cfg.backspaceDrag) wordDetentPixels;
         inherit (cfg) haptics;
       };
-      extraArgs = [ ./vr-keyboard/swipe-decoder.js ./vr-keyboard/textmodel.js ./vr-keyboard/corrector.js dictionaryJs ];
+      extraArgs = [ ./vr-keyboard/swipe-decoder.js ./vr-keyboard/textmodel.js ./vr-keyboard/corrector.js dictionaryJs ./vr-keyboard/gesture-input.js ];
     }} $out
     node --check $out
   '';

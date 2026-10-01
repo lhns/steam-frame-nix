@@ -101,6 +101,9 @@ default):
   release on the last. The word is typed with a space before it if needed
   (`text.autoSpace`); alternatives show in the strip. `'` and `-` are typed,
   not swiped.
+  With both controllers on the keyboard, a swipe follows only the
+  controller that pressed; the other one's laser doesn't enter its path,
+  and its presses meanwhile are plain taps.
 - **Suggestions** never change text by themselves: a finished tapped word
   that isn't in the dictionary gets corrections (itself first;
   `autocorrect`), a word being tapped gets completions (the typed letters
@@ -141,7 +144,9 @@ via its xdotool helper).
 changes them the keyboard stays stock (see
 [after a Steam update](ui-patches.md#after-a-steam-update)). Accented words
 of other languages are in the dictionary but only swipable where the layout
-has the letters.
+has the letters. With two controllers on the keyboard, SteamVR sometimes
+sends no laser movement for a press (seen for the controller that didn't
+own the keyboard's cursor just before): that press stays a tap.
 
 **Remove when** Steam's VR keyboard gets swipe typing and suggestions.
 
@@ -162,7 +167,8 @@ has the letters.
 - Found by signature (entries `vr-keyboard`, `vr-keyboard-panel`).
 
 **Tests:** `nix flake check` (checks `vr-keyboard`: text model, corrector,
-decoder accuracy on German + English) and `keyboard.vr.checks` for the
+decoder accuracy on German + English,
+gesture input from two controllers) and `keyboard.vr.checks` for the
 configured dictionary.
 
 **Debugging:** `window.__sfuiSwipeLog` and `__sfuiSwipePaths` in Steam's

@@ -104,12 +104,13 @@ modules/
     swipe-decoder.js           Steam (argument of patch.js): swipe path -> words
     textmodel.js               Steam (argument of patch.js): what the keyboard typed
     corrector.js               Steam (argument of patch.js): corrections, completions
+    gesture-input.js           Steam (argument of patch.js): a gesture's own events
     suggestions-panel/
       patch.js, unpatch.js     SteamVR: the strip as a panel above/below the keyboard
       relay.mjs                service vr-keyboard-relay: strip state Steam <-> SteamVR
     dictionary.nix, gen-dict.py  build: dictionary from wordfreq + Hunspell
     check.nix, tests/          test (also built before the patch): text model,
-                               corrector, swipe-decoder accuracy
+                               corrector, swipe-decoder accuracy, gesture input
   dashboard-windows.nix, dashboard-windows/     SteamVR: window scale/distance limits
   steam-close-button.nix, steam-close-button/   SteamVR: X on the Steam window
   window-curvature.nix, window-curvature/       SteamVR: curvature wheel
