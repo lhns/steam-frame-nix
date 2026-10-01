@@ -1,18 +1,11 @@
-# Launchers: an app's own desktop entry (from its Flatpak, Nix package or a
-# host file), rewritten with extra environment, options, wrappers, MIME
-# defaults and wallet access, under the same desktop ID in
-# ~/.local/share/applications, so it replaces the original in the KDE menu
-# and the "+" menu (which reads only that directory).
-# - Flatpak/host file entries only exist at runtime: steam-frame-nix-launchers
-#   (launchers/generate.sh + rewrite.awk) writes them to
-#   <session.runtimeDir>/steam-frame-nix/applications (tmpfs), on switch, at
-#   login and when Flatpak installs/updates apps (path unit); the Home
-#   Manager links point there.
-# - Package entries are rewritten at build time.
-# - keyring: one kwalletd6 for both sessions (the outer bus), the wallet's
-#   D-Bus names for Flatpaks, --password-store=kwallet6 for Electron.
-# Replaces the keyring module (steamFrame.keyring.*), whose options fail with
-# the new form.
+# Launchers (launchers.<desktop ID>, docs/launchers.md): the app's own desktop
+# entry, rewritten (launchers/rewrite.awk), under the same desktop ID in
+# ~/.local/share/applications. Package entries are rewritten at build time;
+# Flatpak and host file entries only exist at runtime, so
+# steam-frame-nix-launchers (launchers/generate.sh) writes them to
+# <session.runtimeDir>/steam-frame-nix/applications (tmpfs), where the Home
+# Manager links point. Replaces the keyring module (steamFrame.keyring.*),
+# whose options fail with the new form.
 { config, lib, pkgs, ... }:
 let
   cfg = config.steamFrame.launchers;

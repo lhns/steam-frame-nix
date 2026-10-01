@@ -1,24 +1,8 @@
-# The VR dashboard's "+" menu (non-Steam programs). Steam lists them in GLib
-# hash-table order (random-looking). Steam UI patches in SharedJSContext, each
-# registered only when its option is set, reverted when unset (next switch):
-# - order/: sorts ScanForInstalledNonSteamApps() by name;
-# - pinned-desktop/: hides Desktop in the list, pins a proxy above/below it;
-# - launch/: wraps LaunchNonSteamApp (menu-only) to close the menu and/or
-#   debounce repeated launches;
-# - grid/: programs as a grid of tiles, optionally maxRows visible;
-# - show-all/: empties the list Steam hides without Developer Mode.
-# Tested with Steam client 1790377368.
-#
-# iconFallbacks (not a patch): Steam resolves Icon= names only in hicolor (and
-# pixmaps), so Breeze-only icons (Konsole, KDE System Settings) are missing.
-# Home Manager links a fixed list of them from nixpkgs' Breeze into
-# ~/.local/share/icons/hicolor/scalable/apps (a missing name fails the
-# build); on switch, icon-fallbacks.sh --suggest only prints hints (names to
-# add, names no longer needed), and hicolor's mtime is bumped when the list
-# changed so a running Steam rescans. Until 2026-09 a script made the links
-# on switch (removed by steam-frame-nix-cleanup, or before checkLinkTargets
-# where Home Manager takes over). iconFallbacks was a list of names until
-# 2026-09; a list fails with a pointer to enable/extra (until ~2026-12).
+# The VR dashboard's "+" menu (launcherMenu.*, docs/launcher-menu.md): Steam
+# UI patches in SharedJSContext (launcher-menu/<patch>/), each registered
+# only while its option is set (its unpatch runs on the next switch), and the
+# icon fallbacks: Breeze icons linked into hicolor, hints from
+# launcher-menu/icon-fallbacks.sh. Tested with Steam client 1790377368.
 { config, lib, pkgs, ... }:
 let
   cfg = config.steamFrame.launcherMenu;
@@ -128,7 +112,8 @@ in {
         Hicolor links for program icons only Breeze has, so the "+" menu shows
         them (Steam looks only in hicolor).
       '';
-      # Formerly a list of names: fail with a message instead (see assertion).
+      # A list of names until 2026-09: fails with a pointer to enable/extra
+      # (see the assertion; until ~2026-12).
       type = lib.types.coercedTo (lib.types.listOf lib.types.str)
         (names: { legacyList = names; })
         (lib.types.submodule {
@@ -181,7 +166,8 @@ in {
     value.source = breezeIcon name;
   }) icons);
 
-  # The script's links of 2026-09 where Home Manager links now.
+  # Until 2026-09 a script made these links on switch: replaced by Home
+  # Manager's (steam-frame-nix-cleanup removes the rest).
   config.steamFrame.cleanup.migrateLinks = map (name: {
     path = "${iconDir}/scalable/apps/${name}.svg";
     target = "/nix/store/*-breeze-icons-*/share/icons/breeze/apps/*";
