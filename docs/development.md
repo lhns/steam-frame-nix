@@ -49,7 +49,7 @@ modules/
   cleanup.nix                  switch: `cleanup --orphans`; steam-frame-nix-cleanup on PATH
   cleanup/package.nix          build: install.sh as a command (cleanup, steamvr-debugger-arm, restart-check)
   cleanup/check.nix            test: install.sh cleanup and restart-check on fake home/runtime dirs,
-                               install --clone against local bare repos, uninstall on a fake /proc
+                               install (template, --clone) against local bare repos, uninstall on a fake /proc
   portal.nix                   Steam session portal config (session.portalFix)
   portal/check.nix             test: KDE FileChooser on by default, absent when disabled
   applications-menu.nix        applications.menu link for KDE apps (session.applicationsMenu)

@@ -92,10 +92,18 @@ it just switches again (`--yes` answers every question). Afterwards edit
 
 Your own config in a git repository: `--clone <git-url>` clones it into
 `~/nix-config` (`--dir <path>`, branch `--ref <branch>`) and installs it like
-`--flake <dir>`; an existing clone of the same repository is reused (after
-asking, `git pull --ff-only`). URLs: `git@github.com:owner/repo`,
-`https://...` or `github:owner/repo`; a private repository needs an SSH URL
-with your key or HTTPS credentials (e.g. `gh auth login`).
+`--flake <dir>`. URLs: `git@github.com:owner/repo`, `https://...` or
+`github:owner/repo`. Without a Home Manager configuration it first activates
+the template, whose git credential helpers then clone a private repository:
+your GitHub CLI login (`~/.config/gh`, kept by `uninstall`) or
+`~/.git-credentials`; git never asks for a password. If the clone fails, it
+offers `gh auth login` (browser or one-time code, works with 2FA); an SSH URL
+uses your key instead. The clone then replaces the template. Keep the
+template's `programs.git`/`programs.gh` lines (see [Usage](#usage)) in your
+config, or the helpers go with the switch to it. Only a missing
+`~/nix-config` or the unchanged template is replaced by the clone; anything
+else there is used as it is, without cloning. So re-running continues where
+it stopped (after a failed switch it just switches again).
 
 ```sh
 curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- install --clone git@github.com:owner/my-config
@@ -188,6 +196,12 @@ these two files ([`template/`](template), with more comments):
   home.stateVersion = "26.05";
   targets.genericLinux.enable = true;
   programs.home-manager.enable = true;
+  programs.git = {                    # SteamOS's git, Home Manager writes its config
+    enable = true;
+    package = null;
+    settings.credential.helper = "store";   # ~/.git-credentials
+  };
+  programs.gh.enable = true;          # github.com credentials: gh auth login
 
   steamFrame = {
     keyboard.layout = "de";               # XKB layout, Steam session
@@ -449,11 +463,11 @@ versions left: [docs/cleanup.md](docs/cleanup.md).
 - `experimental-features = nix-command flakes` in `~/.config/nix/nix.conf`
   if Nix was already there without flakes;
 - `~/nix-config` (your configuration, a git repository, from the template
-  with your user name filled into `flake.nix`) and the link
-  `~/.config/home-manager` to it, unless that exists or `--flake` is given
-  (with `--flake <dir>` or `--clone`, the link to that directory unless it
-  exists); uninstall removes the link, never the configuration (a clone
-  included);
+  with your user name filled into `flake.nix`; with `--clone` only until the
+  clone replaces it) and the link `~/.config/home-manager` to it, unless that
+  exists or `--flake` is given (with `--flake <dir>` or `--clone`, the link
+  to that directory unless it exists); uninstall removes the link, never
+  the configuration (a clone included);
 - dotfiles in Home Manager's way, renamed to `*.hm-backup-<time>` (kept);
 - `~/.local/state/home-manager`, `~/.local/state/nix` (profiles,
   generations), `~/.nix-profile`, `~/.nix-defexpr`, `~/.nix-channels`,
@@ -500,12 +514,13 @@ stops Home Manager's user services (reverting the UI patches), runs
 `cleanup --all`, runs `home-manager uninstall`, then removes Nix and the
 per-user Nix state (see [Set up by install.sh](#set-up-by-installsh)). If
 SteamVR is running, its key is restored when SteamVR stops (the closing
-message says so). Nix can't be removed while programs started from the Nix
-store run: `uninstall` lists them and waits; close them or run it right
-after a reboot. If Nix stays (in use, `--yes`, or its uninstaller failed),
-the rest still runs (the `~/.config/home-manager` link goes) except the
-per-user Nix state, and the closing message says to run `uninstall` again. Your configuration, `*.hm-backup-*` files, app data and
-Flatpaks stay.
+message says so). Programs started from the Nix store (often the Steam
+session itself) keep running until you log out or reboot: `uninstall` lists
+them and removes Nix without waiting. If Nix's uninstaller fails, the rest
+still runs (the `~/.config/home-manager` link goes) except the per-user Nix
+state, and the closing message says to reboot and run `uninstall` again.
+Your configuration, `*.hm-backup-*` files, app data, Flatpaks and the GitHub
+CLI login (`~/.config/gh`) stay.
 
 To drop steam-frame-nix from a Home Manager configuration you keep, first
 run `steam-frame-nix-cleanup --all`, then remove it and switch. Or set Home
