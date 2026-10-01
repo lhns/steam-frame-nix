@@ -417,6 +417,9 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
   grep -q "steamFrame" $HOME/nix-config/home.nix || fail "no template"
   [ -s $HOME/nix-config/.git/steam-frame-nix-template ] || fail "no template marker"
   ! $GIT -C $HOME/nix-config status --porcelain | grep -v '^A ' || fail "marker visible to git"
+  has "$res" "Your configuration: ~/nix-config (home.nix). After changing it, apply it with"
+  has "$res" "'home-manager switch' (from a terminal in the nested desktop"
+  for p in uncomment Konsole "install.sh status"; do hasnt "$res" "$p"; done
   # --clone replaces it (unchanged; active with the helpers: no switch to it)
   res=$(inst --clone github:owner/config)
   has "$res" "(skipped)"

@@ -567,9 +567,10 @@ cmd_install() {
   local pending=()
   mapfile -t pending < <(restart_pending)
 
-  local switch_cmd="home-manager switch --flake $ref" edit="your configuration"
+  local switch_cmd="home-manager switch --flake $ref" config=$ref
   if [[ -n $dir ]]; then
-    edit="$dir/home.nix"
+    config="$(tilde "$dir")"
+    [[ -e $dir/home.nix ]] && config+=" (home.nix)"
     if [[ $(readlink -f "$HM_CONFIG_LINK" 2>/dev/null) == "$dir" ]] \
        && [[ $ref == "$dir" || $ref == "$dir#$USER_NAME" ]]; then
       switch_cmd="home-manager switch"
@@ -584,17 +585,9 @@ cmd_install() {
   fi
   cat <<EOF
 
-Next steps:
-  - Open a new terminal so that nix and home-manager are on your PATH.
-  - Edit $edit (e.g. uncomment the steamFrame block),
-    then apply it with:
-      $switch_cmd
-    Run it from a terminal in the nested desktop. Flakes only see files
-    tracked by git: 'git add' new files first.
-  - Konsole in the Steam session's "+" menu needs Steam Developer Mode
-    (Steam Settings > System > Enable Developer Mode) or
-    steamFrame.launcherMenu.showAllApps = true.
-  - Status: install.sh status. Remove everything: install.sh uninstall
+Open a new terminal so that nix and home-manager are on your PATH.
+Your configuration: $config. After changing it, apply it with
+'$switch_cmd' (from a terminal in the nested desktop; new files need 'git add').
 EOF
 }
 
