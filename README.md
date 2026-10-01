@@ -94,16 +94,15 @@ Your own config in a git repository: `--clone <git-url>` clones it into
 `~/nix-config` (`--dir <path>`, branch `--ref <branch>`) and installs it like
 `--flake <dir>`. URLs: `git@github.com:owner/repo`, `https://...` or
 `github:owner/repo`. Without a Home Manager configuration it first activates
-the template, whose git credential helpers then clone a private repository:
-your GitHub CLI login (`~/.config/gh`, kept by `uninstall`) or
-`~/.git-credentials`; git never asks for a password. If the clone fails, it
-offers `gh auth login` (browser or one-time code, works with 2FA); an SSH URL
-uses your key instead. The clone then replaces the template. Keep the
-template's `programs.git`/`programs.gh` lines (see [Usage](#usage)) in your
-config, or the helpers go with the switch to it. Only a missing
-`~/nix-config` or the unchanged template is replaced by the clone; anything
-else there is used as it is, without cloning. So re-running continues where
-it stopped (after a failed switch it just switches again).
+the template, so a private repository clones with its git credential
+helpers: your GitHub CLI login (`~/.config/gh`, kept by `uninstall`) or
+`~/.git-credentials`, never a password prompt. If the clone fails, it offers
+`gh auth login` (browser or one-time code, works with 2FA); an SSH URL uses
+your key instead. Keep the template's `programs.git`/`programs.gh` lines
+(see [Usage](#usage)) in your config, or the helpers go with the switch to
+it. Only a missing `~/nix-config` or the unchanged template is replaced by
+the clone; anything else there is used as it is. So re-running continues
+where it stopped (after a failed switch it just switches again).
 
 ```sh
 curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- install --clone git@github.com:owner/my-config

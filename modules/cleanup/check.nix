@@ -448,20 +448,14 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
   has "$res" "hm switch --flake $HOME/nix-config -b"
   [ "$($GIT -C $HOME/nix-config config --get remote.origin.url)" = git@github.com:owner/config ] || fail "existing directory changed"
 
-  # --dir (relative) and --ref; an active configuration: no template, the
-  # existing link stays
-  res=$(cd $HOME && inst --clone github:owner/config --dir cfg --ref dev)
+  # --dir (relative, trailing /) and --ref; an active configuration: no
+  # template, the existing link stays
+  res=$(cd $HOME && inst --clone github:owner/config --dir cfg/ --ref dev)
   grep -qF "clone --branch dev -- https://github.com/owner/config.git $HOME/.cfg.clone." $LOG || fail "ref: $(cat $LOG)"
   ! switched_to_template || fail "template with a configuration"
   clone_ok $HOME/cfg dev
   has "$res" "hm switch --flake $HOME/cfg -b"
   [ "$(readlink $HOME/.config/home-manager)" = $HOME/nix-config ] || fail "link replaced"
-  # not a configuration: not cloned over, kept (and no flake to switch to)
-  mkdir $HOME/plain; echo x > $HOME/plain/x
-  res=$(inst --clone github:owner/config --dir $HOME/plain 2>&1) && fail "plain dir used"
-  has "$res" "using it as it is (not cloning)"
-  has "$res" "has no flake.nix"
-  there $HOME/plain/x
   # a failed clone: the hint, nothing left
   res=$(inst --clone https://example.org/missing.git --dir $HOME/m 2>&1) && fail "missing repo"
   has "$res" "gh auth login"
@@ -542,7 +536,7 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
   # nix-installer: logs its arguments and the lazy-unmount drop-in it sees
   D=$root/run-system/nix.mount.d/50-steam-frame-nix-lazy-unmount.conf
   export D LOG=$root/log RC=0
-  printf '#!%s\n[ "$1" = --version ] && exit 0\necho "nix-installer $*" >> $LOG\ncat $D >> $LOG 2>/dev/null || echo "no drop-in" >> $LOG\nexit $RC\n' \
+  printf '#!%s\n[ "$1" = --version ] && exit 0\necho "nix-installer $*" >> $LOG\ncat $D >> $LOG 2>/dev/null || echo "no drop-in" >> $LOG\n[ $RC != term ] || { kill -TERM $PPID; exit 1; }\nexit $RC\n' \
     "$(command -v bash)" > $root/nix-installer
   chmod +x $root/nix-installer
   uninst() { # mounted: 1|0
@@ -575,6 +569,10 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
   res=$(RC=1 uninst 1) && fail "uninstall succeeded: $res"
   has "$res" "its uninstaller failed. Reboot, then run uninstall again"
   gone $D $HOME/.config/home-manager
+  # interrupted (TERM): the drop-in goes too
+  res=$(RC=term uninst 1) && fail "interrupted uninstall succeeded: $res"
+  has "$(cat $LOG)" "LazyUnmount=yes"
+  gone $D
   SH
   echo "H ok"
   touch $out

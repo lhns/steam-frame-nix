@@ -10,9 +10,8 @@
   programs.home-manager.enable = true; # the `home-manager` command
 
   # git credentials for HTTPS (`install.sh install --clone` uses them):
-  # GitHub through the GitHub CLI (log in once: gh auth login, works with
-  # 2FA), other hosts from ~/.git-credentials. git itself is SteamOS's;
-  # Home Manager only writes its config. Remove to manage git yourself.
+  # github.com through the GitHub CLI (gh auth login), other hosts from
+  # ~/.git-credentials. git is SteamOS's; Home Manager writes its config.
   programs.git = {
     enable = true;
     package = null;

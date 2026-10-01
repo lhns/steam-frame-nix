@@ -7,7 +7,7 @@
 #   curl -fsSL https://steam-frame-nix.lhns.de | bash -s -- cleanup --all
 #
 # Run `install.sh --help` for details. Works from a file or piped into bash
-# (prompts read from /dev/tty; tests: STEAM_FRAME_NIX_TTY).
+# (prompts read from /dev/tty).
 set -euo pipefail
 
 TEMPLATE="${STEAM_FRAME_NIX_TEMPLATE:-github:lhns/steam-frame-nix}"
@@ -28,13 +28,14 @@ USER_NAME="$(id -un)"
 USER_ID="$(id -u)"
 OUTER_RUNTIME_DIR="${STEAM_FRAME_NIX_RUNTIME_DIR:-/run/user/$USER_ID}"
 SFN_PROC="${STEAM_FRAME_NIX_PROC:-/proc}"   # tests: a fake /proc
-SFN_TTY="${STEAM_FRAME_NIX_TTY:-/dev/tty}"
-# Runtime drop-in for the uninstall (tests: another directory).
+SFN_TTY="${STEAM_FRAME_NIX_TTY:-/dev/tty}"  # tests: a file
+# uninstall_nix: nix.mount detaches lazily (tests: another directory)
 NIX_MOUNT_DROPIN="${STEAM_FRAME_NIX_SYSTEM_RUNTIME:-/run/systemd/system}/nix.mount.d/50-steam-frame-nix-lazy-unmount.conf"
 
 ASSUME_YES=0
 RO_RELOCK=0
-CLONE_TMP=''
+CLONE_TMP=''      # an unfinished --clone, removed on exit
+NIX_DROPIN=0      # NIX_MOUNT_DROPIN written, removed on exit
 
 # --- output -----------------------------------------------------------------
 
@@ -63,12 +64,11 @@ Commands:
                              --dir (default ~/nix-config) on branch --ref,
                              then used like --flake <dir>. Without a Home
                              Manager configuration it activates the template
-                             first, so git clones with its credential helpers
-                             (gh, ~/.git-credentials); if that fails it offers
-                             'gh auth login'. Only a missing directory or the
-                             unchanged template is replaced by the clone;
-                             anything else there is used as it is (a rerun
-                             after a failed switch just switches)
+                             first, for git's credential helpers (gh,
+                             ~/.git-credentials), and offers 'gh auth login'
+                             if the clone fails. Only a missing directory or
+                             the unchanged template is replaced by the clone;
+                             anything else there is used as it is
         otherwise            ~/.config/home-manager
         neither exists       a new config in ~/nix-config from the
                              steam-frame-nix template, linked to
@@ -174,7 +174,8 @@ ro_relock() {
 }
 
 on_exit() {
-  [[ -z $CLONE_TMP ]] || rm -rf -- "$CLONE_TMP"   # an unfinished --clone
+  [[ -z $CLONE_TMP ]] || rm -rf -- "$CLONE_TMP"
+  nix_dropin_remove
   ro_relock
 }
 trap on_exit EXIT
@@ -248,8 +249,16 @@ install_nix() {
 
 nix_mounted() { mountpoint -q /nix 2>/dev/null; }
 
+nix_dropin_remove() {
+  (( NIX_DROPIN )) || return 0
+  NIX_DROPIN=0
+  sudo rm -f "$NIX_MOUNT_DROPIN"
+  sudo rmdir "${NIX_MOUNT_DROPIN%/*}" 2>/dev/null || true
+  sudo systemctl daemon-reload || true
+}
+
 uninstall_nix() {
-  local rc=0 bin='' lazy=0 users=()
+  local rc=0 bin='' users=()
   need_sudo
   ro_unlock
   step "Uninstalling Nix"
@@ -268,22 +277,16 @@ uninstall_nix() {
   # `systemctl stop nix.mount` would fail. With LazyUnmount= that stop
   # detaches /nix; the programs keep their open files until they exit.
   if nix_mounted; then
-    if sudo mkdir -p "${NIX_MOUNT_DROPIN%/*}" \
-       && printf '%s\n' '# steam-frame-nix: removing Nix detaches /nix while programs use it.' \
-            '[Mount]' 'LazyUnmount=yes' | sudo tee "$NIX_MOUNT_DROPIN" >/dev/null \
-       && sudo systemctl daemon-reload; then
-      lazy=1
-    else
-      warn "could not add $NIX_MOUNT_DROPIN; removing Nix fails if a program still uses /nix"
-    fi
+    NIX_DROPIN=1
+    sudo mkdir -p "${NIX_MOUNT_DROPIN%/*}" \
+      && printf '%s\n' '# steam-frame-nix: removing Nix detaches /nix while programs use it.' \
+           '[Mount]' 'LazyUnmount=yes' | sudo tee "$NIX_MOUNT_DROPIN" >/dev/null \
+      && sudo systemctl daemon-reload \
+      || warn "could not add $NIX_MOUNT_DROPIN; removing Nix fails if a program still uses /nix"
   fi
   sudo "$bin" uninstall --no-confirm || rc=$?
   [[ $bin == "$NIX_INSTALLER_BIN" ]] || sudo rm -f "$bin"
-  if (( lazy )); then
-    sudo rm -f "$NIX_MOUNT_DROPIN"
-    sudo rmdir "${NIX_MOUNT_DROPIN%/*}" 2>/dev/null || true
-    sudo systemctl daemon-reload || true
-  fi
+  nix_dropin_remove
   hash -r   # commands found in /nix are gone
   ro_relock
   return "$rc"
@@ -299,7 +302,7 @@ ensure_nix() {
       warn "Nix is installed ($NIX_RECEIPT) but not working"
       confirm "Uninstall and reinstall Nix?" || die "aborted"
       [[ -x $NIX_INSTALLER_BIN ]] || die "$NIX_INSTALLER_BIN is missing; can't uninstall the broken Nix"
-      uninstall_nix
+      uninstall_nix || die "the Nix uninstall failed (see above)"
     elif [[ -d /nix ]] && [[ -n $(ls -A /nix 2>/dev/null) ]]; then
       die "/nix exists but was not installed by nix-installer (no $NIX_RECEIPT); remove it or fix that Nix first"
     fi
@@ -326,23 +329,20 @@ set_let() { # file name value
   sed -i "s|^\( *$name = \)\"[^\"]*\";|\1\"$value\";|" "$file"
 }
 
-# Marker of a configuration create_config made: the hash of its files, in
-# .git (never a file of the configuration). `install --clone` replaces
-# such a configuration while it is unchanged (template_untouched).
+# create_config's marker in .git: the hash of the files it wrote, so
+# `install --clone` replaces the template only while it is unchanged.
 TEMPLATE_MARK=steam-frame-nix-template
 
-# Hash of a configuration's files (without .git).
-config_hash() {
+config_hash() { # dir: its files without .git
   (cd "$1" && find . -path ./.git -prune -o ! -type d -print0 | LC_ALL=C sort -z \
      | xargs -0 -r sha256sum | sha256sum) | cut -d' ' -f1
 }
 
-# Whether <dir> is the template as create_config made it: the marker
-# matches its files, at most one commit.
+# The marker matches the files, at most one commit.
 template_untouched() { # dir
   local m=$1/.git/$TEMPLATE_MARK n
   [[ -f $m ]] || return 1
-  n="$(git -C "$1" rev-list --count HEAD 2>/dev/null || echo 0)"
+  n="$(git_any -C "$1" rev-list --count HEAD 2>/dev/null || echo 0)"
   [[ $(<"$m") == "$(config_hash "$1")" ]] && (( n <= 1 ))
 }
 
@@ -370,16 +370,11 @@ create_config() { # dir [question]
   info "user $USER_NAME, home $HOME, system $system"
 
   # Flakes in a git repository only see tracked files.
-  if command -v git >/dev/null 2>&1; then
-    git -C "$dir" init -q
-    git -C "$dir" add -A
-    nix flake lock "$dir"
-    git -C "$dir" add flake.lock
-    config_hash "$dir" >"$dir/.git/$TEMPLATE_MARK"
-  else
-    warn "git not found; $dir is used as a plain directory"
-    nix flake lock "$dir"
-  fi
+  git_any -C "$dir" init -q
+  git_any -C "$dir" add -A
+  nix flake lock "$dir"
+  git_any -C "$dir" add flake.lock
+  config_hash "$dir" >"$dir/.git/$TEMPLATE_MARK"
 
   mkdir -p "${HM_CONFIG_LINK%/*}"
   ln -s "$dir" "$HM_CONFIG_LINK"
@@ -425,15 +420,11 @@ gh_login() { # url
   "$gh" auth login --hostname github.com --git-protocol https <"$SFN_TTY"
 }
 
-# --clone: <dir> missing (or empty) or the untouched template gets the clone
-# of <url>; anything else in <dir> is used as it is (also the clone of an
-# earlier run whose switch failed). Each step checks whether an earlier run
-# did it already:
-#   - without a Home Manager configuration (or with the template in <dir>
-#     linked), the template is created in <dir> and activated, so git has
-#     the credential helpers (skipped if they are there);
-#   - <url> is cloned next to <dir> (on failure the template stays active
-#     in <dir>); the template is removed and the clone takes its place.
+# --clone, resumable: a missing (or empty) <dir> or the untouched template
+# there gets the clone of <url>; anything else is used as it is (e.g. the
+# clone of an earlier run whose switch failed). Without an active Home
+# Manager configuration the template is activated first, for git's
+# credential helpers.
 clone_config() { # url dir ref
   local url dir=$2 ref=$3 tmpl=0 parent link=''
   url="$(clone_url "$1")"
@@ -445,21 +436,21 @@ clone_config() { # url dir ref
     tmpl=1
   fi
 
-  # The template, for git's credential helpers.
   if [[ -L $HM_CONFIG_LINK || -e $HM_CONFIG_LINK ]]; then
     link="$(readlink -f "$HM_CONFIG_LINK" || true)"
   fi
-  if (( ! tmpl )) && [[ -z $link ]]; then
-    create_config "$dir" "No Home Manager configuration found. First activate the steam-frame-nix template from $dir (git's credential helpers, e.g. 'gh auth login'), then replace it with the clone of $url?"
-    tmpl=1
-    hm_activate "$dir#$USER_NAME" || die "the switch to the template failed (see above); run install --clone again to continue"
-  elif (( tmpl )) && [[ -z $link || $link -ef $dir ]]; then
-    if [[ -z $link ]]; then
+  if [[ -z $link ]]; then
+    if (( tmpl )); then   # an earlier run's template; the link was removed
       mkdir -p "${HM_CONFIG_LINK%/*}"
       ln -s "$dir" "$HM_CONFIG_LINK"
       info "linked $HM_CONFIG_LINK -> $dir"
+    else
+      create_config "$dir" "No Home Manager configuration found. Activate the steam-frame-nix template in $dir first (for git's credentials), then replace it with the clone of $url?"
+      tmpl=1
     fi
-    if [[ -n $link ]] && hm_installed && git_has_helpers; then
+    hm_activate "$dir#$USER_NAME" || die "the switch to the template failed (see above); run install --clone again to continue"
+  elif (( tmpl )) && [[ $link -ef $dir ]]; then
+    if hm_installed && git_has_helpers; then
       step "The template in $dir is active with git's credential helpers (skipped)"
     else
       hm_activate "$dir#$USER_NAME" || die "the switch to the template failed (see above); run install --clone again to continue"
@@ -516,6 +507,8 @@ cmd_install() {
     clone_url "$clone" >/dev/null
     clone_dir=${clone_dir:-$DEFAULT_CONFIG_DIR}
     [[ $clone_dir == /* ]] || clone_dir=$PWD/$clone_dir
+    clone_dir=${clone_dir%"${clone_dir##*[!/]}"}   # no trailing /
+    [[ -n ${clone_dir%/*} ]] || die "--dir: '$clone_dir' is not below a directory"
   elif [[ -n $clone_dir || -n $clone_ref ]]; then
     die "install: --dir and --ref need --clone"
   fi

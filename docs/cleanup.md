@@ -46,27 +46,20 @@ desktop can't reach it with its own environment) and uses the installed
 `home-manager` if there is one, else Home Manager's `master`.
 
 `install --clone` takes SteamOS' `git`, else `nix run nixpkgs#git`, always
-with `GIT_TERMINAL_PROMPT=0`. Each step checks whether an earlier run did it
-(Nix works: not installed). The target directory is cloned into only when it
-is missing, empty or the untouched template: `create_config` writes the hash
-of the configuration's files (without `.git`) to
-`.git/steam-frame-nix-template`, and the template counts as untouched while
-the files still match and there is at most one commit. Anything else (the
-clone of an earlier run, a changed template, any other directory) is used
-as it is: no clone, `--ref` ignored, straight to the switch.
-
-Into an empty target, the template comes first, but only without a Home
-Manager configuration (no `~/.config/home-manager`); with one, git clones
-with that configuration's helpers. The switch to the template is skipped
-when it is linked, Home Manager is installed and git has a credential
-helper. The clone goes to `.<dir>.clone.XXXXXX` next to the target (removed
-if it fails, the template stays), replaces the template (checked unchanged
-again), then Home Manager switches to it. A failed switch leaves the clone,
-so a rerun only switches. `gh auth login --hostname github.com
---git-protocol https`, with the Home Manager profile's `gh`, is offered only
-for `https://github.com/` URLs and with a terminal. Tests: section G of
-`modules/cleanup/check.nix` (a logging git, a fake nix,
-`STEAM_FRAME_NIX_TTY` instead of `/dev/tty`).
+with `GIT_TERMINAL_PROMPT=0`. "The unchanged template": `create_config`
+writes the hash of the configuration's files (without `.git`) to
+`.git/steam-frame-nix-template`; it must still match, with at most one
+commit. Any other directory is used as it is, `--ref` ignored. The template
+is created and activated only into an empty target without
+`~/.config/home-manager`; with another configuration linked, git clones
+with that one's helpers. The switch to an existing template is skipped when
+it is linked, Home Manager is installed and git has a credential helper.
+The clone goes to `.<dir>.clone.XXXXXX` next to the target (removed on
+failure or exit), then replaces the template (checked unchanged again).
+`gh auth login --hostname github.com --git-protocol https`, with the Home
+Manager profile's `gh`, is offered only for `https://github.com/` URLs and
+with a terminal. Tests: section G of `modules/cleanup/check.nix` (a logging
+git, a fake nix, `STEAM_FRAME_NIX_TTY` instead of `/dev/tty`).
 
 `restart-check` (run by the session module's activation after
 `steamFrameUserServices`, and by `install` at its end) compares the
@@ -78,16 +71,16 @@ with the debugger drop-in, looks for a listener on port 8087 in
 `STEAM_FRAME_NIX_CGROUP` (section F of `modules/cleanup/check.nix`).
 
 `uninstall` removes Nix with nix-installer (from a root-owned copy in
-`/tmp`), whose `systemctl stop nix.mount` fails while a process uses `/nix`,
-and in the Steam session some always do until logout (e.g. Steam and
-xdg-desktop-portal, once they mapped a file from the store). So first a
-runtime drop-in, `/run/systemd/system/nix.mount.d/50-steam-frame-nix-lazy-unmount.conf`
+`/tmp`), whose `systemctl stop nix.mount` fails while a process uses `/nix`;
+in the Steam session some always do until logout (e.g. Steam and
+xdg-desktop-portal, once they mapped a file from the store). So a runtime
+drop-in, `/run/systemd/system/nix.mount.d/50-steam-frame-nix-lazy-unmount.conf`
 with `LazyUnmount=yes`, makes that stop detach `/nix` (`umount -l`): the
 programs keep their open files until they exit. The drop-in is removed
-afterwards. Before that, for information, it lists the processes whose
-`exe`, `cwd`, `root` or an `fd` links into `/nix`, or whose `maps` names a
-file there (only the user's own are readable), except the script itself,
-its subshells and its process group (the `curl | bash` pipeline). Tests:
-section H of `modules/cleanup/check.nix` (`STEAM_FRAME_NIX_PROC` as a fake
-`/proc`, `STEAM_FRAME_NIX_SYSTEM_RUNTIME` for the drop-in, a logging
-nix-installer).
+afterwards, also on failure or Ctrl+C. Listed first, for information: the
+processes whose `exe`, `cwd`, `root` or an `fd` links into `/nix`, or whose
+`maps` names a file there (only the user's own are readable), except the
+script itself, its subshells and its process group (the `curl | bash`
+pipeline). Tests: section H of `modules/cleanup/check.nix`
+(`STEAM_FRAME_NIX_PROC` as a fake `/proc`, `STEAM_FRAME_NIX_SYSTEM_RUNTIME`
+for the drop-in, a logging nix-installer).
