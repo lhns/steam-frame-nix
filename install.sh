@@ -713,7 +713,9 @@ clean_icons() {
 # --- Firefox user.js ---
 
 ff_keys() { sed -n 's/^[[:space:]]*user_pref(\("[^"]*"\),.*/\1/p' "$1" 2>/dev/null || true; }
-ff_in_use() { find /proc/[0-9]*/fd -lname "$1/.parentlock" -print -quit 2>/dev/null | grep -q .; }
+# Not `find | grep -q`: find fails on other users' /proc/<pid>/fd, and with
+# pipefail that would make every profile look unused.
+ff_in_use() { [[ -n $(find /proc/[0-9]*/fd -lname "$1/.parentlock" -print -quit 2>/dev/null) ]]; }
 
 clean_firefox() { # all
   local all=$1 prof name u t kind keys pats left
