@@ -28,25 +28,19 @@
 // re-patch and unpatch), saved on every change through the injector's
 // persistent store (window.__sfuiStore, patch registered with state = true:
 // ~/.local/state/steam-frame-nix/ui-patches/frame-controls.json), which
-// seeds a fresh page (SteamVR restart, reboot, reload). localStorage can't
-// do that: steamvr.service deletes ~/.cache/SteamVR (vrwebhelper's profile)
-// on every start (which also took version 4's localStorage copy with it).
+// seeds a fresh page (SteamVR restart, reboot, reload; localStorage doesn't
+// survive SteamVR starts, see docs/ui-patches.md#persistent-state).
 //
 // Long press: the dashboard only gets primary-button laser input (no right
 // click; thumbstick click arrives as nothing). Holding changes nothing; the
 // timer survives the laser leaving the control, an early release cancels it.
 // On completion the popup opens and the next click on that control is
 // swallowed so its stock action doesn't run.
-// Contract with window-curvature (whose controls own press-and-drag): its
-// elements carry class sfui-curv-ctl; a drag there dispatches a bubbling
-// CustomEvent 'sfui-curv-dragstart', which cancels the long press (a drag
-// always wins). When the ring shows, the press's drag threshold is raised to
-// CURV_RING_THRESHOLD x its own via
-// window.__sfuiWindowCurvature.scalePressDragThreshold(), still measured from
-// the press start: laser drift keeps the long press, a deliberate drag still
-// cancels it. On completion the long press takes the press over via
-// cancelPress() (no curvature click on release). Neither reads the other's
-// thresholds.
+// With window-curvature (docs/window-curvature.md#contract-for-other-patches):
+// 'sfui-curv-dragstart' cancels the long press (a drag always wins); when the
+// ring shows, scalePressDragThreshold(CURV_RING_THRESHOLD) lets laser drift
+// keep the long press; on completion cancelPress() takes the press over (no
+// curvature click on release).
 //
 // Popup: its own scene-graph panel so the bar/menu panels don't change. The
 // dashboard builds its scene graph from the DOM (vsg-transform attributes,

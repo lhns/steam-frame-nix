@@ -44,27 +44,12 @@
 // Sliding per step (at most every 30 ms). During a drag the dashboard's own
 // haptics (hover clicks on buttons the laser passes) are muted.
 //
-// Contract with other patches (e.g. frame-controls' long press); this patch
-// owns press-and-drag on its controls:
-//   - Every element it drives has the class `sfui-curv-ctl`.
-//   - When a press becomes a drag (opts.dragThresholdPixels px vertical from
-//     where the press started) it dispatches a bubbling CustomEvent
-//     `sfui-curv-dragstart` on the element (detail { frameID, where: 'menu' |
-//     'bar' }); when that drag ends (release or cancelPress),
-//     `sfui-curv-dragend`.
-//   - window.__sfuiWindowCurvature.scalePressDragThreshold(factor) sets the
-//     current press's threshold to factor x opts.dragThresholdPixels, still
-//     measured from the press start, so small laser drift doesn't start a
-//     drag while a deliberate one still does; returns whether it applied
-//     (a press that is not yet a drag). The next press starts at 1x.
-//   - window.__sfuiWindowCurvature.cancelPress() ends the current press
-//     without its click (a drag keeps its value); returns whether a press
-//     was active.
-// A patch with its own gesture on these elements lets mousemove through while
-// undecided, drops its gesture on `sfui-curv-dragstart`, may raise the
-// threshold with scalePressDragThreshold() while its gesture is under way,
-// and calls cancelPress() when it takes the press over. Neither side reads
-// the other's thresholds or restores the other's state.
+// Contract with other patches (e.g. frame-controls' long press), documented
+// in docs/window-curvature.md#contract-for-other-patches: this patch owns
+// press-and-drag on its controls (class sfui-curv-ctl), dispatches
+// sfui-curv-dragstart / sfui-curv-dragend, and offers
+// scalePressDragThreshold(factor) and cancelPress() on
+// window.__sfuiWindowCurvature.
 //
 // Debugging: window.__sfuiWindowCurvature: dump(), hits (rewrite/haptic
 // counters), log, setValue(frameID, v), controls(), cancelPress(),
@@ -345,7 +330,6 @@ ${ROW}:last-child > .sfui-curv-ind { margin-bottom: -14px; }
       c.el?.dispatchEvent(new CustomEvent(type, { bubbles: true, detail: { frameID: c.fid, where: c.where } }));
     } catch (e) { log(`${type} listener failed`, String(e)); }
   };
-
 
   const onMove = (e) => {
     const p = press;

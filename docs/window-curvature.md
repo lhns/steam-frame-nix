@@ -70,16 +70,23 @@ Debugging: `window.__sfuiWindowCurvature.dump()` (`.log` recent events).
 ### Contract for other patches
 
 For patches handling presses on the curvature controls (e.g. the window
-control bar's long press): every element the patch drives has class
-`sfui-curv-ctl`; when a press becomes a drag, a bubbling `CustomEvent`
-`sfui-curv-dragstart` (detail `{ frameID, where: 'menu' | 'bar' }`) is
-dispatched on it, and `sfui-curv-dragend` when it ends;
-`window.__sfuiWindowCurvature.scalePressDragThreshold(factor)` sets the
-current press's drag threshold to `factor` × `dragThresholdPixels` (from the
-press start; returns whether it applied, i.e. a press that is not yet a
-drag); `window.__sfuiWindowCurvature.cancelPress()` ends a press without its
-click. A patch with its own gesture lets `mousemove` through while
-undecided, drops its gesture on `sfui-curv-dragstart`, may raise the
-threshold while its gesture is under way, and calls `cancelPress()` when it
-takes the press over. The window control bar uses factor 3 once its
-progress ring shows.
+control bar's long press); the curvature patch owns press-and-drag on them:
+
+- Every element the patch drives has class `sfui-curv-ctl`.
+- When a press becomes a drag (`dragThresholdPixels` vertical from where the
+  press started), a bubbling `CustomEvent` `sfui-curv-dragstart` (detail
+  `{ frameID, where: 'menu' | 'bar' }`) is dispatched on the element, and
+  `sfui-curv-dragend` when that drag ends (release or `cancelPress()`).
+- `window.__sfuiWindowCurvature.scalePressDragThreshold(factor)` sets the
+  current press's drag threshold to `factor` × `dragThresholdPixels`, still
+  measured from the press start; returns whether it applied (a press that
+  is not yet a drag). The next press starts at 1×.
+- `window.__sfuiWindowCurvature.cancelPress()` ends the current press
+  without its click (a drag keeps its value); returns whether a press was
+  active.
+
+A patch with its own gesture lets `mousemove` through while undecided,
+drops its gesture on `sfui-curv-dragstart`, may raise the threshold while
+its gesture is under way, and calls `cancelPress()` when it takes the press
+over. Neither side reads the other's thresholds or restores the other's
+state. The window control bar uses factor 3 once its progress ring shows.
