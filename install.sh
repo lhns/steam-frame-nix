@@ -16,7 +16,6 @@ HM_FLAKE="${HM_FLAKE:-home-manager/master}"
 NIX_PROFILE_SCRIPT=/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
 NIX_RECEIPT=/nix/receipt.json
 NIX_INSTALLER_BIN=/nix/nix-installer
-FLAKES_LINE="experimental-features = nix-command flakes"
 
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 HM_CONFIG_LINK="$CONFIG_HOME/home-manager"
@@ -61,19 +60,14 @@ Commands:
         --flake given        that flake (a directory or a flake reference)
         --clone given        your config's git repository (git@host:owner/repo,
                              https://..., github:owner/repo), cloned into
-                             --dir (default ~/nix-config) on branch --ref,
-                             then used like --flake <dir>. Without a Home
-                             Manager configuration it activates the template
-                             first, for git's credential helpers (gh,
-                             ~/.git-credentials), and offers 'gh auth login'
-                             if the clone fails. Only a missing directory or
-                             the unchanged template is replaced by the clone;
-                             anything else there is used as it is
-        otherwise            ~/.config/home-manager, else the flake in
-                             ~/nix-config (linked there)
-        neither exists       a new config in ~/nix-config from the
-                             steam-frame-nix template, linked to
-                             ~/.config/home-manager
+                             --dir (default ~/nix-config) on branch --ref
+                             (anything there but the unchanged template is
+                             used as it is), then used like --flake <dir>.
+                             Private repositories: see the README
+        otherwise            ~/.config/home-manager; without it the flake
+                             in ~/nix-config, else a new config there from
+                             the steam-frame-nix template (either linked to
+                             ~/.config/home-manager)
       Existing dotfiles that conflict are renamed to *.hm-backup-<time>.
       Re-running just switches again.
 
@@ -87,8 +81,7 @@ Commands:
   cleanup [--dry-run] [--quiet] (--all | --orphans [--keep <artifact>]...)
       Remove what steam-frame-nix (any version) wrote outside the Nix store,
       only where it is provably its own; everything else is reported as
-      "left alone". Safe to re-run. Needs bash, coreutils, findutils,
-      grep, sed, awk, jq.
+      "left alone". Safe to re-run.
         --all        everything, incl. the dashboard patches' saved choices
                      (~/.local/state/steam-frame-nix/ui-patches). Use after
                      rolling back to a generation without steam-frame-nix,
@@ -98,9 +91,8 @@ Commands:
         --keep       still in use (with --orphans): debugger, screenshots, pet
         --dry-run    only print what would be done
         --quiet      print only actions, deferrals and warnings
-      SteamVR's VRWebHelper.DebuggerEnabled can't be changed while SteamVR
-      runs; it is then restored when SteamVR stops (a drop-in in
-      /run/user/<uid>, gone at reboot).
+      While SteamVR runs, VRWebHelper.DebuggerEnabled is restored when it
+      stops.
 
   status
       Show Nix, Home Manager and user service state, and what
@@ -111,10 +103,8 @@ Commands:
       set VRWebHelper.DebuggerEnabled until SteamVR stops.
 
   restart-check
-      Internal (run on every switch, and by install): name what of the
-      linked configuration only takes effect after a restart of the Steam
-      session or SteamVR (the keyboard layout, the SteamVR dashboard
-      patches).
+      Internal (run on every switch, and by install): name the settings
+      that wait for a restart of the Steam session or SteamVR.
 
 Options:
   --yes, -y      Don't ask; answer yes to every question.
@@ -211,17 +201,18 @@ nix_features() {
   env -u NIX_CONFIG nix config show experimental-features 2>/dev/null
 }
 
-receipt_planner() { jq -r '.planner.planner // empty' "$NIX_RECEIPT" 2>/dev/null; }
-
-# systemctl --user of the outer (Steam/VR) session; the nested desktop
-# can't reach the user manager with its own environment.
-outer_systemctl() {
-  XDG_RUNTIME_DIR="$OUTER_RUNTIME_DIR" \
-    DBUS_SESSION_BUS_ADDRESS="unix:path=$OUTER_RUNTIME_DIR/bus" \
-    /usr/bin/systemctl --user "$@"
+# systemctl --user of the outer (Steam/VR) session: the nested desktop
+# can't reach the user manager with its own environment. Fails if it isn't
+# reachable. Tests: STEAM_FRAME_NIX_SYSTEMCTL.
+user_systemctl() {
+  if [[ -n ${STEAM_FRAME_NIX_SYSTEMCTL:-} ]]; then "$STEAM_FRAME_NIX_SYSTEMCTL" --user "$@"
+  elif [[ -S $OUTER_RUNTIME_DIR/bus && -x /usr/bin/systemctl ]]; then
+    XDG_RUNTIME_DIR="$OUTER_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="unix:path=$OUTER_RUNTIME_DIR/bus" \
+      /usr/bin/systemctl --user "$@"
+  else return 1; fi
 }
 
-outer_bus_ok() { [[ -S $OUTER_RUNTIME_DIR/bus && -x /usr/bin/systemctl ]]; }
+user_manager_ok() { user_systemctl --version >/dev/null 2>&1; }
 
 HM_PROFILE="${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/home-manager"
 hm_installed() { [[ -e $HM_PROFILE || -L $HM_PROFILE ]]; }
@@ -323,7 +314,7 @@ ensure_nix() {
   if [[ " $features " != *" flakes "* || " $features " != *" nix-command "* ]]; then
     step "Enabling flakes in $USER_NIX_CONF"
     mkdir -p "${USER_NIX_CONF%/*}"
-    printf '%s\n' "$FLAKES_LINE" >>"$USER_NIX_CONF"
+    echo "experimental-features = nix-command flakes" >>"$USER_NIX_CONF"
   fi
 }
 
@@ -378,9 +369,13 @@ create_config() { # dir [question]
   git_any -C "$dir" add flake.lock
   config_hash "$dir" >"$dir/.git/$TEMPLATE_MARK"
 
+  link_config "$dir"
+}
+
+link_config() { # dir
   mkdir -p "${HM_CONFIG_LINK%/*}"
-  ln -s "$dir" "$HM_CONFIG_LINK"
-  info "linked $HM_CONFIG_LINK -> $dir"
+  ln -s "$1" "$HM_CONFIG_LINK"
+  info "linked $HM_CONFIG_LINK -> $1"
 }
 
 # git, or Nix's when SteamOS has none (only after ensure_nix).
@@ -400,12 +395,6 @@ clone_url() {
   esac
 }
 
-# git with its credential helpers but without asking for a password.
-git_noprompt() {
-  local -x GIT_TERMINAL_PROMPT=0
-  git_any "$@"
-}
-
 # Whether git has a credential helper (the template's: gh, store).
 git_has_helpers() {
   git_any config --global --get-regexp '^credential\..*helper$' 2>/dev/null \
@@ -422,11 +411,8 @@ gh_login() { # url
   "$gh" auth login --hostname github.com --git-protocol https <"$SFN_TTY"
 }
 
-# --clone, resumable: a missing (or empty) <dir> or the untouched template
-# there gets the clone of <url>; anything else is used as it is (e.g. the
-# clone of an earlier run whose switch failed). Without an active Home
-# Manager configuration the template is activated first, for git's
-# credential helpers.
+# --clone, resumable: only a missing (or empty) <dir> or the untouched
+# template there gets the clone. The steps: docs/cleanup.md.
 clone_config() { # url dir ref
   local url dir=$2 ref=$3 tmpl=0 parent link=''
   url="$(clone_url "$1")"
@@ -443,9 +429,7 @@ clone_config() { # url dir ref
   fi
   if [[ -z $link ]]; then
     if (( tmpl )); then   # an earlier run's template; the link was removed
-      mkdir -p "${HM_CONFIG_LINK%/*}"
-      ln -s "$dir" "$HM_CONFIG_LINK"
-      info "linked $HM_CONFIG_LINK -> $dir"
+      link_config "$dir"
     else
       create_config "$dir" "No Home Manager configuration found. Activate the steam-frame-nix template in $dir first (for git's credentials), then replace it with the clone of $url?"
       tmpl=1
@@ -463,8 +447,9 @@ clone_config() { # url dir ref
   CLONE_TMP="$(mktemp -d "$parent/.${dir##*/}.clone.XXXXXX")"
   chmod "$(umask -S)" "$CLONE_TMP"
   step "Cloning $url"
-  if ! git_noprompt clone ${ref:+--branch "$ref"} -- "$url" "$CLONE_TMP" \
-     && ! { gh_login "$url" && git_noprompt clone ${ref:+--branch "$ref"} -- "$url" "$CLONE_TMP"; }; then
+  # Credential helpers only: git never asks for a password.
+  if ! GIT_TERMINAL_PROMPT=0 git_any clone ${ref:+--branch "$ref"} -- "$url" "$CLONE_TMP" \
+     && ! { gh_login "$url" && GIT_TERMINAL_PROMPT=0 git_any clone ${ref:+--branch "$ref"} -- "$url" "$CLONE_TMP"; }; then
     (( tmpl )) && warn "the steam-frame-nix template stays active in $dir; install --clone replaces it while it is unchanged"
     die "git clone failed. For a private repository log in to GitHub with \
 'gh auth login' or use an SSH URL (git@github.com:owner/repo) with a key \
@@ -536,11 +521,7 @@ cmd_install() {
       dir="$(cd "${flake%%#*}" && pwd -P)"
       [[ -e $dir/flake.nix ]] || die "$dir has no flake.nix"
       ref="$dir${flake#"${flake%%#*}"}"
-      if [[ ! -e $HM_CONFIG_LINK && ! -L $HM_CONFIG_LINK ]]; then
-        mkdir -p "${HM_CONFIG_LINK%/*}"
-        ln -s "$dir" "$HM_CONFIG_LINK"
-        info "linked $HM_CONFIG_LINK -> $dir"
-      fi
+      [[ -e $HM_CONFIG_LINK || -L $HM_CONFIG_LINK ]] || link_config "$dir"
     else
       ref=$flake
     fi
@@ -595,12 +576,8 @@ EOF
 
 # --- cleanup ----------------------------------------------------------------
 #
-# Every artifact any version of steam-frame-nix wrote outside the Nix store
-# and Home Manager's links, and how each is proven to be ours (the
-# clean_<artifact> functions below): docs/cleanup.md. Anything not proven
-# ours is reported as "left alone" and never touched. --orphans keeps what
-# the current configuration still uses (--keep ...); the Home Manager module
-# runs it on every switch.
+# One clean_<artifact> per artifact any version wrote outside the Nix store;
+# how each is proven ours: docs/cleanup.md. Anything else is "left alone".
 
 SFN_STATE="${XDG_STATE_HOME:-$HOME/.local/state}/steam-frame-nix"
 SFN_DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
@@ -631,13 +608,20 @@ declare -A CLEAN_GONE=()
 # Output; the header only before the first line (--quiet).
 c_line()  { if [[ -n $CLEAN_HEADER ]]; then step "$CLEAN_HEADER"; CLEAN_HEADER=''; fi; info "$1"; }
 c_do()    { CLEAN_ACTIONS=$((CLEAN_ACTIONS + 1)); if (( CLEAN_DRY )); then c_line "would $1"; return 1; fi; }
-c_done()  { c_line "$1"; }
 c_left()  { (( CLEAN_QUIET )) || c_line "left alone: $1"; }
 c_defer() { CLEAN_DEFERRED+=("$1"); c_line "deferred: $1"; }
 
 c_rm() { # path why
   c_do "remove $1 ($2)" || { CLEAN_GONE[$1]=1; return 0; }
-  rm -f -- "$1" && CLEAN_GONE[$1]=1 && c_done "removed $1 ($2)"
+  rm -f -- "$1" && CLEAN_GONE[$1]=1 && c_line "removed $1 ($2)"
+}
+
+# A link to <glob> is removed, any other link left alone.
+c_rm_link() { # path glob why
+  [[ -L $1 ]] || return 0
+  local t; t="$(readlink "$1")"
+  # shellcheck disable=SC2053  # $2 is a glob
+  if [[ $t == $2 ]]; then c_rm "$1" "$3"; else c_left "$1 (link to $t)"; fi
 }
 
 # Empty, or will be once the planned removals are done (dry run).
@@ -651,7 +635,7 @@ c_empty_after() {
 c_rmdir() { # dir: removed if empty (after the planned removals)
   [[ -d $1 && ! -L $1 ]] && c_empty_after "$1" || return 0
   c_do "remove empty directory $1" || { CLEAN_GONE[$1]=1; return 0; }
-  rmdir -- "$1" && CLEAN_GONE[$1]=1 && c_done "removed empty directory $1"
+  rmdir -- "$1" && CLEAN_GONE[$1]=1 && c_line "removed empty directory $1"
 }
 
 # Not fed through a pipe: a pipe's subshell would lose CLEAN_ACTIONS and the
@@ -659,20 +643,13 @@ c_rmdir() { # dir: removed if empty (after the planned removals)
 c_write() { # path why content: replace the contents (same inode and mode)
   c_do "rewrite $1 ($2)" || return 0
   printf '%s\n' "$3" >"$1"
-  c_done "rewrote $1 ($2)"
-}
-
-# systemctl --user of the outer session (overridable for tests).
-c_systemctl() {
-  if [[ -n ${STEAM_FRAME_NIX_SYSTEMCTL:-} ]]; then "$STEAM_FRAME_NIX_SYSTEMCTL" --user "$@"
-  elif outer_bus_ok; then outer_systemctl "$@"
-  else return 1; fi
+  c_line "rewrote $1 ($2)"
 }
 
 # running | stopped | unknown
 steamvr_state() {
   local s
-  if s="$(c_systemctl show -p ActiveState --value steamvr.service 2>/dev/null)" && [[ -n $s ]]; then
+  if s="$(user_systemctl show -p ActiveState --value steamvr.service 2>/dev/null)" && [[ -n $s ]]; then
     case $s in inactive|failed) echo stopped ;; *) echo running ;; esac
   elif pgrep -u "$USER_ID" -x vrserver >/dev/null 2>&1; then echo running
   else echo unknown; fi
@@ -740,15 +717,15 @@ debugger_ensure_hook() {
     if c_do "write the restore script $DEBUGGER_RESTORE"; then
       mkdir -p "$SFN_RUNTIME"
       debugger_restore_script >"$DEBUGGER_RESTORE"
-      c_done "wrote the restore script $DEBUGGER_RESTORE"
+      c_line "wrote the restore script $DEBUGGER_RESTORE"
     fi
   fi
   if [[ $(cat "$DEBUGGER_DROPIN" 2>/dev/null) != "$(debugger_dropin)" ]]; then
     if c_do "write the runtime drop-in $DEBUGGER_DROPIN"; then
       mkdir -p "${DEBUGGER_DROPIN%/*}"
       debugger_dropin >"$DEBUGGER_DROPIN"
-      c_done "wrote the runtime drop-in $DEBUGGER_DROPIN"
-      c_systemctl daemon-reload || warn "could not reload the user manager; the restore on SteamVR stop needs: systemctl --user daemon-reload"
+      c_line "wrote the runtime drop-in $DEBUGGER_DROPIN"
+      user_systemctl daemon-reload || warn "could not reload the user manager; the restore on SteamVR stop needs: systemctl --user daemon-reload"
     fi
   fi
 }
@@ -762,7 +739,7 @@ debugger_remove_hook() {
   c_rmdir "${DEBUGGER_DROPIN%/*}"
   c_rmdir "$OUTER_RUNTIME_DIR/systemd/user"
   c_rmdir "$OUTER_RUNTIME_DIR/systemd"
-  (( CLEAN_DRY )) || c_systemctl daemon-reload || true
+  (( CLEAN_DRY )) || user_systemctl daemon-reload || true
   return 0
 }
 
@@ -817,7 +794,7 @@ clean_debugger() { # keep
     if c_do "migrate $DEBUGGER_MARKER_V1 to $DEBUGGER_ARMED (value before: absent)"; then
       printf 'absent\n' >"$DEBUGGER_ARMED"
       rm -f -- "$DEBUGGER_MARKER_V1"
-      c_done "migrated $DEBUGGER_MARKER_V1 to $DEBUGGER_ARMED (value before: absent)"
+      c_line "migrated $DEBUGGER_MARKER_V1 to $DEBUGGER_ARMED (value before: absent)"
     else
       CLEAN_GONE[$DEBUGGER_MARKER_V1]=1
     fi
@@ -851,7 +828,7 @@ clean_debugger() { # keep
   else
     # Running (or unknown): SteamVR rewrites the file from memory; restore
     # when it stops.
-    if [[ $state == unknown ]] && ! c_systemctl --version >/dev/null 2>&1; then
+    if [[ $state == unknown ]] && ! user_manager_ok; then
       c_defer "VRWebHelper.DebuggerEnabled ($VRSETTINGS): user manager not reachable; run this again from the Steam session or with SteamVR stopped"
       return 0
     fi
@@ -881,7 +858,7 @@ clean_icons() {
   # GTK (Steam) rescans a theme only when a theme dir's mtime changes.
   if [[ -d ${ICON_DIR%/*/*} && -z ${CLEAN_GONE[${ICON_DIR%/*/*}]:-} ]]; then
     if c_do "touch ${ICON_DIR%/*/*} (mtime only, so Steam rescans icons)"; then
-      touch -- "${ICON_DIR%/*/*}"; c_done "touched ${ICON_DIR%/*/*} (mtime only, so Steam rescans icons)"
+      touch -- "${ICON_DIR%/*/*}"; c_line "touched ${ICON_DIR%/*/*} (mtime only, so Steam rescans icons)"
     fi
   fi
   return 0
@@ -1025,30 +1002,17 @@ clean_launchers() {
 # --- screenshots link (tmpfs) ---
 
 clean_screenshots() { # keep
-  local l=$SFN_RUNTIME/screenshots
-  (( $1 )) && return 0
-  [[ -L $l ]] || return 0
-  if [[ $(readlink "$l") == */userdata/*/760/remote/250820/screenshots ]]; then
-    c_rm "$l" "link to the SteamVR screenshots"
-  else
-    c_left "$l (not a link to SteamVR screenshots)"
-  fi
+  (( $1 )) || c_rm_link "$SFN_RUNTIME/screenshots" '*/userdata/*/760/remote/250820/screenshots' \
+    "link to the SteamVR screenshots"
 }
 
 # --- VR pet "+" menu icon link (tmpfs) ---
 
 clean_pet() { # keep
-  local d=$SFN_RUNTIME/vr-pet l f
+  local d=$SFN_RUNTIME/vr-pet f
   (( $1 )) && return 0
   [[ -d $d && ! -L $d ]] || return 0
-  l=$d/icon.png
-  if [[ -L $l ]]; then
-    if [[ $(readlink "$l") == /nix/store/*-vr-pet-icons/*.png ]]; then
-      c_rm "$l" "link to the VR pet's \"+\" menu icon"
-    else
-      c_left "$l (not a link to a VR pet icon)"
-    fi
-  fi
+  c_rm_link "$d/icon.png" '/nix/store/*-vr-pet-icons/*.png' "link to the VR pet's \"+\" menu icon"
   while IFS= read -r -d '' f; do
     c_rm "$f" "the VR pet icon's lock or unfinished link"
   done < <(find "$d" -mindepth 1 -maxdepth 1 \( -name .lock -type f -empty -o -name '.icon.tmp.*' -type l \) -print0)
@@ -1120,17 +1084,9 @@ cmd_cleanup() {
 
 # --- what waits for a restart -------------------------------------------------
 #
-# Two settings are read only when their process starts, so a switch (or the
-# first install) can't apply them to the running session:
-# - the keyboard layout (keyboard-layout.nix: XKB_DEFAULT_* in a drop-in on
-#   gamescope-session.service), read by gamescope at its start;
-# - SteamVR's DevTools port (steamvr-debugger.nix: a Wants= drop-in on
-#   steamvr.service sets VRWebHelper.DebuggerEnabled before SteamVR starts),
-#   which the dashboard patches (VR pet, the keyboard's suggestion strip, ...)
-#   need.
-# Both are compared with the running session; neither can be applied at
-# runtime (gamescope sends its own keymap to Xwayland again, e.g. whenever
-# the VR keyboard types, and only a SteamVR start opens the port).
+# Read only at a process start, compared with the running session: the
+# keyboard layout (gamescope) and SteamVR's DevTools port (the dashboard
+# patches need it). See docs/cleanup.md.
 
 SFN_CGROUP="${STEAM_FRAME_NIX_CGROUP:-/sys/fs/cgroup}"
 LAYOUT_DROPIN="$USER_UNIT_DIR/gamescope-session.service.d/keyboard.conf"
@@ -1147,8 +1103,8 @@ unit_env() { # file name
 # (gamescope itself isn't: it has capabilities). Fails if unknown.
 session_xkb() { # LAYOUT|VARIANT
   local cg pid env found=1
-  [[ $(c_systemctl show -p ActiveState --value gamescope-session.service 2>/dev/null) == active ]] || return 1
-  cg="$(c_systemctl show -p ControlGroup --value gamescope-session.service 2>/dev/null)" && [[ -n $cg ]] || return 1
+  [[ $(user_systemctl show -p ActiveState --value gamescope-session.service 2>/dev/null) == active ]] || return 1
+  cg="$(user_systemctl show -p ControlGroup --value gamescope-session.service 2>/dev/null)" && [[ -n $cg ]] || return 1
   [[ -r $SFN_CGROUP$cg/cgroup.procs ]] || return 1
   while read -r pid; do
     env="$( { tr '\0' '\n' <"$SFN_PROC/$pid/environ"; } 2>/dev/null)" || continue
@@ -1218,12 +1174,12 @@ stop_hm_services() {
   local units=()
   mapfile -t units < <(hm_user_units)
   if (( ${#units[@]} == 0 )); then info "none found"; return 0; fi
-  if ! outer_bus_ok; then
+  if ! user_manager_ok; then
     warn "user manager not reachable at $OUTER_RUNTIME_DIR; not stopping: ${units[*]}"
     return 0
   fi
   info "${units[*]}"
-  outer_systemctl stop -- "${units[@]}" || warn "some units failed to stop"
+  user_systemctl stop -- "${units[@]}" || warn "some units failed to stop"
 }
 
 remove_hm() {
@@ -1245,18 +1201,14 @@ remove_hm() {
   printf 'y' | hm -I "nixpkgs=$nixpkgs" uninstall \
     || die "'home-manager uninstall' failed; fix the error and re-run (Nix was not touched)"
 
-  if outer_bus_ok; then
-    outer_systemctl daemon-reload || true
-    outer_systemctl reset-failed >/dev/null 2>&1 || true
-  fi
+  user_systemctl daemon-reload || true
+  user_systemctl reset-failed >/dev/null 2>&1 || true
 }
 
 # --- programs from the Nix store ---
 #
 # Listed before Nix goes, for information (uninstall_nix detaches /nix
-# lazily): their program, a library, an open file or their working
-# directory is in /nix. Only this user's processes are readable. This
-# script, its subshells and its curl | bash pipeline are skipped.
+# lazily). See docs/cleanup.md.
 
 proc_ppid() { # pid
   local k v
@@ -1419,7 +1371,7 @@ cmd_status() {
     info "not installed"
   fi
   if [[ -r $NIX_RECEIPT ]]; then
-    info "installer:  nix-installer, planner $(receipt_planner || echo '?')"
+    info "installer:  nix-installer, planner $(jq -r '.planner.planner // "?"' "$NIX_RECEIPT" 2>/dev/null || echo '?')"
   fi
   if command -v nix >/dev/null 2>&1; then
     features="$(nix_features || true)"
@@ -1452,9 +1404,9 @@ cmd_status() {
   mapfile -t units < <(hm_user_units)
   if (( ${#units[@]} == 0 )); then
     info "none"
-  elif outer_bus_ok; then
+  elif user_manager_ok; then
     for unit in "${units[@]}"; do
-      info "$(printf '%-30s %s' "$unit" "$(outer_systemctl is-active "$unit" 2>/dev/null || true)")"
+      info "$(printf '%-30s %s' "$unit" "$(user_systemctl is-active "$unit" 2>/dev/null || true)")"
     done
   else
     info "user manager not reachable at $OUTER_RUNTIME_DIR"
