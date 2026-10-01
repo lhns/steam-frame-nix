@@ -1,5 +1,5 @@
 # Cleanup of what steam-frame-nix writes outside the Nix store (install.sh
-# cleanup, see there for the list). Imported by every module.
+# cleanup; what and how: docs/cleanup.md). Imported by every module.
 # - steam-frame-nix-cleanup on PATH (e.g. `steam-frame-nix-cleanup --all`
 #   before removing steam-frame-nix from a configuration).
 # - On every switch, `cleanup --orphans` removes what the configuration no

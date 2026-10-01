@@ -67,7 +67,8 @@ Commands:
   cleanup [--dry-run] [--quiet] (--all | --orphans [--keep <artifact>]...)
       Remove what steam-frame-nix (any version) wrote outside the Nix store,
       only where it is provably its own; everything else is reported as
-      "left alone". Safe to re-run. Needs bash, coreutils, findutils, jq.
+      "left alone". Safe to re-run. Needs bash, coreutils, findutils,
+      grep, sed, awk, jq.
         --all        everything, incl. the dashboard patches' saved choices
                      (~/.local/state/steam-frame-nix/ui-patches). Use after
                      rolling back to a generation without steam-frame-nix,
@@ -384,41 +385,12 @@ EOF
 
 # --- cleanup ----------------------------------------------------------------
 #
-# Everything steam-frame-nix (any version) ever wrote outside the Nix store
-# and Home Manager's own links, and how it is proven to be ours:
-#
-#   debugger   VRWebHelper.DebuggerEnabled in steamvr.vrsettings. Proof:
-#              $SFN_STATE/steamvr-debugger.armed (holds the value before;
-#              older versions: the empty marker steamvr-debugger, value
-#              before = absent). Restored once SteamVR is stopped; while it
-#              runs a runtime drop-in restores it when SteamVR stops.
-#              Also the runtime drop-in and restore script themselves.
-#   icons      links hicolor/scalable/apps/<name>.svg -> Breeze in the store
-#              (the icon-fallbacks script of 2026-09; manifest
-#              $SFN_STATE/icon-fallbacks).
-#   firefox    user.js in Firefox profiles: links to
-#              /app/etc/firefox/steam-frame-nix-desktop-user.js (the
-#              wrapper's, while the desktop profile runs; left alone while
-#              the profile is in use), older links to *-firefox-*user.js and
-#              copies starting with FF_MARKER, and the values they left in
-#              prefs.js (only with Firefox closed).
-#   jellyfin   the hwdec shim entries in the Jellyfin Flatpak's user override
-#              (nix-flatpak), an empty override file, and the shim copy of
-#              earlier versions (marker $SFN_STATE/jellyfin-hwdec-shim).
-#   ui-state   the dashboard patches' saved choices
-#              ($SFN_STATE/ui-patches/<name>.json; --all only, never
-#              --orphans) and stray *.json.tmp files.
-#   launchers  entries of steamFrame.launchers in
-#              $OUTER_RUNTIME_DIR/steam-frame-nix/applications (tmpfs; --all
-#              only: the switch's own run removes those of removed launchers).
-#   screenshots  the link $OUTER_RUNTIME_DIR/steam-frame-nix/screenshots
-#              (tmpfs) to a SteamVR screenshot folder
-#              (*/userdata/<id>/760/remote/250820/screenshots).
-#   dirs       $SFN_STATE and $OUTER_RUNTIME_DIR/steam-frame-nix when empty.
-#
-# --orphans keeps what the current configuration still uses (--keep ...);
-# the Home Manager module runs it on every switch. Anything not proven ours
-# is reported as "left alone" and never touched.
+# Every artifact any version of steam-frame-nix wrote outside the Nix store
+# and Home Manager's links, and how each is proven to be ours (the
+# clean_<artifact> functions below): docs/cleanup.md. Anything not proven
+# ours is reported as "left alone" and never touched. --orphans keeps what
+# the current configuration still uses (--keep ...); the Home Manager module
+# runs it on every switch.
 
 SFN_STATE="${XDG_STATE_HOME:-$HOME/.local/state}/steam-frame-nix"
 SFN_DATA="${XDG_DATA_HOME:-$HOME/.local/share}"

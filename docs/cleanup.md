@@ -11,9 +11,9 @@ writes outside the Nix store, how to remove it, rollback and uninstall:
 imported by every module) is `install.sh cleanup`, so the same code runs
 with Nix (on every switch: `cleanup --orphans --keep <what the configuration
 still uses>`) and without it, from the script (bash, coreutils, findutils,
-jq, all in SteamOS' `/usr/bin`). Home Manager's `uninstall = true;` runs
-`cleanup --all` from the activation. `--quiet` prints only actions,
-deferrals and warnings.
+grep, sed, awk, jq, all in SteamOS' `/usr/bin`). Home Manager's
+`uninstall = true;` runs `cleanup --all` from the activation. `--quiet`
+prints only actions, deferrals and warnings.
 
 It removes an artifact only when it is proven to be its own; anything else
 is reported as "left alone" and never touched:
