@@ -64,7 +64,7 @@ Commands:
       Manager, uninstall Nix (unless --keep-nix) and remove per-user Nix
       leftovers. Your configuration directory is never deleted.
 
-  cleanup [--dry-run] (--all | --orphans [--keep <artifact>]...)
+  cleanup [--dry-run] [--quiet] (--all | --orphans [--keep <artifact>]...)
       Remove what steam-frame-nix (any version) wrote outside the Nix store,
       only where it is provably its own; everything else is reported as
       "left alone". Safe to re-run. Needs bash, coreutils, findutils, jq.
@@ -550,11 +550,10 @@ debugger_dropin() {
 }
 
 # Runtime drop-in + script so that stopping SteamVR restores the key, even
-# after Nix and Home Manager are gone. Returns 0 if it (would have) changed.
+# after Nix and Home Manager are gone. Best effort: called with `|| true`
+# (no errexit inside).
 debugger_ensure_hook() {
-  local changed=1
   if [[ $(cat "$DEBUGGER_RESTORE" 2>/dev/null) != "$(debugger_restore_script)" ]]; then
-    changed=0
     if c_do "write the restore script $DEBUGGER_RESTORE"; then
       mkdir -p "$SFN_RUNTIME"
       debugger_restore_script >"$DEBUGGER_RESTORE"
@@ -562,7 +561,6 @@ debugger_ensure_hook() {
     fi
   fi
   if [[ $(cat "$DEBUGGER_DROPIN" 2>/dev/null) != "$(debugger_dropin)" ]]; then
-    changed=0
     if c_do "write the runtime drop-in $DEBUGGER_DROPIN"; then
       mkdir -p "${DEBUGGER_DROPIN%/*}"
       debugger_dropin >"$DEBUGGER_DROPIN"
@@ -570,7 +568,6 @@ debugger_ensure_hook() {
       c_systemctl daemon-reload || warn "could not reload the user manager; the restore on SteamVR stop needs: systemctl --user daemon-reload"
     fi
   fi
-  return $changed
 }
 
 debugger_remove_hook() {
@@ -684,14 +681,13 @@ clean_debugger() { # keep
 # --- icon fallback links ---
 
 clean_icons() {
-  local l t removed=0
+  local l removed=0
   for l in "$ICON_DIR"/*.svg; do
     [[ -L $l ]] || continue
-    t="$(readlink "$l")"
-    case $t in
-      /nix/store/*-breeze-icons-*/share/icons/breeze/apps/*) c_rm "$l" "icon fallback link to Breeze"; removed=1 ;;
-      *-home-manager-files/*) ;;
-    esac
+    # Home Manager's own links (to *-home-manager-files) are left as they are.
+    if [[ $(readlink "$l") == /nix/store/*-breeze-icons-*/share/icons/breeze/apps/* ]]; then
+      c_rm "$l" "icon fallback link to Breeze"; removed=1
+    fi
   done
   [[ -e $ICON_MANIFEST ]] && c_rm "$ICON_MANIFEST" "icon fallback manifest" && removed=1
   (( removed )) || return 0
@@ -876,7 +872,7 @@ clean_ui_state() { # all
 }
 
 cmd_cleanup() {
-  local mode='' keep_debugger=0 keep_screenshots=0 keeps=0 k
+  local mode='' all=0 keep_debugger=0 keep_screenshots=0 keeps=0 k
   while (( $# )); do
     case $1 in
       --all) mode=all; shift ;;
@@ -898,6 +894,7 @@ cmd_cleanup() {
   [[ -n $mode ]] || die "cleanup: --all or --orphans is required (see --help)"
   [[ $mode == all && $keeps -gt 0 ]] && die "cleanup: --keep only goes with --orphans"
   need_not_root
+  [[ $mode == all ]] && all=1
 
   CLEAN_ACTIONS=0; CLEAN_DEFERRED=(); CLEAN_GONE=()
   CLEAN_HEADER="steam-frame-nix: cleaning up files outside Nix ($mode"
@@ -905,12 +902,12 @@ cmd_cleanup() {
   if (( ! CLEAN_QUIET )); then step "$CLEAN_HEADER"; CLEAN_HEADER=''; fi
   clean_debugger "$keep_debugger"
   clean_icons
-  clean_firefox "$([[ $mode == all ]] && echo 1 || echo 0)"
+  clean_firefox "$all"
   clean_jellyfin
-  clean_ui_state "$([[ $mode == all ]] && echo 1 || echo 0)"
+  clean_ui_state "$all"
   c_rmdir "$SFN_STATE"
   clean_screenshots "$keep_screenshots"
-  if [[ $mode == all ]]; then clean_launchers; c_rmdir "$SFN_RUNTIME"; fi
+  if (( all )); then clean_launchers; c_rmdir "$SFN_RUNTIME"; fi
   (( CLEAN_ACTIONS || ${#CLEAN_DEFERRED[@]} || CLEAN_QUIET )) || info "nothing to clean up"
   return 0
 }
