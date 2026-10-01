@@ -89,7 +89,10 @@ in {
     };
   };
 
+  # In a subshell: the outer session's environment must not leak into
+  # activation steps that run later.
   config.home.activation.steamFrameUserServices = lib.hm.dag.entryAfter [ "reloadSystemd" ] (''
+    (
     export XDG_RUNTIME_DIR=${lib.escapeShellArg cfg.runtimeDir} DBUS_SESSION_BUS_ADDRESS=${lib.escapeShellArg cfg.bus}
     run /usr/bin/systemctl --user daemon-reload
   '' + lib.optionalString (cfg.services.start != [ ]) ''
@@ -102,5 +105,7 @@ in {
     done
   '' + lib.optionalString (cfg.services.restart != [ ]) ''
     run /usr/bin/systemctl --user restart ${units cfg.services.restart}
+  '' + ''
+    )
   '');
 }
