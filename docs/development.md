@@ -151,6 +151,7 @@ they are kept even where a file name says more:
 | `steamvr-debugger` | `steamvrDebugger` | | `steamvr-webhelper-debugger` |
 | `launchers` | `launchers` | | `steam-frame-nix-launchers` (`.service`, `.path`) |
 | `screenshots` | `screenshots` | | `steam-frame-nix-screenshots` (`.service`, `.path`) |
+| `docker` | `docker` | | `docker` |
 
 Log of all patches:
 `journalctl --user -u steam-ui-patches -u steam-keyboard-patch -u vr-keyboard-relay -u vr-keyboard-controllers-relay`.
