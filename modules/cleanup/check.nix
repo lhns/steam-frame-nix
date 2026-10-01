@@ -5,6 +5,8 @@
 # Also `install.sh restart-check` (what waits for a session/SteamVR restart).
 # Also `install.sh install --clone` (argument parsing and the clone step),
 # against local bare repositories through a logging git, without network.
+# Also `install.sh uninstall` stopping before Nix while programs from the
+# Nix store run (a fake /proc).
 { pkgs }:
 let
   cleanup = pkgs.callPackage ./package.nix { };
@@ -385,5 +387,50 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
   res=$(inst --clone https://example.org/missing.git --dir $HOME/m 2>&1) && fail "missing repo"
   has "$res" "gh auth login"
   echo "G ok"
+
+  # --- H: uninstall: /nix in use ---
+  fresh h
+  export -f fail has hasnt gone
+  export root INSTALL
+  # In a process of its own: in the sandbox $$ is PID 1.
+  bash <<'SH'
+  set -euo pipefail
+  P=$root/proc
+  # pid name ppid pgid exe: a fake /proc entry
+  fake() {
+    mkdir -p $P/$1/fd; echo $2 > $P/$1/comm; printf '%s\0-x\0' $5 > $P/$1/cmdline
+    ln -sfn $5 $P/$1/exe; ln -sfn /home $P/$1/cwd
+    printf 'Name:\t%s\nPPid:\t%s\n' $2 $3 > $P/$1/status
+    echo "$1 ($2 x) S $3 $4 0" > $P/$1/stat
+    echo "00400000-00401000 r-xp 00000000 00:01 1 $5" > $P/$1/maps
+  }
+  fake $$ bash 30 $$ /usr/bin/bash                          # this uninstall
+  fake 30 zsh 1 30 /nix/store/a-zsh/bin/zsh                 # its terminal's shell
+  fake 31 curl 30 $$ /nix/store/b-curl/bin/curl             # its pipeline: skipped
+  fake 32 sort $$ 32 /nix/store/c-coreutils/bin/sort        # its subshell: skipped
+  fake 40 app 1 40 /usr/bin/app                             # a library from /nix
+  echo "7f00-7f01 r-xp 0 00:01 2 /nix/store/d-lib/lib/libx.so" >> $P/40/maps
+  fake 41 cwd 1 41 /usr/bin/cwd; ln -sfn /nix/store/e $P/41/cwd
+  fake 42 fd 1 42 /usr/bin/fd; ln -s /nix/store/f/file $P/42/fd/3
+  fake 43 clean 1 43 /usr/bin/clean
+  printf '#!/bin/sh\n' > $root/nix-installer; chmod +x $root/nix-installer
+  mkdir -p $HOME/.config; ln -s $HOME/cfg $HOME/.config/home-manager
+  uninst() {
+    (STEAM_FRAME_NIX_PROC=$P; . $INSTALL; ASSUME_YES=1 NIX_INSTALLER_BIN=$root/nix-installer
+     uninstall_nix() { echo "nix-installer uninstall"; }; cmd_uninstall) 2>&1
+  }
+  res=$(uninst) && fail "uninstall went on with /nix in use: $res"
+  echo "$res"
+  hasnt "$res" "nix-installer uninstall"
+  has "$res" "zsh (PID 30, started this uninstall"
+  for p in "app (PID 40)" "cwd (PID 41)" "fd (PID 42)" "Close these or reboot,"; do has "$res" "$p"; done
+  for p in "PID 31" "PID 32" "PID 43" "PID $$"; do hasnt "$res" "$p"; done
+  gone $HOME/.config/home-manager
+  # closed: Nix is removed
+  rm -r $P/30 $P/40 $P/41 $P/42; fake $$ bash 1 $$ /usr/bin/bash
+  res=$(uninst) || fail "uninstall failed: $res"
+  has "$res" "nix-installer uninstall"
+  SH
+  echo "H ok"
   touch $out
 ''

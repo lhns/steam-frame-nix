@@ -44,3 +44,18 @@ What `install.sh install` sets up is listed in the README under
 `systemctl --user` against the outer session's user manager (the nested
 desktop can't reach it with its own environment) and uses the installed
 `home-manager` if there is one, else Home Manager's `master`.
+
+`uninstall` removes Nix with nix-installer, which fails when it can't
+unmount `/nix` (`systemctl stop nix.mount`). Before that it scans `/proc`
+for processes using `/nix`: their `exe`, `cwd`, `root` or an `fd` links into
+`/nix`, or `maps` names a file there (e.g. an app started before the
+uninstall that mapped Home Manager's `mime.cache`). Only the user's own
+processes are readable; the Nix daemon is nix-installer's to stop. Skipped:
+the script itself, its subshells (descendants) and its process group (the
+`curl | bash` pipeline). Its ancestors are listed with a hint to run
+`uninstall` from another terminal. Nothing is killed: it asks to close them
+and re-checks on Enter, or (`--yes`, no terminal) stops before Nix. A bash
+from the Nix store re-executes the script with `/usr/bin/bash` first, and
+nix-installer runs from a copy outside `/nix`. The check uses
+`STEAM_FRAME_NIX_PROC` as a fake `/proc` (section H of
+`modules/cleanup/check.nix`).

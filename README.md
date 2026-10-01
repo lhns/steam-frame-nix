@@ -501,8 +501,10 @@ stops Home Manager's user services (reverting the UI patches), runs
 `cleanup --all`, runs `home-manager uninstall`, then removes Nix and the
 per-user Nix state (see [Set up by install.sh](#set-up-by-installsh)). If
 SteamVR is running, its key is restored when SteamVR stops (the closing
-message says so). If Nix's own uninstaller fails (e.g. something still uses
-`/nix`), the rest still runs (the `~/.config/home-manager` link goes) except
+message says so). Programs started from the Nix store keep `/nix` busy:
+before removing Nix, `uninstall` lists them and waits until you close them
+(with `--yes`, it stops instead); close them or run it right after a reboot.
+If Nix's own uninstaller fails anyway, the rest still runs (the `~/.config/home-manager` link goes) except
 the per-user Nix state, and the closing message says to reboot and run
 `uninstall` again. Your configuration, `*.hm-backup-*` files, app data and
 Flatpaks stay.

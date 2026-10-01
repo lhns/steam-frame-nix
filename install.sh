@@ -27,6 +27,7 @@ USER_UNIT_DIR="$CONFIG_HOME/systemd/user"
 USER_NAME="$(id -un)"
 USER_ID="$(id -u)"
 OUTER_RUNTIME_DIR="${STEAM_FRAME_NIX_RUNTIME_DIR:-/run/user/$USER_ID}"
+SFN_PROC="${STEAM_FRAME_NIX_PROC:-/proc}"   # tests: a fake /proc
 
 ASSUME_YES=0
 RO_RELOCK=0
@@ -69,8 +70,9 @@ Commands:
   uninstall [--yes] [--keep-nix]
       Stop Home Manager's user services, run 'cleanup --all', uninstall Home
       Manager, uninstall Nix (unless --keep-nix) and remove per-user Nix
-      leftovers. Your configuration directory (also a --clone) is never
-      deleted.
+      leftovers. Before removing Nix it lists the programs started from the
+      Nix store that still use /nix and waits until they are closed. Your
+      configuration directory (also a --clone) is never deleted.
 
   cleanup [--dry-run] [--quiet] (--all | --orphans [--keep <artifact>]...)
       Remove what steam-frame-nix (any version) wrote outside the Nix store,
@@ -232,11 +234,17 @@ install_nix() {
 }
 
 uninstall_nix() {
-  local rc=0
+  local rc=0 bin
   need_sudo
   ro_unlock
   step "Uninstalling Nix"
-  sudo "$NIX_INSTALLER_BIN" uninstall --no-confirm || rc=$?
+  # From a copy: the uninstaller running from /nix would keep /nix busy.
+  bin="$(mktemp)"
+  if ! { cp "$NIX_INSTALLER_BIN" "$bin" && chmod +x "$bin" && "$bin" --version >/dev/null 2>&1; }; then
+    rm -f "$bin"; bin=$NIX_INSTALLER_BIN
+  fi
+  sudo "$bin" uninstall --no-confirm || rc=$?
+  [[ $bin == "$NIX_INSTALLER_BIN" ]] || rm -f "$bin"
   ro_relock
   return "$rc"
 }
@@ -1018,7 +1026,6 @@ cmd_cleanup() {
 # runtime (gamescope sends its own keymap to Xwayland again, e.g. whenever
 # the VR keyboard types, and only a SteamVR start opens the port).
 
-SFN_PROC="${STEAM_FRAME_NIX_PROC:-/proc}"
 SFN_CGROUP="${STEAM_FRAME_NIX_CGROUP:-/sys/fs/cgroup}"
 LAYOUT_DROPIN="$USER_UNIT_DIR/gamescope-session.service.d/keyboard.conf"
 DEBUGGER_HM_DROPIN="$USER_UNIT_DIR/steamvr.service.d/webhelper-debugger.conf"
@@ -1139,37 +1146,68 @@ remove_hm() {
   fi
 }
 
-# Processes still running from /nix/store would keep /nix busy.
-stop_nix_processes() {
-  local skip=" " p=$$ pid exe pids=()
-  while [[ -n $p && $p -gt 1 ]]; do
-    skip+="$p "
-    p="$(awk '/^PPid:/ {print $2}' "/proc/$p/status" 2>/dev/null || true)"
-  done
-  for pid in /proc/[0-9]*; do
-    pid=${pid#/proc/}
-    [[ -O /proc/$pid && $skip != *" $pid "* ]] || continue
-    exe="$(readlink "/proc/$pid/exe" 2>/dev/null || true)"
-    [[ $exe == /nix/store/* ]] && pids+=("$pid")
-  done
-  (( ${#pids[@]} )) || return 0
+# --- /nix in use ---
+#
+# nix-installer can't unmount /nix while a process uses it: its program, a
+# library, an open file or its working directory in /nix. Only this user's
+# processes are readable (the uninstaller stops the Nix daemon itself). This
+# script, its subshells and its curl | bash pipeline are skipped; the
+# shells and apps it was started from are not.
 
-  step "Processes still running from /nix"
-  ps -o pid=,args= -p "$(IFS=,; echo "${pids[*]}")" | cut -c1-120 | sed 's/^/    /' || true
-  if confirm "Stop them (Nix can't be unmounted while they run)?"; then
-    kill -TERM "${pids[@]}" 2>/dev/null || true
-    sleep 2
-    for pid in "${pids[@]}"; do    # only if it's still the same /nix process
-      [[ $(readlink "/proc/$pid/exe" 2>/dev/null || true) == /nix/store/* ]] && kill -KILL "$pid" 2>/dev/null || true
-    done
-  else
-    warn "left running; the Nix uninstall may fail to unmount /nix"
-  fi
-  for p in $skip; do
-    [[ $(readlink "/proc/$p/exe" 2>/dev/null || true) == /nix/store/* ]] \
-      && warn "process $p (a parent shell) runs from /nix; if the uninstall can't unmount /nix, re-run from a terminal whose shell is /usr/bin/bash"
-  done
+proc_ppid() { # pid
+  local k v
+  { while read -r k v; do [[ $k == PPid: ]] && { echo "$v"; return 0; }; done <"$SFN_PROC/$1/status"; } 2>/dev/null
   return 0
+}
+
+proc_pgid() { # pid
+  local s
+  { read -r s <"$SFN_PROC/$1/stat"; } 2>/dev/null || return 0
+  s=${s##*) }               # after "pid (comm) "; comm may contain spaces
+  read -r _ _ s _ <<<"$s"   # state ppid pgrp
+  echo "$s"
+}
+
+# "<name> (PID <pid>)" per process using /nix.
+nix_users() {
+  local p pid name argv0 self=$$ pgid ancestors=" "
+  p=$self
+  while [[ $p =~ ^[0-9]+$ ]] && (( p > 1 )); do ancestors+="$p "; p="$(proc_ppid "$p")"; done
+  pgid="$(proc_pgid "$self")"
+  { find "$SFN_PROC"/[0-9]*/{exe,cwd,root} "$SFN_PROC"/[0-9]*/fd -maxdepth 1 -lname '/nix/*' 2>/dev/null || true
+    grep -ls '[[:space:]]/nix/' "$SFN_PROC"/[0-9]*/maps || true
+  } | while IFS= read -r p; do p=${p#"$SFN_PROC"/}; echo "${p%%/*}"; done | sort -un \
+    | while read -r pid; do
+      [[ $pid != "$self" ]] && { read -r name <"$SFN_PROC/$pid/comm"; } 2>/dev/null || continue
+      # argv[0]'s name says more than comm (often a thread name)
+      argv0=''; { IFS= read -r -d '' argv0 <"$SFN_PROC/$pid/cmdline"; } 2>/dev/null || true
+      [[ ${argv0##*/} == '' || ${argv0##*/} == exe ]] || name=${argv0##*/}
+      if [[ $ancestors == *" $pid "* ]]; then
+        echo "$name (PID $pid, started this uninstall: close it and run uninstall from another terminal)"
+        continue
+      fi
+      [[ -n $pgid && $(proc_pgid "$pid") == "$pgid" ]] && continue      # our pipeline
+      p=$pid
+      while [[ $p =~ ^[0-9]+$ && $p != "$self" ]] && (( p > 1 )); do p="$(proc_ppid "$p")"; done
+      [[ $p == "$self" ]] && continue                                    # our subshells
+      echo "$name (PID $pid)"
+    done
+}
+
+# Waits until no process uses /nix; fails if the user gives up (or can't be
+# asked: --yes, no terminal). Nothing is stopped automatically.
+nix_idle() {
+  local users=() reply
+  while :; do
+    mapfile -t users < <(nix_users)
+    (( ${#users[@]} )) || return 0
+    warn "programs started from the Nix store still use /nix, so Nix can't be removed:"
+    printf '  - %s\n' "${users[@]}" >&2
+    (( ! ASSUME_YES )) && have_tty || return 1
+    printf 'Close them, then press Enter to check again (a: abort) ' >/dev/tty
+    read -r reply </dev/tty || return 1
+    [[ $reply != [aA]* ]] || return 1
+  done
 }
 
 remove_path() {
@@ -1217,7 +1255,7 @@ cmd_uninstall() {
   need_not_root
 
   # A bash from Nix (e.g. via /usr/bin/env) would keep /nix busy.
-  if (( ! keep_nix )) && [[ $(readlink /proc/$$/exe) == /nix/store/* ]]; then
+  if (( ! keep_nix )) && [[ $(readlink "$SFN_PROC/$$/exe") == /nix/store/* ]]; then
     if [[ -f ${BASH_SOURCE[0]:-} && -x /usr/bin/bash ]]; then
       exec /usr/bin/bash "${BASH_SOURCE[0]}" uninstall "${orig_args[@]}"
     fi
@@ -1239,13 +1277,14 @@ cmd_uninstall() {
   # A failed Nix uninstall (e.g. /nix still busy) must not skip the rest:
   # Home Manager is gone by now, so its config link goes regardless; the
   # per-user Nix files stay for a Nix that may still be there.
-  local nix_failed=0
+  local nix_failed=''
   if (( ! keep_nix )); then
     if [[ -x $NIX_INSTALLER_BIN ]]; then
-      stop_nix_processes
-      if ! uninstall_nix; then
+      if ! nix_idle; then
+        nix_failed=busy keep_nix=1
+      elif ! uninstall_nix; then
         warn "the Nix uninstall failed (see above)"
-        nix_failed=1 keep_nix=1
+        nix_failed=failed keep_nix=1
       fi
     elif command -v nix >/dev/null 2>&1; then
       warn "Nix wasn't installed by nix-installer ($NIX_INSTALLER_BIN missing); not removing it"
@@ -1266,14 +1305,17 @@ Intentionally left in place:
   - app data, e.g. ~/.local/share/docker, Firefox profiles, and Flatpak apps
 Log out or reboot so running sessions drop the removed tweaks.
 EOF
-  if (( ${#CLEAN_DEFERRED[@]} || nix_failed )); then
+  if (( ${#CLEAN_DEFERRED[@]} )) || [[ -n $nix_failed ]]; then
     printf '\nNot done yet:\n'
     (( ${#CLEAN_DEFERRED[@]} )) && printf '  - %s\n' "${CLEAN_DEFERRED[@]}"
-    (( nix_failed )) && printf '%s\n' \
-      "  - Nix: its uninstaller failed. Reboot (so nothing uses /nix), then run" \
-      "    uninstall again; it also removes ~/.nix-profile and ~/.local/state/nix."
+    case $nix_failed in
+      busy) printf '%s\n' "  - Nix: still in use by the programs listed above. Close these or reboot," ;;
+      failed) printf '%s\n' "  - Nix: its uninstaller failed. Reboot (so nothing uses /nix)," ;;
+    esac
+    [[ -n $nix_failed ]] && printf '%s\n' \
+      "    then run uninstall again; it also removes ~/.nix-profile and ~/.local/state/nix."
   fi
-  (( ! nix_failed ))
+  [[ -z $nix_failed ]]
 }
 
 # --- status -----------------------------------------------------------------
