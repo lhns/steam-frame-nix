@@ -1,14 +1,7 @@
-# Rootless Docker as a systemd user service (home-manager can't install a
-# root daemon). SteamOS already provides what it needs: newuidmap/newgidmap
-# with their capabilities in /usr/bin, /etc/subuid and /etc/subgid entries
-# for the user, user namespaces and cgroup v2 delegation.
-# - The socket is in the outer runtime dir (session.runtimeDir): the nested
-#   desktop has its own XDG_RUNTIME_DIR, so the CLI gets DOCKER_HOST as a
-#   default in its wrapper instead of relying on $XDG_RUNTIME_DIR.
-# - Started, never restarted, on switch (session.services.start): a restart
-#   would stop running containers.
-# Nothing is written outside the store by this module; dockerd keeps its data
-# (images, containers, volumes) in ~/.local/share/docker (app data).
+# Rootless Docker as a systemd user service (docs/docker.md). The socket is
+# in the outer runtime dir, so the CLI gets it as a default DOCKER_HOST (the
+# nested desktop has its own XDG_RUNTIME_DIR); the unit is only started on
+# switch, as a restart would stop running containers.
 { config, lib, pkgs, ... }:
 let
   cfg = config.steamFrame.docker;

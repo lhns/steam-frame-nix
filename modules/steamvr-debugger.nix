@@ -1,27 +1,10 @@
-# SteamVR web helper debugger: DevTools of the dashboard (vrwebhelper) on
-# 127.0.0.1:8087, for dashboard patches. On automatically (mkDefault) when a
-# patch targets port 8087.
-#
-# The port opens only with VRWebHelper/DebuggerEnabled in
-# ~/.config/openvr/config/steamvr.vrsettings, which SteamVR rewrites from
-# memory, so it can't be a store link or be edited while SteamVR runs. The key
-# is set only while SteamVR runs:
-# - before each start, the steamvr-webhelper-debugger oneshot (drop-in
-#   Wants/After on steamvr.service; ExecStartPre= would be too late, vrserver
-#   starts in the unit's own chain) runs `install.sh steamvr-debugger-arm`:
-#   it keeps the key's value in $XDG_STATE_HOME/steam-frame-nix/
-#   steamvr-debugger.armed (a key already true is the user's own and left
-#   alone), sets the key, and writes a runtime drop-in
-#   ($XDG_RUNTIME_DIR/systemd/user/steamvr.service.d) with a /usr/bin-only
-#   restore script (daemon-reload only when it is new, i.e. once per boot);
-# - when SteamVR stops, that ExecStopPost= puts the value back and removes
-#   .armed. The runtime pieces don't depend on Nix, so this also works after
-#   a rollback or uninstall; they are gone at reboot, and .armed (the only
-#   trace after a power loss) is resolved by the next start or
-#   steam-frame-nix-cleanup.
-# Off: no unit and no drop-in; cleanup restores the key once SteamVR is
-# stopped. Developer Mode forwards the port to 0.0.0.0:8088 (docs/ui-patches.md,
-# "DevTools on the LAN"); our patches use 127.0.0.1 only.
+# SteamVR web helper debugger (docs/steamvr-debugger.md): DevTools of the
+# dashboard on 127.0.0.1:8087, on (mkDefault) when a patch targets port 8087.
+# The steamvr-webhelper-debugger oneshot runs `install.sh steamvr-debugger-arm`
+# before each SteamVR start, through a Wants/After drop-in on steamvr.service
+# (ExecStartPre= would be too late: vrserver starts in the unit's own chain).
+# The arm step reloads systemd only when its runtime drop-in is new (once per
+# boot). Off: no unit and no drop-in; cleanup restores the key.
 { config, lib, pkgs, ... }:
 let
   cfg = config.steamFrame.steamvrDebugger;

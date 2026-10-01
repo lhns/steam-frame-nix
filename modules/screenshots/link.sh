@@ -1,4 +1,4 @@
-# steam-frame-nix-screenshots (the module prepends runtime, steam): points
+# steam-frame-nix-screenshots (package.nix prepends runtime, steam): points
 # <runtime>/steam-frame-nix/screenshots (tmpfs), where ~/Pictures/<name>
 # links, to the SteamVR screenshot folder of the Steam account last logged
 # in:
