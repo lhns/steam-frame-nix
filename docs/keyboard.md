@@ -219,9 +219,9 @@ to the laser only. Depends on Steam and SteamVR UI internals (see
   animated `trigger` component (not yet verified). The
   `vr-keyboard-controllers-relay` user service carries these frames to
   Steam's `SharedJSContext`: up to ~90 Hz (45 Hz and more under load)
-  while a hand is within 10 cm of the keyboard, its laser is on it or its
-  trigger is pulled, else every 250 ms, and only while SteamVR shows the
-  keyboard. The laser hit matches SteamVR's laser to a few px.
+  while a hand's tip is within 10 cm of the keyboard or its trigger is
+  pulled, else every second; nothing while the keyboard is hidden. The
+  laser hit matches SteamVR's laser to a few px.
 - **Touch typing** (patch `vr-keyboard-touch`, `SharedJSContext`): per hand
   `tracker.js` turns the tip's path into press and release, then calls the
   keyboard's own `HandleTouchStart` / `HandleTouchEnd` with the key under

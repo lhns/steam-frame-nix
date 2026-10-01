@@ -8,8 +8,8 @@
 //   last                           the last frame (null: none / lost)
 // Each frame's hand points (tip, ray) get the keyboard page's px: x, y
 // (CSS px of the keyboard popup) and onKeyboard (inside the page), if the
-// keyboard popup exists. Frames come every ~11 ms while a hand is near the
-// keyboard, its laser on it or its trigger pulled, else every 250 ms, and
+// keyboard popup exists. Frames come at up to ~90 Hz while a hand's tip is
+// within 10 cm of the keyboard or its trigger is pulled, else every 1 s, and
 // only while SteamVR shows the keyboard (then one with keyboard null).
 (() => {
   const VERSION = 1;

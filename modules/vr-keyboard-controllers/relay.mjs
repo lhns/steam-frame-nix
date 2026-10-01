@@ -46,7 +46,9 @@ async function connect(side) {
     if (m.method === 'Runtime.bindingCalled' && m.params.name === cfg.binding) forward(m.params.payload);
   };
   const closed = new Promise((res) => { ws.onclose = res; });
-  if (cfg.binding) { send('Runtime.enable'); send('Runtime.addBinding', { name: cfg.binding }); }
+  // No Runtime.enable: bindings work without it, and it would stream the
+  // page's console and context events here.
+  if (cfg.binding) send('Runtime.addBinding', { name: cfg.binding });
   live[side] = (expression) => send('Runtime.evaluate', { expression });
   console.log(`${side}: connected`);
   await closed;
