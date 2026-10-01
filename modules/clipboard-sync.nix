@@ -54,7 +54,8 @@ in {
       desktop=() other=()
       for pid in $(${pkgs.procps}/bin/pgrep -x clipboard-sync || true); do
         # clipboard-sync forks workers; only look at top-level instances.
-        ppid="$(${pkgs.procps}/bin/ps -o ppid= -p "$pid" | tr -d ' ')"
+        # Gone since pgrep (e.g. an exited worker): skip it.
+        ppid="$(${pkgs.procps}/bin/ps -o ppid= -p "$pid" | tr -d ' ')" || continue
         [ "$(cat "/proc/$ppid/comm" 2>/dev/null)" = clipboard-sync ] && continue
         if [ "$(readlink "/proc/$pid/exe" 2>/dev/null)" != "$want" ]; then
           run kill "$pid" || true                                  # stale build
