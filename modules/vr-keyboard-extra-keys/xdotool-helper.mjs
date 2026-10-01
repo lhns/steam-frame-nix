@@ -6,6 +6,7 @@
 // On SIGTERM/SIGINT it reverts the patch (unpatch.js), so stopping the service
 // restores Steam's stock keyboard without restarting Steam.
 // usage: node xdotool-helper.mjs <patch.js> <unpatch.js> [xdotool]
+// Debugging (docs/keyboard.md): VRKBD_VERBOSE=1, VRKBD_DISPLAY.
 import { readFileSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { allowedCombo, allowedChar, allowedMod } from './allowlist.mjs';

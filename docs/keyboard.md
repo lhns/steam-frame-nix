@@ -48,7 +48,8 @@ Applies right away: no reboot or Steam restart needed, and it is re-applied
 after Steam restarts. Turning it off reverts the keyboard.
 
 **Layouts:** the character routing targets the German keymap; on others it
-is harmless, and Esc/Ctrl/Alt/arrows work regardless.
+is harmless (xdotool types those characters on any keymap), and
+Esc/Ctrl/Alt/arrows work regardless.
 
 **Security:** the helper service that presses the keys only accepts
 single-key Ctrl/Alt chords, the extra keys (and F1–F12 for
@@ -78,12 +79,15 @@ Steam client 1790377368 (UI build 11041156).
   keymap.
 - Problem characters (non-ASCII, AltGr/dead-key characters on the German
   keymap) are typed with `xdotool type`; everything else goes through
-  Steam's own text emulation. On other keymaps those characters are still
-  typed by xdotool, which is why the routing is harmless there.
+  Steam's own text emulation.
 - The new keys use Steam's key type Meta (the dark face); the Delete key
   takes Backspace's key type.
 - Found by signature (see
   [finders and signatures](ui-patches.md#finders-and-signatures)).
+
+**Debugging:** `journalctl --user -u steam-keyboard-patch` (injection
+results, rejected key requests, xdotool errors); `VRKBD_VERBOSE=1` in the
+service's environment logs every injection, `VRKBD_DISPLAY` replaces `:0`.
 
 ## Swipe and suggestions
 
