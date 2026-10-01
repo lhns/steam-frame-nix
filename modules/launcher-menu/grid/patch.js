@@ -23,7 +23,7 @@
 // unpatch.js (or a new VERSION/options) calls __sfuiLauncherGrid.stop().
 ((find, sigs, opts) => {
   const NAME = 'launcher-menu-grid';
-  const VERSION = 7;
+  const VERSION = 8;
   const COLS = opts.columns;
   const ROWS = opts.maxRows ?? null;
   if (!(Number.isInteger(COLS) && COLS >= 1) || !(ROWS === null || (Number.isInteger(ROWS) && ROWS >= 1)))
@@ -276,7 +276,7 @@ ${PINNED} > [role=button] * { flex-grow: 0 !important; text-align: center !impor
   const scan = () => {
     for (const [d, o] of docs) if (!d.defaultView || d.defaultView.closed) detach(d, o);
     for (const p of g_PopupManager.GetPopups())
-      if (/barpopup/.test(p.m_strName ?? '')) guard(attach)(p.window?.document);
+      if (/barpopup/.test(p.m_strName ?? '')) guard(() => attach(p.window?.document))();
   };
 
   const timer = setInterval(scan, 1000);
