@@ -273,7 +273,7 @@ which: [Repository layout](docs/development.md).
 | `steamFrame.uiPatches.patches.*.patch` | path | required | JS evaluated (awaited) in every matching page. |
 | `steamFrame.uiPatches.patches.*.unpatch` | null or path | `null` | JS evaluated when the service stops. |
 | `steamFrame.uiPatches.patches.*.state` | bool | `false` | One [persistent JSON value](docs/ui-patches.md#persistent-state) for the patch. |
-| `steamFrame.uiPatches.lib` | attrs, read-only | | Patch helpers (`mkPatch`), see [Finders and signatures](docs/ui-patches.md#mkpatch). |
+| `steamFrame.uiPatches.lib` | attrs, read-only | | Patch helpers (`mkPatch`), see [mkPatch](docs/ui-patches.md#mkpatch). |
 | `steamFrame.launcherMenu.sort` | bool | `false` | Sort the "+" menu alphabetically. |
 | `steamFrame.launcherMenu.pinDesktop` | null or `"top"` / `"bottom"` | `null` | Pin "Desktop" above/below the "+" menu's list; `null`: normal entry. |
 | `steamFrame.launcherMenu.closeOnLaunch` | bool | `false` | Close the "+" menu when a program is clicked. |

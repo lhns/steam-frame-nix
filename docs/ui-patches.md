@@ -53,9 +53,9 @@ it runs. What they have in common:
 
 - Each turns on the [SteamVR debugger](steamvr-debugger.md) (**the first
   time, restart SteamVR once**).
-- They depend on SteamVR UI internals: each is found by signature (its entry
-  in `modules/steam-ui-patches/lib/signatures.json` has the patch's name); after an update
-  that changes them the dashboard stays stock (see
+- They depend on SteamVR UI internals: each is found by signature (its
+  entry in `modules/steam-ui-patches/lib/signatures.json` has the patch's
+  name); after an update that changes them the dashboard stays stock (see
   [after a Steam update](#after-a-steam-update)). Tested with SteamVR build
   11008059.
 - All are laser-only: gamepad navigation sees the stock dashboard.
@@ -111,8 +111,9 @@ see [changes outside Nix](../README.md#changes-outside-nix-exceptions).
 ## Finders and signatures
 
 Webpack module ids and export names change with every Steam UI build, so
-patches never use them. `modules/steam-ui-patches/lib/finders.js` (like Decky Loader's
-`findModule`/`findInReactTree` or Vencord's `find`) locates by *signature*:
+patches never use them. `modules/steam-ui-patches/lib/finders.js` (like
+Decky Loader's `findModule`/`findInReactTree` or Vencord's `find`) locates
+by *signature*:
 
 - a **module** by strings/regexes in its factory source;
 - an **export** by shape: type, function source, arity, data properties,
@@ -127,8 +128,8 @@ candidates r_, xy` as the patch's result. Results are cached per page. The
 library also has `ensureStyle(doc, id, css)` and `logger(buffer)` (a capped
 debug log).
 
-Signatures live in `modules/steam-ui-patches/lib/signatures.json`, shared by patches and the
-offline checker. An entry can also list `expects` (strings the patch relies
+Signatures live in `modules/steam-ui-patches/lib/signatures.json`, shared
+by patches and the offline checker. An entry can also list `expects` (strings the patch relies
 on, checked offline only) or be `checkOnly` (anchors not used through the
 finder, checked offline only; with `stylesheet` instead of `module` it is
 matched against the bundle's CSS).
@@ -168,9 +169,9 @@ steamFrame.uiPatches.patches = [ {
 
 ### Shared method hooks
 
-`modules/steam-ui-patches/lib/hooks.js`, argument `hooks`, also `window.__sfuiHooks`: patches
-intercepting the same method (e.g. the dashboard mailbox's `SendMessage`,
-used by [dashboard windows](dashboard-windows.md#how-it-works) and
+`modules/steam-ui-patches/lib/hooks.js`, argument `hooks`, also
+`window.__sfuiHooks`: patches intercepting the same method (e.g. the
+dashboard mailbox's `SendMessage`, used by [dashboard windows](dashboard-windows.md#how-it-works) and
 [window curvature](window-curvature.md#how-it-works)) register named hooks;
 one wrapper per method runs them in registration order, so patches can be
 injected, upgraded and reverted in any order.
