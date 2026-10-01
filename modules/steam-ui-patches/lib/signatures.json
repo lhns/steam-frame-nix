@@ -405,7 +405,7 @@
           "expects": ["icon:{enum:38},invocation:2", "\"#FloatInWorld\"),icon:{enum:26},invocation:1", "\"#ReturnToDashboard\"),icon:{enum:27}",
             "\"#ViewInTheater\"),icon:{enum:28}", "icon:{enum:\"left\"==t?29:30}", "icon:{enum:22},icon_active:{enum:24}",
             "icon:{enum:40},icon_active:{enum:39}", "onlyVisibleIn:\"additional-options\"", "controlAdditionalOptionsItems.length>0",
-            "SetDockLocation(l.yWq.World)"]
+            ".docking.SetDockLocation(", ".World)}})"]
         },
         "closeIcon": {
           "checkOnly": true,
@@ -415,8 +415,8 @@
         "frameControls": {
           "checkOnly": true,
           "module": { "includes": ["legacy-frame-controls-additional-options-anchor-", "controlAdditionalOptionsItems.filter("] },
-          "expects": ["id:`legacy-frame-controls-${", "id:`legacy-frame-controls-additional-options-${", "parent_id:p,translation:{x:-34*",
-            "\"ButtonControl\"", "onClick:()=>{", "control:e,key:e.action_id", "const v={x:0,y:.15,z:.05}"]
+          "expects": ["id:`legacy-frame-controls-${", "id:`legacy-frame-controls-additional-options-${", "translation:{x:-34*",
+            "\"ButtonControl\"", "onClick:()=>{", "control:e,key:e.action_id", "={x:0,y:.15,z:.05}"]
         },
         "panel": {
           "checkOnly": true,
