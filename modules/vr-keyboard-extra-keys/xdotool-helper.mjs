@@ -52,6 +52,7 @@ async function session() {
   let id = 0;
   const pending = new Map();
   const call = (method, params = {}) => new Promise((res) => {
+    if (ws.readyState !== WebSocket.OPEN) return res({});   // closed: never answered
     const i = ++id; pending.set(i, res); ws.send(JSON.stringify({ id: i, method, params }));
   });
   let last;                                       // logged when it changes (e.g. a signature error once, not every 15 s)
