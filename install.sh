@@ -75,7 +75,7 @@ Commands:
                      or before removing it.
         --orphans    what the configuration no longer uses (run by the Home
                      Manager module on every switch); keeps saved choices.
-        --keep       still in use (with --orphans): debugger, screenshots
+        --keep       still in use (with --orphans): debugger, screenshots, pet
         --dry-run    only print what would be done
         --quiet      print only actions, deferrals and warnings
       SteamVR's VRWebHelper.DebuggerEnabled can't be changed while SteamVR
@@ -825,6 +825,26 @@ clean_screenshots() { # keep
   fi
 }
 
+# --- VR pet "+" menu icon link (tmpfs) ---
+
+clean_pet() { # keep
+  local d=$SFN_RUNTIME/vr-pet l f
+  (( $1 )) && return 0
+  [[ -d $d && ! -L $d ]] || return 0
+  l=$d/icon.png
+  if [[ -L $l ]]; then
+    if [[ $(readlink "$l") == /nix/store/*-vr-pet-icons/*.png ]]; then
+      c_rm "$l" "link to the VR pet's \"+\" menu icon"
+    else
+      c_left "$l (not a link to a VR pet icon)"
+    fi
+  fi
+  while IFS= read -r -d '' f; do
+    c_rm "$f" "the VR pet icon's lock or unfinished link"
+  done < <(find "$d" -mindepth 1 -maxdepth 1 \( -name .lock -type f -empty -o -name '.icon.tmp.*' -type l \) -print0)
+  c_rmdir "$d"
+}
+
 # --- dashboard patch state ---
 
 clean_ui_state() { # all
@@ -845,7 +865,7 @@ clean_ui_state() { # all
 }
 
 cmd_cleanup() {
-  local mode='' all=0 keep_debugger=0 keep_screenshots=0 keeps=0 k
+  local mode='' all=0 keep_debugger=0 keep_screenshots=0 keep_pet=0 keeps=0 k
   while (( $# )); do
     case $1 in
       --all) mode=all; shift ;;
@@ -858,7 +878,8 @@ cmd_cleanup() {
         case $k in
           debugger) keep_debugger=1 ;;
           screenshots) keep_screenshots=1 ;;
-          *) die "cleanup: unknown artifact '$k' for --keep (debugger, screenshots)" ;;
+          pet) keep_pet=1 ;;
+          *) die "cleanup: unknown artifact '$k' for --keep (debugger, screenshots, pet)" ;;
         esac ;;
       -h|--help) usage; exit 0 ;;
       *) die "cleanup: unknown option '$1' (see --help)" ;;
@@ -880,7 +901,9 @@ cmd_cleanup() {
   clean_ui_state "$all"
   c_rmdir "$SFN_STATE"
   clean_screenshots "$keep_screenshots"
-  if (( all )); then clean_launchers; c_rmdir "$SFN_RUNTIME"; fi
+  clean_pet "$keep_pet"
+  (( all )) && clean_launchers
+  c_rmdir "$SFN_RUNTIME"
   (( CLEAN_ACTIONS || ${#CLEAN_DEFERRED[@]} || CLEAN_QUIET )) || info "nothing to clean up"
   return 0
 }

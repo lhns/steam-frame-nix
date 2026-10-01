@@ -59,6 +59,9 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq ]; } ''
   : > $root/run/steam-frame-nix/applications/.lock
   ln -s $HOME/.local/share/Steam/userdata/1/760/remote/250820/screenshots \
     $root/run/steam-frame-nix/screenshots               # steamFrame.screenshots
+  mkdir -p $root/run/steam-frame-nix/vr-pet             # steamFrame.pet
+  ln -s /nix/store/00000000000000000000000000000000-vr-pet-icons/ginger.png $root/run/steam-frame-nix/vr-pet/icon.png
+  : > $root/run/steam-frame-nix/vr-pet/.lock
   echo old > $root/run/systemd/user/steamvr.service.d/50-steam-frame-nix-debugger.conf
   echo keep > $root/run/systemd/user/steamvr.service.d/other.conf
   ln -s /nix/store/00000000000000000000000000000000-breeze-icons-6.30.0/share/icons/breeze/apps/64/utilities-terminal.svg $I/utilities-terminal.svg
@@ -80,6 +83,7 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq ]; } ''
   mkdir -p $HOME/.var/app/org.jellyfin.JellyfinDesktop
   echo so > $HOME/.var/app/org.jellyfin.JellyfinDesktop/mpv-hwdec-shim.so; touch $S/jellyfin-hwdec-shim
   echo '{"a":1}' > $S/ui-patches/frame-controls.json; echo '{' > $S/ui-patches/vr-cat.json.tmp
+  echo '{"model":"shiba"}' > $S/ui-patches/vr-pet.json
   echo mine > $S/ui-patches/notes.txt
 
   exec 9< $F/d.busy/.parentlock                     # Firefox "uses" d.busy
@@ -118,7 +122,7 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq ]; } ''
   there $O/org.example.Other
   gone $HOME/.var/app/org.jellyfin.JellyfinDesktop/mpv-hwdec-shim.so $S/jellyfin-hwdec-shim
   # ui state: ours gone, foreign file kept (so the dirs stay)
-  gone $S/ui-patches/frame-controls.json $S/ui-patches/vr-cat.json.tmp
+  gone $S/ui-patches/frame-controls.json $S/ui-patches/vr-cat.json.tmp $S/ui-patches/vr-pet.json
   there $S/ui-patches/notes.txt
   noop --all
   exec 9<&-
@@ -200,9 +204,23 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq ]; } ''
   there $root/run/steam-frame-nix/screenshots
   res=$(steam-frame-nix-cleanup --orphans)
   gone $root/run/steam-frame-nix/screenshots
-  ln -s /elsewhere $root/run/steam-frame-nix/screenshots
+  mkdir -p $root/run/steam-frame-nix; ln -s /elsewhere $root/run/steam-frame-nix/screenshots
   res=$(steam-frame-nix-cleanup --orphans)
   has "$res" "left alone: $root/run/steam-frame-nix/screenshots"
+  rm -r $root/run/steam-frame-nix
+  # VR pet icon link: kept while used, a foreign link and file left alone
+  P=$root/run/steam-frame-nix/vr-pet; mkdir -p $P
+  ln -s /nix/store/00000000000000000000000000000000-vr-pet-icons/fox.png $P/icon.png
+  : > $P/.lock; ln -s /nix/store/00000000000000000000000000000000-vr-pet-icons/fox.png $P/.icon.tmp.123
+  res=$(steam-frame-nix-cleanup --orphans --keep pet)
+  there $P/icon.png $P/.lock $P/.icon.tmp.123
+  res=$(steam-frame-nix-cleanup --orphans)
+  gone $P
+  noop --orphans
+  mkdir -p $P; ln -s /elsewhere.png $P/icon.png; echo mine > $P/notes
+  res=$(steam-frame-nix-cleanup --orphans)
+  has "$res" "left alone: $P/icon.png"
+  there $P/icon.png $P/notes
   rm -r $root/run/steam-frame-nix
   ! steam-frame-nix-cleanup --all --keep debugger 2>/dev/null || fail "--all --keep accepted"
   ! steam-frame-nix-cleanup --orphans --keep bogus 2>/dev/null || fail "unknown --keep accepted"
