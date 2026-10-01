@@ -512,7 +512,7 @@ debugger_restore() { # vrsettings armed
     *) echo "steam-frame-nix: $armed holds '$prior', not a value it writes; left as is" >&2; return 1 ;;
   esac
   if [[ -f $f ]]; then
-    cur="$(jq -r '.VRWebHelper.DebuggerEnabled // "absent"' "$f")" || { echo "steam-frame-nix: can't read $f" >&2; return 1; }
+    cur="$(jq -r '.VRWebHelper.DebuggerEnabled | if . == null then "absent" else tostring end' "$f")" || { echo "steam-frame-nix: can't read $f" >&2; return 1; }
     if [[ $cur == true ]]; then
       tmp="$(mktemp "$f.XXXXXX")" || return 1
       if ! jq --indent 3 "$filter" "$f" >"$tmp"; then rm -f "$tmp"; return 1; fi
