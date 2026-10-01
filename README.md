@@ -463,7 +463,7 @@ versions left: [docs/cleanup.md](docs/cleanup.md).
 - `experimental-features = nix-command flakes` in `~/.config/nix/nix.conf`
   if Nix was already there without flakes;
 - `~/nix-config` (your configuration, a git repository, from the template
-  with your user name filled into `flake.nix`; with `--clone` only until the
+  with your user name filled into `flake.nix`, locked and committed; with `--clone` only until the
   clone replaces it) and the link `~/.config/home-manager` to it, unless that
   exists or `--flake` is given (with `--flake <dir>` or `--clone`, the link
   to that directory unless it exists); uninstall removes the link, never

@@ -49,7 +49,10 @@ desktop can't reach it with its own environment) and uses the installed
 with `GIT_TERMINAL_PROMPT=0`. "The unchanged template": `create_config`
 writes the hash of the configuration's files (without `.git`) to
 `.git/steam-frame-nix-template`; it must still match, with at most one
-commit. Any other directory is used as it is, `--ref` ignored. The template
+commit. `create_config` locks the template as `path:` (no "dirty" warning)
+and commits everything once, with the user's git identity or, missing
+that, `-c user.name=<user> -c user.email=<user>@localhost` for that commit
+only. Any other directory is used as it is, `--ref` ignored. The template
 is created and activated only into an empty target without
 `~/.config/home-manager`; with another configuration linked, git clones
 with that one's helpers. The switch to an existing template is skipped when

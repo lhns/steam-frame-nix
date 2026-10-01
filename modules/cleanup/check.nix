@@ -356,7 +356,7 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
     "store info") ;;
     "config show") echo "flakes nix-command" ;;
     "flake init") cp -r --no-preserve=mode "$TEMPLATE_SRC"/. . ;;
-    "flake lock") echo '{}' > "$3/flake.lock" ;;
+    "flake lock") [ "''${3#path:}" != "$3" ] || exit 1; echo '{}' > "''${3#path:}/flake.lock" ;;
     "eval --impure") printf aarch64-linux ;;
     *) echo "nix $*: not faked" >&2; exit 1 ;;
   esac
@@ -378,6 +378,7 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
   inst() {
     : > $LOG
     (. $INSTALL; ASSUME_YES=1; curl() { :; }; install_nix() { echo "nix install"; }
+     unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
      hm() {
        echo "hm $*" | tee -a $LOG
        if grep -qs 'credential.helper = "store"' "''${3%%#*}/home.nix"; then
@@ -416,7 +417,13 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
   has "$res" "hm switch --flake $HOME/nix-config#$(id -un) -b"
   grep -q "steamFrame" $HOME/nix-config/home.nix || fail "no template"
   [ -s $HOME/nix-config/.git/steam-frame-nix-template ] || fail "no template marker"
-  ! $GIT -C $HOME/nix-config status --porcelain | grep -v '^A ' || fail "marker visible to git"
+  # one commit with everything (git has no identity here: the fallback)
+  [ -z "$($GIT -C $HOME/nix-config status --porcelain)" ] || fail "template repository not clean"
+  [ "$($GIT -C $HOME/nix-config rev-list --count HEAD)" = 1 ] || fail "template: not one commit"
+  [ "$($GIT -C $HOME/nix-config ls-files | sort | tr '\n' ' ')" = "flake.lock flake.nix home.nix " ] || fail "template: files"
+  [ "$($GIT -C $HOME/nix-config log -1 --format='%an <%ae>')" = "$(id -un) <$(id -un)@localhost>" ] || fail "template: identity"
+  [ -z "$($GIT config --global user.name)" ] || fail "global identity written"
+  sfn template_untouched $HOME/nix-config || fail "template marker doesn't match"
   has "$res" "Your configuration: ~/nix-config (home.nix). After changing it, apply it with"
   has "$res" "'home-manager switch' (from a terminal in the nested desktop"
   for p in uncomment Konsole "install.sh status"; do hasnt "$res" "$p"; done
@@ -489,7 +496,10 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
 
   # a changed template is used as it is
   rm -rf $HOME/nix-config $HOME/.config/home-manager $GH_LOGIN; nohelper
+  $GIT config --global user.name "A User"; $GIT config --global user.email a@example.org
   inst --clone https://github.com/owner/private.git >/dev/null 2>&1 && fail "private repo cloned"
+  [ "$($GIT -C $HOME/nix-config log -1 --format='%an <%ae>')" = "A User <a@example.org>" ] || fail "template: the user's identity"
+  $GIT config --global --unset user.name; $GIT config --global --unset user.email
   echo "# mine" >> $HOME/nix-config/home.nix
   res=$(inst --clone github:owner/config)
   has "$res" "using it as it is (not cloning)"

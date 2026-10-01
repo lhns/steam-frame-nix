@@ -362,11 +362,16 @@ create_config() { # dir [question]
   set_let "$dir/flake.nix" system "$system"
   info "user $USER_NAME, home $HOME, system $system"
 
-  # Flakes in a git repository only see tracked files.
+  # Locked as a path (not the git repository: no "dirty" warning), then
+  # one commit, since flakes in a git repository only see tracked files.
+  nix flake lock "path:$dir"
   git_any -C "$dir" init -q
   git_any -C "$dir" add -A
-  nix flake lock "$dir"
-  git_any -C "$dir" add flake.lock
+  local id=()   # the user's git identity, else one for this commit only
+  git_any -C "$dir" config user.name >/dev/null || id+=(-c "user.name=$USER_NAME")
+  git_any -C "$dir" config user.email >/dev/null || id+=(-c "user.email=$USER_NAME@localhost")
+  git_any -C "$dir" "${id[@]}" -c commit.gpgsign=false commit -q --no-verify \
+    -m "Configuration from the steam-frame-nix template"
   config_hash "$dir" >"$dir/.git/$TEMPLATE_MARK"
 
   link_config "$dir"
