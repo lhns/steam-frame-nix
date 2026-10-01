@@ -345,7 +345,8 @@ cmd_install() {
 
   if [[ -n $dir ]] && git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     local untracked
-    untracked="$(git -C "$dir" ls-files --others --exclude-standard -- '*.nix' | head -n5)"
+    # || true: with pipefail, head closing the pipe early fails git.
+    untracked="$(git -C "$dir" ls-files --others --exclude-standard -- '*.nix' | head -n5 || true)"
     [[ -z $untracked ]] || warn "untracked files are invisible to the flake (git add them): $(echo "$untracked" | tr '\n' ' ')"
   fi
 
