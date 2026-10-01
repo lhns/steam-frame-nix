@@ -27,8 +27,9 @@ keep working.
 - **`prefs`:** further `about:config` values for every profile; they can
   also override the fixes above.
 - **`desktopProfile`** (`"desktop"`): in the nested desktop the launcher
-  uses this separate profile (not for "Open Profile Manager") (a normal Firefox profile with its own browser
-  data, created on first use). `null`: the default profile in both sessions.
+  (not its "Open Profile Manager" action) uses this separate profile, a
+  normal Firefox profile with its own browser data, created on first use.
+  `null`: the default profile in both sessions.
 - **`defaultBrowser`** (off): the launcher becomes the default for `http`,
   `https` and `text/html` (the launcher's `defaultFor`: Home Manager's
   `xdg.mimeApps`, which then owns `~/.config/mimeapps.list`).
@@ -76,10 +77,9 @@ The launcher's wrapper (`modules/firefox/wrapper.nix`) gets the entry's
 `flatpak run …` command line and, in the nested desktop, adds `--profile
 <desktopProfile>` (not to the profile manager action, `--ProfileManager`).
 The desktop profile undoes the fullscreen fix only while its Firefox runs:
-the wrapper links the
-profile's `user.js` to `/app/etc/firefox/steam-frame-nix-desktop-user.js`
-(a sandbox path) right before starting Firefox, waits for it, and once it
-has exited and the profile is no longer in use removes the link and the
+the wrapper links the profile's `user.js` to
+`/app/etc/firefox/steam-frame-nix-desktop-user.js` (a sandbox path) right
+before starting Firefox, waits for it, and once it has exited and the profile is no longer in use removes the link and the
 value Firefox stored from it in `prefs.js`. A second launch that just hands
 a URL to the running Firefox leaves both in place. After a crash (or if
 `prefs.js` can't be rewritten), the next launch or `steam-frame-nix-cleanup`
