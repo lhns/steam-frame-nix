@@ -15,8 +15,9 @@ their lifetime and what removes them; `steam-frame-nix-cleanup` removes every
 one of them (on each switch what the configuration no longer uses, `--all`
 for everything).
 
-All options live under `steamFrame.*`. The portal fix, the applications menu
-and clipboard sync are on by default; everything else is opt-in.
+All options live under `steamFrame.*`. The portal fix, the applications menu,
+clipboard sync and the "+" menu's icon fallbacks are on by default;
+everything else is opt-in.
 
 ## Features
 
@@ -34,7 +35,7 @@ configuration, limitations and how it works.
 **VR keyboard** ([docs/keyboard.md](docs/keyboard.md)):
 
 - [Extra keys](docs/keyboard.md#extra-keys) (`keyboard.vr.extraKeys`): Esc/Ctrl/Alt, arrows, Delete, Shift+Tab, real chords and AltGr/non-ASCII characters.
-- [Swipe and suggestions](docs/keyboard.md#swipe-and-suggestions) (`keyboard.vr`): swipe typing, corrections, completions, Backspace drag, F1–F12 on AltGr.
+- [Swipe and suggestions](docs/keyboard.md#swipe-and-suggestions) (`keyboard.vr`): swipe typing (also two-handed), corrections, completions, Backspace drag, F1–F12 in the strip on AltGr (`functionKeys`).
 - [Touch typing](docs/keyboard.md#touch-typing) (`keyboard.vr.touchTyping`): press keys by touching them with the controller's tip, both hands.
 
 **VR "+" menu** ([docs/launcher-menu.md](docs/launcher-menu.md)):
@@ -219,7 +220,7 @@ home-manager switch --flake .#steamos  # manual setup, from the flake's director
 In your own flake, add the input as above and
 `steam-frame-nix.homeManagerModules.default` to the modules. `default`
 imports all modules; single ones:
-`homeManagerModules.{session,portal,applications-menu,keyboard-layout,vr-keyboard-extra-keys,vr-keyboard,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,cleanup,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox,jellyfin,launchers,docker,screenshots,pet}`
+`homeManagerModules.{session,portal,applications-menu,keyboard-layout,vr-keyboard-extra-keys,vr-keyboard,vr-keyboard-controllers,vr-keyboard-touch,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,cleanup,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox,jellyfin,launchers,docker,screenshots,pet}`
 (`steam-keyboard-patch` and `keyring` still work as the former names of
 `vr-keyboard-extra-keys` and `launchers`). Every module imports `cleanup` (see
 [Changes outside Nix](#changes-outside-nix-exceptions)); which file is
@@ -250,23 +251,23 @@ which: [Repository layout](docs/development.md).
 | `steamFrame.keyboard.vr.dictionary.extraWordsFrequency` | number | `5.0` | Zipf frequency of extra words. |
 | `steamFrame.keyboard.vr.dictionary.extraWordFiles` | list of paths | `[ ]` | Word lists, `word` or `word<TAB>zipf` per line. |
 | `steamFrame.keyboard.vr.dictionary.excludeWords` | list of str | `[ ]` | Words never suggested. |
-| `steamFrame.keyboard.vr.text.bufferChars` | int | `128` | Characters of typed text the keyboard remembers. |
-| `steamFrame.keyboard.vr.text.resetAfterIdleSeconds` | int | `30` | Forget it after this long without typing (`0`: never). |
+| `steamFrame.keyboard.vr.text.bufferChars` | int, 8-1024 | `128` | Characters of typed text the keyboard remembers. |
+| `steamFrame.keyboard.vr.text.resetAfterIdleSeconds` | unsigned int (s) | `30` | Forget it after this long without typing (`0`: never). |
 | `steamFrame.keyboard.vr.text.autoSpace` | bool | `true` | Space before a swiped word after a known non-space character. |
 | `steamFrame.keyboard.vr.suggestions.position` | `"below"`, `"above"`, `"inside"` | `"above"` | Suggestion strip: SteamVR panel below/above the keyboard, or over its number row. |
-| `steamFrame.keyboard.vr.suggestions.count` | int | `6` | Suggestions shown. |
+| `steamFrame.keyboard.vr.suggestions.count` | int, 1-8 | `6` | Suggestions shown. |
 | `steamFrame.keyboard.vr.autocorrect.enable` | bool | `true` | Correction suggestions for finished tapped words not in the dictionary. |
-| `steamFrame.keyboard.vr.autocorrect.maxEditDistance` | int | `2` | Largest edit distance (neighbouring keys and swaps count 0.5). |
+| `steamFrame.keyboard.vr.autocorrect.maxEditDistance` | int, 1-3 | `2` | Largest edit distance (neighbouring keys and swaps count 0.5). |
 | `steamFrame.keyboard.vr.completions.enable` | bool | `true` | Completions of the tapped word. |
-| `steamFrame.keyboard.vr.completions.minPrefix` | int | `2` | Letters typed before completions show. |
+| `steamFrame.keyboard.vr.completions.minPrefix` | int, 1-10 | `2` | Letters typed before completions show. |
 | `steamFrame.keyboard.vr.backspaceDrag.enable` | bool | `true` | Backspace drag: left deletes, back right retypes. |
-| `steamFrame.keyboard.vr.backspaceDrag.pixelsPerChar` | int | `25` | Travel per character (keyboard px; a key is ~60). |
-| `steamFrame.keyboard.vr.backspaceDrag.wordDetentPixels` | int | `90` | Extra travel across a word border (`0`: none). |
+| `steamFrame.keyboard.vr.backspaceDrag.pixelsPerChar` | positive int (px) | `25` | Travel per character (keyboard px; a key is ~60). |
+| `steamFrame.keyboard.vr.backspaceDrag.wordDetentPixels` | unsigned int (px) | `90` | Extra travel across a word border (`0`: none). |
 | `steamFrame.keyboard.vr.functionKeys.enable` | bool | `false` | F1–F12 in the suggestion strip while AltGr (or Fn) is active, pressed with the active Ctrl/Alt/Shift; the suggestions come back unchanged. Needs `keyboard.vr.enable`, `keyboard.vr.extraKeys.enable` and `suggestions.position` `"above"`/`"below"`, see [VR keyboard](docs/keyboard.md#swipe-and-suggestions). |
 | `steamFrame.keyboard.vr.haptics` | bool | `true` | Haptic ticks for drag steps, word detents and picks. |
 | `steamFrame.keyboard.vr.checks` | package, read-only | | The tests, built with the configured dictionary. |
 | `steamFrame.keyboard.vr.touchTyping.enable` | bool | `false` | Touch typing: a key is pressed when a controller's tip touches it, both hands; the lasers work as before, see [Touch typing](docs/keyboard.md#touch-typing). |
-| `steamFrame.keyboard.vr.touchTyping.depth` | number | `0` | How far behind the keyboard's surface a touch registers (cm, `-2` to `5`; negative: in front). |
+| `steamFrame.keyboard.vr.touchTyping.depth` | number, -2 to 5 (cm) | `0` | How far behind the keyboard's surface a touch registers; negative: in front. |
 | `steamFrame.keyboard.vr.touchTyping.haptics` | bool | `true` | A haptic tick when a touch presses a key. |
 | `steamFrame.uiPatches.patches` | list of submodules | `[ ]` | Runtime patches of Steam's web UIs, see [UI patches](docs/ui-patches.md#defining-a-patch). Fields below. |
 | `steamFrame.uiPatches.patches.*.name` | str | required | Unique name (log). |
@@ -369,6 +370,9 @@ Removed options fail with the new form:
 | Old | New |
 |---|---|
 | `keyring.flatpaks.<id>`, `keyring.programs.<id>` | `launchers.<id>.keyring` (fields: [Launchers](docs/launchers.md#configuration)) |
+| `launcherMenu.iconFallbacks = [ … ]` (a list) | `iconFallbacks.enable` (`false` for none), `iconFallbacks.extra` |
+| `dashboard.windowCurvature.snap` | `dashboard.windowCurvature.detentPixels` |
+| `dashboard.windowCurvature.barDragRoom` | nothing (no longer needed) |
 
 ## Changes outside Nix (exceptions)
 
