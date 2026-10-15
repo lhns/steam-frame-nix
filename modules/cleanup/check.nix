@@ -43,7 +43,8 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
     I=$HOME/.local/share/icons/hicolor/scalable/apps
     F=$HOME/.var/app/org.mozilla.firefox/config/mozilla/firefox
     O=$HOME/.local/share/flatpak/overrides
-    mkdir -p $S/ui-patches ''${V%/*} $I $F $O
+    L=$HOME/.local/share/Steam/logs
+    mkdir -p $S/ui-patches ''${V%/*} $I $F $O $L
   }
   snap() { (cd $root && find . -printf '%p %y %m %l %T@\n' | sort; find . -type f -exec sha256sum {} + | sort) ; }
   has() { grep -qF -- "$2" <<< "$1" || fail "output lacks '$2':"$'\n'"$1"; }
@@ -95,6 +96,7 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
   echo '{"a":1}' > $S/ui-patches/frame-controls.json; echo '{' > $S/ui-patches/vr-cat.json.tmp
   echo '{"model":"shiba"}' > $S/ui-patches/vr-pet.json
   echo mine > $S/ui-patches/notes.txt
+  echo log > $L/vrclient_steam-frame-nix-passthrough.txt     # steamFrame.dashboard.passthroughToggle
 
   exec 9< $F/d.busy/.parentlock                     # Firefox "uses" d.busy
   before=$(snap)
@@ -134,6 +136,8 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
   # ui state: ours gone, foreign file kept (so the dirs stay)
   gone $S/ui-patches/frame-controls.json $S/ui-patches/vr-cat.json.tmp $S/ui-patches/vr-pet.json
   there $S/ui-patches/notes.txt
+  # passthrough toggle log: always gone with --all
+  gone $L/vrclient_steam-frame-nix-passthrough.txt
   noop --all
   exec 9<&-
   res=$(steam-frame-nix-cleanup --all)
@@ -232,6 +236,15 @@ pkgs.runCommand "cleanup-check" { nativeBuildInputs = [ cleanup pkgs.jq pkgs.git
   has "$res" "left alone: $P/icon.png"
   there $P/icon.png $P/notes
   rm -r $root/run/steam-frame-nix
+  # passthrough toggle log: kept while the toggle is enabled, gone once it
+  # isn't
+  echo log > $L/vrclient_steam-frame-nix-passthrough.txt
+  res=$(steam-frame-nix-cleanup --orphans --keep passthrough)
+  there $L/vrclient_steam-frame-nix-passthrough.txt
+  noop --orphans --keep passthrough
+  res=$(steam-frame-nix-cleanup --orphans)
+  gone $L/vrclient_steam-frame-nix-passthrough.txt
+  noop --orphans
   ! steam-frame-nix-cleanup --all --keep debugger 2>/dev/null || fail "--all --keep accepted"
   ! steam-frame-nix-cleanup --orphans --keep bogus 2>/dev/null || fail "unknown --keep accepted"
   echo "C ok"

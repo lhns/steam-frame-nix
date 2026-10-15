@@ -516,6 +516,29 @@
           "expects": ["mountedId"]
         }
       }
+    },
+    "passthrough-toggle": {
+      "bundle": "steamui",
+      "modules": {
+        "popupNames": {
+          "checkOnly": true,
+          "module": { "includes": ["\"valve.steam.gamepadui.bar\""] }
+        },
+        "dashboardAction": {
+          "checkOnly": true,
+          "module": { "includes": ["\"DashboardActionInvoked#1\"", "strMethod:\"DashboardActionInvoked\""] },
+          "expects": ["DashboardActionInvoked(", "SendVRGamepadUIRequest(\"DashboardActionInvoked#1\""]
+        }
+      }
+    },
+    "passthrough-toggle-room-view": {
+      "bundle": "vrwebui-systemui",
+      "modules": {
+        "roomViewAction": {
+          "checkOnly": true,
+          "module": { "includes": ["HasCameraRoomViewCapability()", "icon:{enum:2},icon_active:{enum:1}"] }
+        }
+      }
     }
   }
 }

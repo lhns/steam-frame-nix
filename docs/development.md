@@ -130,6 +130,14 @@ modules/
   steam-close-button.nix, steam-close-button/   SteamVR: X on the Steam window
   window-curvature.nix, window-curvature/       SteamVR: curvature wheel
   frame-controls.nix, frame-controls/           SteamVR: window control bar
+  passthrough-toggle.nix       Steam: room-view button cycle (dashboard.passthroughToggle)
+  passthrough-toggle/
+    src/main.rs, Cargo.toml, package.nix
+                               build: steam-frame-nix-passthrough (dlopens SteamVR's vrclient.so)
+    patch.js, unpatch.js       Steam: finds the button, the click cycle, the icon colour
+    relay.mjs, request.mjs     service passthrough-toggle-relay: CDP binding to the helper
+    check.nix, tests/          test: main.rs's exit paths (fake vrclient.so), request.mjs, patch.js
+    LICENSE-MIT                both upstream MIT notices (README Credits)
   pet.nix                      the VR pet (pet): patch, CLI, "+" menu entry, icon units
   pet/
     package.nix                build: bakes, catalog, patch, CLI, icons, preview, tests
@@ -162,6 +170,7 @@ they are kept even where a file name says more:
 | `steam-close-button` | `dashboard.steamCloseButton` | `steam-close-button` (SteamVR, state) | `steam-ui-patches` |
 | `window-curvature` | `dashboard.windowCurvature` | `window-curvature` (SteamVR) | `steam-ui-patches` |
 | `frame-controls` | `dashboard.frameControls` | `frame-controls` (SteamVR, state) | `steam-ui-patches` |
+| `passthrough-toggle` | `dashboard.passthroughToggle` | `passthrough-toggle` (Steam) | `steam-ui-patches`, `passthrough-toggle-relay` |
 | `steamvr-debugger` | `steamvrDebugger` | | `steamvr-webhelper-debugger` |
 | `launchers` | `launchers` | | `steam-frame-nix-launchers` (`.service`, `.path`) |
 | `screenshots` | `screenshots` | | `steam-frame-nix-screenshots` (`.service`, `.path`) |
@@ -169,7 +178,7 @@ they are kept even where a file name says more:
 | `docker` | `docker` | | `docker` |
 
 Log of all patches:
-`journalctl --user -u steam-ui-patches -u steam-keyboard-patch -u vr-keyboard-relay -u vr-keyboard-controllers-relay`.
+`journalctl --user -u steam-ui-patches -u steam-keyboard-patch -u vr-keyboard-relay -u vr-keyboard-controllers-relay -u passthrough-toggle-relay`.
 
 ## Checks
 

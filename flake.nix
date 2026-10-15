@@ -29,6 +29,7 @@
       steam-close-button = ./modules/steam-close-button.nix;
       window-curvature = ./modules/window-curvature.nix;
       frame-controls = ./modules/frame-controls.nix;
+      passthrough-toggle = ./modules/passthrough-toggle.nix;
       # Built with the consumer's pkgs; `key` dedups direct + `default` imports.
       clipboard-sync = {
         key = "steam-frame-nix/clipboard-sync";
@@ -85,8 +86,9 @@
     # typing, the extra keys' xdotool allowlist, the Jellyfin mpv shim, the
     # Firefox wrapper, the launchers, install.sh cleanup, the
     # applications.menu link, the portal config, the screenshots account
-    # detection and the VR pet (core, SteamVR adapter, CLI, models, icons):
-    # nix flake check
+    # detection, the VR pet (core, SteamVR adapter, CLI, models, icons) and
+    # the passthrough toggle (camera helper, relay, dashboard patch;
+    # aarch64-linux only, like the helper itself): nix flake check
     checks = forSystems (pkgs: {
       applications-menu = import ./modules/applications-menu/check.nix { inherit pkgs; };
       cleanup = import ./modules/cleanup/check.nix { inherit pkgs; };
@@ -100,6 +102,8 @@
       vr-keyboard-extra-keys = import ./modules/vr-keyboard-extra-keys/check.nix { inherit pkgs; };
       vr-keyboard-controllers = import ./modules/vr-keyboard-controllers/check.nix { inherit pkgs; };
       vr-keyboard-touch = import ./modules/vr-keyboard-touch/check.nix { inherit pkgs; };
+    } // nixpkgs.lib.optionalAttrs (pkgs.system == "aarch64-linux") {
+      passthrough-toggle = import ./modules/passthrough-toggle/check.nix { inherit pkgs; };
     });
 
     # nix flake init -t github:lhns/steam-frame-nix

@@ -1,0 +1,13 @@
+[package]
+name = "steam-frame-nix-passthrough"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "steam-frame-nix-passthrough"
+path = "src/main.rs"
+
+[profile.release]
+panic = "abort"
+opt-level = 2

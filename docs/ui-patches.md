@@ -18,9 +18,10 @@ local DevTools port: `127.0.0.1:8080` for Steam (SteamOS passes
 [its debugger](steamvr-debugger.md) is on. The `steam-ui-patches` user
 service (`injector.mjs`) patches the running pages through them; Steam's
 files are never modified. The [launcher menu](launcher-menu.md),
-[dashboard](#steamvr-dashboard-patches) and [VR keyboard](keyboard.md)
-features are such patches (the extra keys have their own injector,
-`steam-keyboard-patch`), and you can add your own.
+[dashboard](#steamvr-dashboard-patches), [VR keyboard](keyboard.md) and
+[passthrough toggle](passthrough-toggle.md) features are such patches (the
+extra keys have their own injector, `steam-keyboard-patch`), and you can
+add your own.
 
 Turning a feature off (or stopping the `steam-ui-patches` /
 `steam-keyboard-patch` user services) restores the stock UI without a Steam

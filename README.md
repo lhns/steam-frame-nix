@@ -49,6 +49,7 @@ configuration, limitations and how it works.
 - [Steam close button](docs/steam-close-button.md) (`dashboard.steamCloseButton`): an X that hides the Steam window.
 - [Window curvature](docs/window-curvature.md) (`dashboard.windowCurvature`): adjustable curvature per window.
 - [Window control bar](docs/window-control-bar.md) (`dashboard.frameControls`): move controls between bar and three-dot menu.
+- [Passthrough toggle](docs/passthrough-toggle.md) (`dashboard.passthroughToggle`): the room-view button cycles Off → colour → mono → Off; colour needs an Arcturus RGB accessory.
 - [VR pet](docs/pet.md) (`pet`): a cat (five coats), Shiba Inu, Fox or Dachshund in the scene that walks around you, can be picked up and petted; "Pet" in the "+" menu, the `vr-pet` command, your own models.
 - [SteamVR debugger](docs/steamvr-debugger.md) (`steamvrDebugger`, automatic): SteamVR's DevTools port for these, set only while SteamVR runs.
 
@@ -252,7 +253,7 @@ home-manager switch --flake .#steamos  # manual setup, from the flake's director
 In your own flake, add the input as above and
 `steam-frame-nix.homeManagerModules.default` to the modules. `default`
 imports all modules; single ones:
-`homeManagerModules.{session,portal,applications-menu,keyboard-layout,vr-keyboard-extra-keys,vr-keyboard,vr-keyboard-controllers,vr-keyboard-touch,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,cleanup,dashboard-windows,steam-close-button,window-curvature,frame-controls,clipboard-sync,firefox,jellyfin,launchers,docker,screenshots,pet}`
+`homeManagerModules.{session,portal,applications-menu,keyboard-layout,vr-keyboard-extra-keys,vr-keyboard,vr-keyboard-controllers,vr-keyboard-touch,hidden-apps,steam-ui-patches,launcher-menu,steamvr-debugger,cleanup,dashboard-windows,steam-close-button,window-curvature,frame-controls,passthrough-toggle,clipboard-sync,firefox,jellyfin,launchers,docker,screenshots,pet}`
 (`steam-keyboard-patch` and `keyring` still work as the former names of
 `vr-keyboard-extra-keys` and `launchers`). Every module imports `cleanup` (see
 [Changes outside Nix](#changes-outside-nix-exceptions)); which file is
@@ -338,6 +339,7 @@ which: [Repository layout](docs/development.md).
 | `steamFrame.dashboard.frameControls.inBar` | list of control names | `[ ]` | Controls that start in the bar: `keyboard`, `float`, `dashboard`, `theater`, `dockLeft`, `dockRight`, `close`, `curvature`, `"icon:<n>"`. |
 | `steamFrame.dashboard.frameControls.inMenu` | list of control names | `[ ]` | Controls that start in the three-dot menu. |
 | `steamFrame.dashboard.frameControls.floatInTheater` | bool | `false` | "Float" control on theater windows. |
+| `steamFrame.dashboard.passthroughToggle.enable` | bool | `false` | Off/colour/mono cycle on the dashboard's room-view button; colour needs an Arcturus RGB accessory, else it quietly stays mono, see [Passthrough toggle](docs/passthrough-toggle.md). |
 | `steamFrame.pet.enable` | bool | `false` | A 3D pet in SteamVR's scene, the `vr-pet` command and "Pet" in the "+" menu, see [VR pet](docs/pet.md); the first switch bakes its models (~0.5 GB in the store). |
 | `steamFrame.pet.defaultModel` | null or str | `null` | Model id shown until another is picked; `null`: the spec's `"default": true` (the Ginger cat). |
 | `steamFrame.pet.extraModels` | attrs of path or attrs | `{ }` | Your own models by id: a folder with a `model.json`, or the spec as an attrset (files as paths), see [VR pet models](docs/pet-models.md). |
@@ -420,6 +422,7 @@ lives in memory (the UI patches). These are written at runtime:
 | `/run/user/1000/steam-frame-nix/applications/<id>.desktop` (with `.<id>.desktop.sum`, `.lock`) | [Launchers](docs/launchers.md) of Flatpaks and host files; `~/.local/share/applications/<id>.desktop` is a Home Manager link to it | until reboot (tmpfs), written again at login | reboot; the next switch or rewrite when the launcher or its app is gone; `steam-frame-nix-cleanup --all` |
 | `/run/user/1000/steam-frame-nix/screenshots` | [SteamVR screenshots](docs/screenshots.md#how-it-works) without `steamUserId`: link to the current account's folder; `~/Pictures/<name>` is a Home Manager link to it | until reboot (tmpfs), written again at login | reboot; `steam-frame-nix-cleanup` once unused |
 | `/run/user/1000/steam-frame-nix/vr-pet/icon.png` (with `.lock`) | [VR pet](docs/pet.md#how-it-works): link to the current model's "+" menu icon; `~/.local/share/icons/hicolor/256x256/apps/vr-pet.png` is a Home Manager link to it | until reboot (tmpfs), written again at login | reboot; `steam-frame-nix-cleanup` once unused |
+| `~/.local/share/Steam/logs/vrclient_steam-frame-nix-passthrough.txt` | [Passthrough toggle](docs/passthrough-toggle.md): SteamVR's own log for the camera helper | while the toggle is enabled | `steam-frame-nix-cleanup` once unused (`--all` always) |
 | mtime of `~/.local/share/applications` | [Launchers](docs/launchers.md#how-it-works): a running Steam rescans the "+" menu | only the directory's timestamp | nothing to remove |
 | mtime of `~/.local/share/icons/hicolor` | [icon fallbacks](docs/launcher-menu.md#icon-fallbacks), [VR pet](docs/pet.md#how-it-works) icon: a running Steam rescans icons | only the directory's timestamp | nothing to remove |
 
@@ -444,6 +447,10 @@ versions left: [docs/cleanup.md](docs/cleanup.md).
   memory; stopping `steam-ui-patches` / `steam-keyboard-patch` reverts them.
   The VR keyboard's relays (`vr-keyboard-relay`,
   `vr-keyboard-controllers-relay`) only pass messages and keep nothing.
+- `passthrough-toggle-relay` only runs
+  [steam-frame-nix-passthrough](docs/passthrough-toggle.md) and passes its
+  result back; it keeps nothing of its own (the camera's actual state is
+  SteamVR's).
 - clipboard-sync runs from KDE autostart (a Home Manager link).
 - Firefox: the desktop profile's `user.js` link exists only while its
   Firefox runs (see [Firefox](docs/firefox.md#how-it-works)).
@@ -567,6 +574,26 @@ in `modules/pet/models/<id>/`. Nix bakes them into the store at build time.
   from npm at build time (not in this repository).
 
 The baked cat's store output carries a short `CREDITS.md` pointing here.
+
+[Passthrough toggle](docs/passthrough-toggle.md): the room-view action's
+signature (invocation/icon/icon_active) and bar-popup finder approach are
+adapted from
+[toorux/steam-frame-passthrough-toggle](https://github.com/toorux/steam-frame-passthrough-toggle)
+(rev `1c790f1`,
+[MIT](https://github.com/toorux/steam-frame-passthrough-toggle/blob/main/LICENSE)).
+Its camera source switching in turn reuses
+[KominoVR/frame-passthrough-shortcuts](https://github.com/KominoVR/frame-passthrough-shortcuts)
+v0.1.0
+([MIT](https://github.com/KominoVR/frame-passthrough-shortcuts/blob/main/LICENSE)):
+the `IVRCameraPassthroughInternal_001` interface name, its vtable get/set
+slots, the 5-byte configuration layout, and the Arcturus RGB camera
+detection (`/sys/class/video4linux` name + ioctl). steam-frame-nix's own
+code -- `src/main.rs` (a from-scratch Rust helper that dlopens `vrclient.so`
+directly, nothing vendored from either project or from Valve's OpenVR SDK),
+`patch.js` (the button/action finder and the click cycle) and
+`relay.mjs`/`request.mjs` (the CDP relay and its allowlist) -- is new, not
+copied. Both upstream licenses:
+[`modules/passthrough-toggle/LICENSE-MIT`](modules/passthrough-toggle/LICENSE-MIT).
 
 ## License
 

@@ -88,7 +88,8 @@ Commands:
                      or before removing it.
         --orphans    what the configuration no longer uses (run by the Home
                      Manager module on every switch); keeps saved choices.
-        --keep       still in use (with --orphans): debugger, screenshots, pet
+        --keep       still in use (with --orphans): debugger, screenshots,
+                     pet, passthrough
         --dry-run    only print what would be done
         --quiet      print only actions, deferrals and warnings
       While SteamVR runs, VRWebHelper.DebuggerEnabled is restored when it
@@ -602,6 +603,10 @@ JF_OVERRIDE="$SFN_DATA/flatpak/overrides/$JF_APP"
 JF_SHIM_COPY="$HOME/.var/app/$JF_APP/mpv-hwdec-shim.so"
 JF_SHIM_MARKER="$SFN_STATE/jellyfin-hwdec-shim"
 UI_STATE="$SFN_STATE/ui-patches"
+# steamFrame.dashboard.passthroughToggle: SteamVR writes this itself the
+# moment steam-frame-nix-passthrough dlopens vrclient.so (its own per-process
+# log), one call at a time, so it keeps growing while the toggle is used.
+PASSTHROUGH_LOG="$SFN_DATA/Steam/logs/vrclient_steam-frame-nix-passthrough.txt"
 
 CLEAN_DRY=0
 CLEAN_QUIET=0
@@ -1024,6 +1029,14 @@ clean_pet() { # keep
   c_rmdir "$d"
 }
 
+# --- passthrough toggle camera helper log ---
+
+clean_passthrough() { # keep
+  (( $1 )) && return 0
+  [[ -e $PASSTHROUGH_LOG ]] && c_rm "$PASSTHROUGH_LOG" "SteamVR's log for the passthrough toggle helper"
+  return 0
+}
+
 # --- dashboard patch state ---
 
 clean_ui_state() { # all
@@ -1044,7 +1057,7 @@ clean_ui_state() { # all
 }
 
 cmd_cleanup() {
-  local mode='' all=0 keep_debugger=0 keep_screenshots=0 keep_pet=0 keeps=0 k
+  local mode='' all=0 keep_debugger=0 keep_screenshots=0 keep_pet=0 keep_passthrough=0 keeps=0 k
   while (( $# )); do
     case $1 in
       --all) mode=all; shift ;;
@@ -1058,7 +1071,8 @@ cmd_cleanup() {
           debugger) keep_debugger=1 ;;
           screenshots) keep_screenshots=1 ;;
           pet) keep_pet=1 ;;
-          *) die "cleanup: unknown artifact '$k' for --keep (debugger, screenshots, pet)" ;;
+          passthrough) keep_passthrough=1 ;;
+          *) die "cleanup: unknown artifact '$k' for --keep (debugger, screenshots, pet, passthrough)" ;;
         esac ;;
       -h|--help) usage; exit 0 ;;
       *) die "cleanup: unknown option '$1' (see --help)" ;;
@@ -1081,6 +1095,7 @@ cmd_cleanup() {
   c_rmdir "$SFN_STATE"
   clean_screenshots "$keep_screenshots"
   clean_pet "$keep_pet"
+  clean_passthrough "$keep_passthrough"
   (( all )) && clean_launchers
   c_rmdir "$SFN_RUNTIME"
   (( CLEAN_ACTIONS || ${#CLEAN_DEFERRED[@]} || CLEAN_QUIET )) || info "nothing to clean up"
