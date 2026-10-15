@@ -1,10 +1,10 @@
 # Checks of the passthrough toggle (flake check `passthrough-toggle`):
 # - steam-frame-nix-passthrough's ELF (NEEDED libc/libgcc_s/ld only, no
 #   rpath, the system's own interpreter, GLIBC symbols at most 2.34);
-# - every exit path of src/main.rs against tests/fake-vrclient.c (a
+# - every exit path of src/main.rs against tests/fake-vrclient.rs (a
 #   stand-in vrclient.so, driven by VR_PATHREG_OVERRIDE, built here without
 #   the interpreter patch so it runs in the sandbox) and Arcturus detection
-#   against a fake sysfs/dev tree with tests/fake-ioctl.c;
+#   against a fake sysfs/dev tree with tests/fake-ioctl.rs;
 # - Rust unit tests of main.rs's pure helpers (`rustc --test`, no cargo);
 # - request.mjs (relay.mjs's allowlist/args/parsing/queue;
 #   tests/request.test.mjs) -- relay.mjs's own CDP session isn't unit
@@ -38,8 +38,8 @@ pkgs.runCommandCC "passthrough-toggle-check" { nativeBuildInputs = [ pkgs.binuti
   BIN=$PWD/steam-frame-nix-passthrough-test
   mkdir -p fakesys fakedev
   V4L_DIR="$PWD/fakesys" DEV_DIR="$PWD/fakedev" rustc --edition 2021 -O -C panic=abort -C linker="$CC" -o "$BIN" ${./src/main.rs}
-  $CC -O2 -Wall -Wextra -Werror -shared -fPIC -o fake-ioctl.so ${./tests/fake-ioctl.c}
-  $CC -O2 -Wall -Wextra -Werror -shared -fPIC -o fake-vrclient.so ${./tests/fake-vrclient.c}
+  rustc --edition 2021 -O -C panic=abort -C linker="$CC" --crate-type cdylib -o fake-ioctl.so ${./tests/fake-ioctl.rs}
+  rustc --edition 2021 -O -C panic=abort -C linker="$CC" --crate-type cdylib -o fake-vrclient.so ${./tests/fake-vrclient.rs}
   mkdir -p fakeruntime/bin/linuxarm64 && cp fake-vrclient.so fakeruntime/bin/linuxarm64/vrclient.so
   printf '{"runtime":["%s"]}' "$PWD/fakeruntime" > fakevrpath.json
   export VR_PATHREG_OVERRIDE=$PWD/fakevrpath.json
