@@ -21,10 +21,12 @@ backtick, `ä ö ü €`) come out as `1`.
 
 **What you get:**
 
-- Esc at the left end of the top row (left of `^` on German, `` ` `` on US).
-- Bottom row: Ctrl at the left end, then Steam's layout keys, then
-  `Alt [Space] AltGr ← ↑ ↓ → Close`, stable with Shift or AltGr. Esc, Ctrl
-  and Alt have Steam's dark special-key face, like its AltGr and layout keys.
+- Bottom row: `Esc Ctrl Alt [Space] AltGr ← ↑ ↓ → Close`, stable with Shift
+  or AltGr. Esc, Ctrl and Alt have Steam's dark special-key face, like its
+  AltGr and layout keys. Optionally at the keyboard's left edge, on every
+  layout: Esc left of the top row (`extraKeys.escInTopRow`, left of `^` on
+  German, `` ` `` on US) and Ctrl at the bottom row's left end, before Steam's
+  layout keys, as wide as AltGr (`extraKeys.ctrlLeftmost`).
 - AltGr + arrows: Home, End, Page Up, Page Down (hinted on the keys);
   Shift + arrows select text.
 - Shift + Tab moves the focus backwards (stock Steam drops the Shift);

@@ -275,6 +275,8 @@ which: [Repository layout](docs/development.md).
 | `steamFrame.keyboard.layout` | null or str | `null` | XKB layout for the Steam session, e.g. `"de"`; `null`: US. |
 | `steamFrame.keyboard.variant` | null or str | `null` | XKB variant for the Steam session, e.g. `"nodeadkeys"`; see [Keyboard layout](docs/session.md#keyboard-layout). |
 | `steamFrame.keyboard.vr.extraKeys.enable` | bool | `false` | VR keyboard with Esc/Ctrl/Alt, arrows, real chords, AltGr/non-ASCII. |
+| `steamFrame.keyboard.vr.extraKeys.escInTopRow` | bool | `false` | Esc at the left end of the top row instead of left of the space bar, see [Extra keys](docs/keyboard.md#extra-keys). |
+| `steamFrame.keyboard.vr.extraKeys.ctrlLeftmost` | bool | `false` | Ctrl at the bottom row's left end (before Steam's layout keys), as wide as AltGr. |
 | `steamFrame.keyboard.vr.enable` | bool | `false` | Swipe typing, suggestions and Backspace drag on the VR keyboard; the sub-features below are on by default, see [VR keyboard](docs/keyboard.md#swipe-and-suggestions). |
 | `steamFrame.keyboard.vr.swipe.enable` | bool | `true` | Swipe typing. |
 | `steamFrame.keyboard.vr.swipe.twoHanded` | bool | `true` | Swipes also with both lasers on the keyboard: the path from the pressing controller's pose, see [VR keyboard](docs/keyboard.md#swipe-and-suggestions). |

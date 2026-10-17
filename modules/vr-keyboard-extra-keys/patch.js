@@ -1,9 +1,10 @@
 // Injected into Steam's SharedJSContext (CEF, 127.0.0.1:8080) by
 // xdotool-helper.mjs.
 // Extends Steam's VR keyboard for gamescope app windows:
-//  - Esc at the left end of the top row; bottom row: Ctrl ... Alt [space]
-//    AltGr ← ↑ ↓ → Close, stable with Shift and AltGr; AltGr + arrows =
-//    Pos1/PgUp/PgDn/End
+//  - bottom row: Esc Ctrl Alt [space] AltGr ← ↑ ↓ → Close, stable with Shift
+//    and AltGr; AltGr + arrows = Pos1/PgUp/PgDn/End. Options: escInTopRow
+//    (Esc left of the top row instead), ctrlLeftmost (Ctrl at the bottom
+//    row's left end, before Steam's layout keys, as wide as AltGr)
 //  - AltGr + the key left of Backspace (German ´/`, empty on AltGr) = Delete
 //    (Steam's "#Key_Delete" label, e.g. Entf), repeating while held; layouts
 //    without AltGr (US, ...) get Steam's AltGr key labelled Fn
@@ -21,10 +22,11 @@
 // run by xdotool-helper.mjs with xdotool on :0. Replaced functions keep their
 // original as __vrkbdOrig; window.__vrkbdRefs etc. are for unpatch.js.
 //
-// mkPatch patch (see steam-ui-patches/lib/default.nix); no options. On a
+// mkPatch patch (see steam-ui-patches/lib/default.nix), options above. On a
 // signature mismatch it returns an error and changes nothing. Idempotent.
-((find, sigs) => {
-  const VERSION = 25;
+((find, sigs, O) => {
+  const VERSION = 26;
+  const STAMP = `${VERSION} ${JSON.stringify(O)}`;   // new code or options: re-wrap
   const send = (msg) => window.__vrkbdKey && window.__vrkbdKey(msg);
   const mods = find.resolvePatch('webpackChunksteamui', sigs);
   if (typeof mods === 'string') return mods;
@@ -36,24 +38,24 @@
   let changed = false;
   const active = (v) => (v & 7) !== 0;           // toggle state bits: 1 one-shot, 2 locked, 4 held
 
-  // Replace obj[name] with make(original), once per VERSION.
+  // Replace obj[name] with make(original), once per STAMP.
   const wrap = (obj, name, make) => {
-    if (obj[name].__vrkbd === VERSION) return;
+    if (obj[name].__vrkbd === STAMP) return;
     const orig = obj[name].__vrkbdOrig || obj[name];
     const f = make(orig);
-    f.__vrkbd = VERSION; f.__vrkbdOrig = orig;
+    f.__vrkbd = STAMP; f.__vrkbdOrig = orig;
     obj[name] = f;
     changed = true;
   };
 
   // ---- top and bottom row ----------------------------------------------------
-  // Fixed window height, so no extra row: Esc goes left of the top row's
-  // first key (German ^, US `), Ctrl to the bottom row's left end (before
-  // Steam's layout keys), Alt left of the space bar, and the stock paired
-  // arrows ([Left, Up-shifted], [Right, Down-shifted]) become four keys.
-  // Entries are explicit [normal, shifted, altgr] triples: without them Shift
-  // moves the close icon and AltGr yields empty full-width keys. null
-  // shifted = same key, no shift label.
+  // Fixed window height, so no extra row: Esc/Ctrl/Alt go left of the space
+  // bar (escInTopRow: Esc left of the top row's first key, German ^, US `;
+  // ctrlLeftmost: Ctrl at the bottom row's left end, before Steam's layout
+  // keys), and the stock paired arrows ([Left, Up-shifted], [Right,
+  // Down-shifted]) become four keys. Entries are explicit [normal, shifted,
+  // altgr] triples: without them Shift moves the close icon and AltGr yields
+  // empty full-width keys. null shifted = same key, no shift label.
   const HALF = 2;                                  // key type "Half"; widths set by the stylesheet
   const META = 4;                                  // key type "Meta" (AltGr, layout keys): the dark special-key face
   const k = (key, label, type = HALF) => ({ key, label, type });
@@ -71,12 +73,13 @@
   // same one-shot/locked/held semantics, AltGr layer, Delete, arrow keys.
   const FN = { key: 'AltGr', label: 'Fn', type: 4 };  // type Meta, like Steam's AltGr key
   const bottomRow = (row) => {
-    const out = [same(CTRL)];
+    const out = O.ctrlLeftmost ? [same(CTRL)] : [];
+    const beforeSpace = [!O.escInTopRow && ESC, !O.ctrlLeftmost && CTRL, ALT].filter(Boolean);
     const hasAltGr = row.some((x) => (Array.isArray(x) ? x : [x]).some((y) => y?.key === 'AltGr'));
     for (const x of row) {
       const key = first(x);
       if (!key || isArrow(x)) continue;
-      if (key.key === ' ') out.push(same(ALT));
+      if (key.key === ' ') out.push(...beforeSpace.map(same));
       out.push(same(key));
       if (key.key === ' ' && !hasAltGr) out.push(same(FN));
     }
@@ -140,7 +143,8 @@
     window.__vrkbdLayouts.add(l);
     wrap(l, 'rgLayout', (orig) => (opts) => {
       const rows = withDelete(orig(opts));
-      return [[same(ESC), ...rows[0]], ...rows.slice(1, -1), bottomRow(rows[rows.length - 1])];
+      const top = O.escInTopRow ? [same(ESC), ...rows[0]] : rows[0];
+      return [top, ...rows.slice(1, -1), bottomRow(rows[rows.length - 1])];
     });
   }
 
@@ -216,9 +220,11 @@
   const added = [ESC, CTRL, ALT, ...ARROWS.map(first), ...ALTGR_ARROWS].map((x) => x.key);
   find.ensureStyle(doc, 'vrkbd-style', [
     `${sel(added)} { width: 43px !important; }`,
-    '[data-key="AltGr"] { width: 52px !important; }',
+    // ctrlLeftmost: Ctrl as wide as AltGr (the later rule beats the 43px).
+    `[data-key="AltGr"]${O.ctrlLeftmost ? ', [data-key="Control"]' : ''} { width: 52px !important; }`,
     // Steam draws the AltGr variant as a small secondary label: hide it on Esc
-    // and in the bottom row, except on the arrows (the Pos1/Ende/Bild hint).
+    // (wherever it is) and in the bottom row, except on the arrows (the
+    // Pos1/Ende/Bild hint).
     `[data-key-row="${lastRow}"]:not([data-key^="Arrow"]) span ~ span, ${sel([ESC.key], ' span ~ span')} { display: none !important; }`,
     // Arrow keys: smaller (still centered) icon and a small hint at the bottom edge.
     '[data-key^="Arrow"] span ~ span { font-size: 7px !important; top: auto !important; bottom: 3px !important; line-height: 1 !important; }',
@@ -349,8 +355,8 @@
   }
 
   // Re-render with the new row (only when something changed or it's a new instance).
-  if (changed || inst.__vrkbd !== VERSION) {
-    inst.__vrkbd = VERSION;
+  if (changed || inst.__vrkbd !== STAMP) {
+    inst.__vrkbd = STAMP;
     inst.setState({ standardLayout: Layouts.currentLayout() });
     inst.forceUpdate();
   }
