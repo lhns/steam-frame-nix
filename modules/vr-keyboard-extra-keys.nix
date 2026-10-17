@@ -2,11 +2,12 @@
 # name "steam-keyboard-patch" in logs and signatures.json).
 # Steam's VR keyboard can only send text (ControllerKeyboardSetKeyState throws
 # "Unknown method" in VR), and its layouts are hardcoded.
-# - patch.js (injected over CEF DevTools, 127.0.0.1:8080) adds a bottom row
-#   Esc Ctrl Alt [space] AltGr ← ↑ ↓ → (AltGr+arrows = Pos1/PgUp/PgDn/End) and
-#   hands chords, Shift+arrows, Shift+Tab and characters Steam would turn
-#   into "1" (non-ASCII, AltGr/dead keys) to the helper. AltGr + the key left
-#   of Backspace = Delete.
+# - patch.js (injected over CEF DevTools, 127.0.0.1:8080) adds Esc left of the
+#   top row, Ctrl left of the bottom row and Alt [space] AltGr ← ↑ ↓ →
+#   (AltGr+arrows = Pos1/PgUp/PgDn/End) to it, and hands chords,
+#   Shift+arrows, Shift+Tab and characters Steam would turn into "1"
+#   (non-ASCII, AltGr/dead keys) to the helper. AltGr + the key left of
+#   Backspace = Delete.
 # - xdotool-helper.mjs keeps it injected (its own injector, not the
 #   steam-ui-patches service), sends those keys with xdotool on :0 (an
 #   allowlist, allowlist.mjs: no ASCII text, no Enter) and unpatches on stop.

@@ -36,7 +36,7 @@
 // Steam's events. Debugging: __sfuiSwipeLog, __sfuiSwipePaths
 // (scripts/vr-keyboard-replay.mjs).
 ((find, sigs, opts, hooks, D, T, C, DICT, P, HUB, F) => {
-  const VERSION = 29;
+  const VERSION = 30;
   const G = window;
   const O = opts;
 
@@ -330,13 +330,17 @@
       kbNow.TypeKeyInternal({ strKey: key });
       if (inPage) haptic(HAPTIC.pick);           // a panel ticks on its own overlay
     }
-    // The in-page strip covers exactly the number row (up to Backspace).
+    // The in-page strip covers exactly the number row (after extra keys' Esc,
+    // up to Backspace).
     function placeStrip() {
       const row0 = [...doc.querySelectorAll('[data-key-row="0"]')].map((el) => el.getBoundingClientRect());
       if (!row0.length) return;
       const top = Math.min(...row0.map((r) => r.top)), height = Math.max(...row0.map((r) => r.bottom)) - top;
+      const inRow = (r) => r?.width && r.top < top + height;
       const bs = doc.querySelector('[data-key="Backspace"]')?.getBoundingClientRect();
-      strip.style.right = bs?.width && bs.top < top + height ? `${Math.max(2, win.innerWidth - bs.x + 2)}px` : '2px';
+      const esc = doc.querySelector('[data-key="VKX_Escape"]')?.getBoundingClientRect();
+      strip.style.right = inRow(bs) ? `${Math.max(2, win.innerWidth - bs.x + 2)}px` : '2px';
+      strip.style.left = inRow(esc) ? `${esc.right + 2}px` : '2px';
       Object.assign(strip.style, { top: `${top}px`, height: `${height}px`, fontSize: `${Math.max(10, Math.min(18, height - 10))}px` });
     }
 

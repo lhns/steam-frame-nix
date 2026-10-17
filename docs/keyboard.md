@@ -21,9 +21,10 @@ backtick, `ä ö ü €`) come out as `1`.
 
 **What you get:**
 
-- Bottom row: `Esc Ctrl Alt [Space] AltGr ← ↑ ↓ → Close`, stable with Shift
-  or AltGr. Esc, Ctrl and Alt have Steam's dark special-key face, like its
-  AltGr and layout keys.
+- Esc at the left end of the top row (left of `^` on German, `` ` `` on US).
+- Bottom row: Ctrl at the left end, then Steam's layout keys, then
+  `Alt [Space] AltGr ← ↑ ↓ → Close`, stable with Shift or AltGr. Esc, Ctrl
+  and Alt have Steam's dark special-key face, like its AltGr and layout keys.
 - AltGr + arrows: Home, End, Page Up, Page Down (hinted on the keys);
   Shift + arrows select text.
 - Shift + Tab moves the focus backwards (stock Steam drops the Shift);
