@@ -439,6 +439,8 @@
     };
     const at = (x, y) => doc.elementFromPoint(x, y);
     // Keep Steam from typing the pressed key at release and from its long press.
+    // Newer Steam keeps a long press per input (argument); none means the
+    // mouse/touch slot, which laser presses use.
     function takeOver(d) {
       const inst = d.inst;
       try {

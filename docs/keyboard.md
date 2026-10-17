@@ -61,7 +61,7 @@ text or press Enter (`allowlist.mjs`, tested by the flake check
 **Caveat:** depends on Steam UI internals; after a Steam update that changes
 them the keyboard stays stock and the journal says why (see
 [after a Steam update](ui-patches.md#after-a-steam-update)). Tested with
-Steam client 1790377368 (UI build 11041156).
+Steam client 1792099137 (UI build 11135251).
 
 **Remove when** Steam's VR keyboard gets these keys.
 
