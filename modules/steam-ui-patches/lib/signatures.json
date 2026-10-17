@@ -368,7 +368,7 @@
           "exports": {
             "Frame": { "type": "class", "protoMethods": ["SetControlsItems", "SetControlAdditionalOptionsOpen", "CreateAction"] }
           },
-          "expects": ["SetControlsItems(e,t,o){this.m_rgControlsItems_BottomFrameControls=e,this.m_rgControlsItems_TabHoverControls=t,this.m_rgControlsItems_AdditionalOptions=o}",
+          "expects": ["/SetControlsItems\\(([\\w$]+),([\\w$]+),([\\w$]+)\\)\\{this\\.m_rgControlsItems_BottomFrameControls=\\1,this\\.m_rgControlsItems_TabHoverControls=\\2,this\\.m_rgControlsItems_AdditionalOptions=\\3\\}/",
             "get isControlAdditionalOptionsOpen(){return this.m_bControlAdditionalOptionsOpen&&this.m_rgControlsItems_AdditionalOptions.length>0}",
             "BPanelHasFocus(this.panels.additionalOptionsPanelSGID)", "this.SetControlAdditionalOptionsOpen(!1)", "m_unControlAdditionalOptionsActionID"]
         },

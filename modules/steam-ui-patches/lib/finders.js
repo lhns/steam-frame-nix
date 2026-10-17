@@ -33,11 +33,12 @@
 //                                   page, though methods offline),
 //       "methods": ["m", ...]       (instance) methods on its prototype chain,
 //       "getters": ["g", ...]       getters on its prototype chain }
-//   Fields that only scripts/check-signatures.mjs uses: "expects" (strings the
-//   module source should contain, i.e. property names the patch relies on;
-//   reported as warnings), "checkOnly": true (not resolved by the patch) and,
-//   in place of "module", "stylesheet": <text signature> (a checkOnly entry
-//   matched against the bundle's CSS files instead of its modules).
+//   Fields that only scripts/check-signatures.mjs uses: "expects" (strings or
+//   "/re/flags" regexes the module source should contain, i.e. property names
+//   the patch relies on; reported as warnings), "checkOnly": true (not
+//   resolved by the patch) and, in place of "module", "stylesheet": <text
+//   signature> (a checkOnly entry matched against the bundle's CSS files
+//   instead of its modules).
 //
 // Every lookup must match exactly once; otherwise a FinderError names the
 // signature, the part that failed and the candidates.

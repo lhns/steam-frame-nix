@@ -130,10 +130,11 @@ library also has `ensureStyle(doc, id, css)`, `logger(buffer)` (a capped
 debug log) and `keyboardPopup()` (Steam's VR keyboard popup or `null`).
 
 Signatures live in `modules/steam-ui-patches/lib/signatures.json`, shared
-by patches and the offline checker. An entry can also list `expects` (strings the patch relies
-on, checked offline only) or be `checkOnly` (anchors not used through the
-finder, checked offline only; with `stylesheet` instead of `module` it is
-matched against the bundle's CSS).
+by patches and the offline checker. An entry can also list `expects`
+(strings or `/re/flags` regexes the patch relies on, checked offline only;
+a regex keeps minified parameter names out) or be `checkOnly` (anchors not
+used through the finder, checked offline only; with `stylesheet` instead of
+`module` it is matched against the bundle's CSS).
 
 ### mkPatch
 

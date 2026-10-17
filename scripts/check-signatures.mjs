@@ -2,7 +2,7 @@
 // check-signatures.mjs: checks offline (no Steam, no browser) that every
 // signature in modules/steam-ui-patches/lib/signatures.json still matches the
 // installed Steam / SteamVR web UI bundles: module and export signatures
-// exactly once, "expects" strings still present (warnings), "stylesheet"
+// exactly once, "expects" strings or /regexes/ still present (warnings), "stylesheet"
 // signatures exactly one file of the bundle's "styles" directory. Run it
 // after a Steam update:
 //
@@ -131,6 +131,11 @@ function runModule(mod) {
 
 // ---- checking ------------------------------------------------------------------------
 const expand = (p) => (p.startsWith('~/') ? join(homedir(), p.slice(2)) : p);
+// "/re/flags" (as in "regex" signatures, e.g. for minified parameter names) or a plain substring.
+const expectFound = (src, s) => {
+  const m = /^\/(.*)\/([a-z]*)$/s.exec(s);
+  return m ? new RegExp(m[1], m[2]).test(src) : src.includes(s);
+};
 const loaded = {};
 function bundle(name) {
   if (name in loaded) return loaded[name];
@@ -183,7 +188,7 @@ for (const [pname, p] of Object.entries(patches)) {
     r.status = ids.length === 1 ? 'found' : ids.length ? 'ambiguous' : 'missing';
     if (r.status !== 'found') { report.ok = false; continue; }
     const mod = b.mods.get(ids[0]);
-    r.missingExpects = (sig.expects ?? []).filter((s) => !mod.source.includes(s));
+    r.missingExpects = (sig.expects ?? []).filter((s) => !expectFound(mod.source, s));
     if (r.missingExpects.length) report.warnings++;
     if (!sig.exports) continue;
     const run = runModule(mod);
